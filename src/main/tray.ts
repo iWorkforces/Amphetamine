@@ -144,8 +144,8 @@ export function setupTray(deps: TrayDeps): () => void {
     }
     if (currentPreventSleep !== lastPreventSleep) {
       lastPreventSleep = currentPreventSleep;
-      // User intent changed — rebuild menu so the checkbox reflects it.
       cachedMenu = buildMenu();
+      tray?.setContextMenu(cachedMenu);
       iconNeedsRefresh = true;
     }
     if (iconNeedsRefresh) {
@@ -185,10 +185,9 @@ export function setupTray(deps: TrayDeps): () => void {
     return Menu.buildFromTemplate(template);
   }
 
-  // Build initial cached menu
   cachedMenu = buildMenu();
+  tray.setContextMenu(cachedMenu);
 
-  // Left-click → cached context menu
   tray.on("click", () => {
     if (tray && cachedMenu) {
       tray.popUpContextMenu(cachedMenu);

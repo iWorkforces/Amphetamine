@@ -16,6 +16,7 @@ const mockTrayConstructor = vi.hoisted(() =>
     this.on = vi.fn();
     this.getBounds = vi.fn().mockReturnValue({ x: 100, y: 0, width: 22, height: 22 });
     this.popUpContextMenu = vi.fn();
+    this.setContextMenu = vi.fn();
   }),
 );
 const mockNativeThemeOn = vi.hoisted(() => vi.fn());
@@ -107,6 +108,7 @@ describe("tray", () => {
       this.on = vi.fn();
       this.getBounds = vi.fn().mockReturnValue({ x: 100, y: 0, width: 22, height: 22 });
       this.popUpContextMenu = vi.fn();
+      this.setContextMenu = vi.fn();
     });
     mockCreateFromPath.mockReturnValue({
       toPNG: vi.fn().mockReturnValue(Buffer.alloc(0)),
