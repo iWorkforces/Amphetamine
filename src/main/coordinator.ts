@@ -29,7 +29,11 @@ import {
   setActiveSessionTimer,
   type SessionTimerHandle,
 } from "./session-timer.js";
-import { setBroadcastFn as setUpdaterBroadcastFn, stopAutoUpdater } from "./auto-updater.js";
+import {
+  setBroadcastFn as setUpdaterBroadcastFn,
+  stopAutoUpdater,
+  checkForUpdatesNow,
+} from "./auto-updater.js";
 import type { TrayDeps } from "./tray.js";
 import { createSettingsWindow, closeSettingsWindow } from "./settings-window.js";
 import { closeAboutWindow } from "./about-window.js";
@@ -62,10 +66,11 @@ function notifyEffectiveActiveChange(next: boolean): void {
  * Either source independently keeps sleep blocked.
  */
 function recomputeSleepPrevention(userIntentOverride?: boolean): void {
-  const userIntent = userIntentOverride ?? getSettings().preventSleep;
+  const settings = getSettings();
+  const userIntent = userIntentOverride ?? settings.preventSleep;
   const next = userIntent || sessionActiveCache;
   const prev = isPreventingSleep();
-  syncPreventSleep(next);
+  syncPreventSleep(next, settings.sleepBlockMode);
   if (prev !== next) {
     batteryMonitor?.onPreventSleepChange(next);
   }
@@ -122,12 +127,6 @@ export async function initCoordinator(): Promise<void> {
   // reconcileSessionState) and registered as the module-level active handle
   // so that ipc.ts's namespace import keeps working.
   sessionTimer = createSessionTimer({
-    onStateChange: (updates) => {
-      updateSettings(updates).catch((err) =>
-        log.error("[coordinator] Session state update failed:", err),
-      );
-    },
-    getSettings,
     broadcast: broadcastToWindows,
     onSessionActiveChange: (active) => {
       sessionActiveCache = active;
@@ -195,6 +194,19 @@ export async function initCoordinator(): Promise<void> {
         syncAutoLaunch(settings.launchAtLogin);
       }
 
+      // Threshold change must re-arm polling even when sleep state is unchanged
+      // (e.g. 0 → 20% while already preventing sleep on battery).
+      if (!prevSettings || settings.batteryThreshold !== prevSettings.batteryThreshold) {
+        batteryMonitor?.reconfigure();
+      }
+
+      // Blocker mode change while sleep prevention is active requires restart.
+      if (!prevSettings || settings.sleepBlockMode !== prevSettings.sleepBlockMode) {
+        if (isPreventingSleep() || settings.preventSleep || sessionActiveCache) {
+          recomputeSleepPrevention(settings.preventSleep);
+        }
+      }
+
       // Re-register shortcut when user changes the keyboard shortcut setting.
       if (prevSettings && settings.shortcut !== prevSettings.shortcut && shortcutDeps) {
         registerGlobalShortcut(shortcutDeps);
@@ -228,6 +240,7 @@ export function cleanupCoordinator(): void {
   unsubscribeSettings = null;
   batteryMonitor?.cleanupBatteryMonitoring();
   batteryMonitor = null;
+  sessionTimer?.cleanup();
   sessionTimer = null;
   setActiveSessionTimer(null);
   sessionActiveCache = false;
@@ -259,5 +272,6 @@ export function getTrayDeps(): TrayDeps {
       };
     },
     openSettings: () => createSettingsWindow(),
+    checkForUpdates: () => checkForUpdatesNow(),
   };
 }

@@ -169,10 +169,10 @@ describe("settings predicates", () => {
   });
 
   describe("mergeValidatedPartial", () => {
-    it("preserves sessionDuration: null (indefinite session marker)", () => {
-      const base = { ...DEFAULT_SETTINGS, sessionDuration: 60 };
-      const result = mergeValidatedPartial(base, { sessionDuration: null });
-      expect(result.merged.sessionDuration).toBeNull();
+    it("preserves defaultSessionDuration: null (indefinite session marker)", () => {
+      const base = { ...DEFAULT_SETTINGS, defaultSessionDuration: 60 };
+      const result = mergeValidatedPartial(base, { defaultSessionDuration: null });
+      expect(result.merged.defaultSessionDuration).toBeNull();
       expect(result.rejectedKeys).toEqual([]);
     });
 

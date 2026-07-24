@@ -7,7 +7,7 @@ import { setupTray } from "./tray.js";
 import { registerIpcHandlers, type IpcDeps } from "./ipc.js";
 import { getPackageInfo } from "./utils/packageInfo.js";
 import { initCoordinator, cleanupCoordinator, getTrayDeps } from "./coordinator.js";
-import { getSettings, updateSettings } from "./settings.js";
+import { getSettings, updateSettings, flushSettingsWriteChain } from "./settings.js";
 import { createSettingsWindow } from "./settings-window.js";
 import { initAutoUpdater, registerAutoUpdaterIpc } from "./auto-updater.js";
 import * as sessionTimer from "./session-timer.js";
@@ -60,7 +60,45 @@ app.setAboutPanelOptions({
 });
 let mainWindow: BrowserWindow | null = null;
 let isQuitting = false;
+let didRunQuitCleanup = false;
 let cleanupTray: (() => void) | null = null;
+
+const SETTINGS_FLUSH_TIMEOUT_MS = 2000;
+
+async function runQuitCleanup(): Promise<void> {
+  if (didRunQuitCleanup) return;
+  didRunQuitCleanup = true;
+  isQuitting = true;
+
+  try {
+    await Promise.race([
+      flushSettingsWriteChain(),
+      new Promise<void>((resolve) => {
+        setTimeout(resolve, SETTINGS_FLUSH_TIMEOUT_MS);
+      }),
+    ]);
+  } catch (err) {
+    log.error("[main] Settings flush on quit failed:", err);
+  }
+
+  try {
+    cleanupTray?.();
+  } catch (err) {
+    log.error("[main] Tray cleanup on quit failed:", err);
+  }
+  cleanupTray = null;
+
+  try {
+    cleanupCoordinator();
+  } catch (err) {
+    log.error("[main] Coordinator cleanup on quit failed:", err);
+  }
+
+  if (mainWindow !== null && !mainWindow.isDestroyed()) {
+    mainWindow.destroy();
+  }
+  mainWindow = null;
+}
 
 function createWindow(): BrowserWindow {
   const win = new BrowserWindow({
@@ -165,11 +203,14 @@ void app.whenReady().then(async () => {
 app.on("window-all-closed", () => {
   // Tray-only app stays alive when all windows close
 });
-app.on("before-quit", () => {
-  isQuitting = true;
-  cleanupTray?.();
-  cleanupCoordinator();
-  if (mainWindow) {
-    mainWindow.destroy();
-  }
+app.on("before-quit", (event) => {
+  if (didRunQuitCleanup) return;
+  event.preventDefault();
+  void runQuitCleanup()
+    .catch((err: unknown) => {
+      log.error("[main] Quit cleanup failed:", err);
+    })
+    .finally(() => {
+      app.exit(0);
+    });
 });

@@ -6,9 +6,9 @@ Renderer Vitest suites run in jsdom and assert DOM behavior around vanilla TypeS
 
 | File | Role |
 |------|------|
-| `index.test.ts` | Popover render, status/timer display, push subscriptions, benchmark API mock |
-| `settings.test.ts` | Settings form render, toggles/selects, debounced save behavior |
-| `delegation.test.ts` | Event delegation on `#app` |
+| `index.test.ts` | Popover render, status/timer, controls, push subscriptions, benchmark API mock |
+| `settings.test.ts` | Settings form render, toggles/selects, debounced save, shortcut-failure subscription |
+| `delegation.test.ts` | Event delegation patterns on `#app` |
 
 ## Setup Pattern
 
@@ -17,19 +17,24 @@ Renderer Vitest suites run in jsdom and assert DOM behavior around vanilla TypeS
 - Include `window.api.benchmark.isEnabled()` when importing popover code because countdown counters check it.
 - Import the renderer entry after mocks, then dispatch `DOMContentLoaded`.
 - Use fake timers for countdown ticks, debounced saves, RAF batches, and delayed indicators.
+- Settings fixtures: spread `DEFAULT_SETTINGS` (includes `defaultSessionDuration`, `sleepBlockMode`).
 
 ## Assertions
 
 - Assert visible DOM output and user-event behavior, not private helper internals.
-- Trigger events through DOM nodes so delegation paths are exercised.
+- Trigger events through DOM nodes so control paths are exercised.
 - Verify push subscription callbacks and unsubscribe cleanup when behavior depends on them.
 - For countdown tests, anchor behavior with mocked `performance.now()` or timer advancement; avoid real waits.
+- Popover: prevent-sleep toggle and session chips call `settings.set` / `session.start` / `session.cancel` as appropriate.
+- Popover chips must not be required to persist `defaultSessionDuration`.
+- Settings: duration select starts session and saves preference; sleep mode select saves `sleepBlockMode`.
 
 ## Mocking Rules
 
 - `window.api` should mirror preload shape closely enough for the entry under test.
-- Settings tests mock `settings.get`, `settings.set`, `onSettingsChanged`, and shortcut failure callbacks as needed.
-- Popover tests mock `session.getStatus`, `onSessionStatusUpdate`, `window.setHeight`, `app.getVersion`, `settings.open`, and `app.quit` as needed.
+- Settings tests mock `settings.get`, `settings.set` (returns `{ settings, rejectedKeys }`), `onSettingsChanged`, and `onShortcutRegistrationFailed`.
+- Popover tests mock `session.getStatus`, `onSessionStatusUpdate`, `window.setHeight`, `app.getVersion`, `settings.open`, `settings.set`, `session.start`/`cancel`, and `app.quit` as needed.
+- Do not mock `electron-log` for settings renderer (module no longer imports it).
 
 ## Anti-Patterns
 

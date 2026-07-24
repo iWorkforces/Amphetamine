@@ -88,6 +88,7 @@ describe("tray", () => {
         };
       },
       openSettings: vi.fn(),
+      checkForUpdates: vi.fn(),
     };
   }
 

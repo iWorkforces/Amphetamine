@@ -109,7 +109,7 @@ describe("renderer popover (index.ts)", () => {
       ...DEFAULT_SETTINGS,
       launchAtLogin: false,
       preventSleep: false,
-      sessionDuration: null,
+      defaultSessionDuration: null,
     };
     mockApi.settings.get.mockResolvedValue(defaultSettings);
     mockApi.session.getStatus.mockResolvedValue(null);
@@ -118,10 +118,10 @@ describe("renderer popover (index.ts)", () => {
       value: {
         ...globalThis.window,
         api: mockApi,
-        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+         
         addEventListener: globalThis.window?.addEventListener?.bind(globalThis.window) ?? vi.fn(),
         removeEventListener:
-        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+         
           globalThis.window?.removeEventListener?.bind(globalThis.window) ?? vi.fn(),
       },
       writable: true,
@@ -139,7 +139,7 @@ describe("renderer popover (index.ts)", () => {
       mockApi.settings.get.mockResolvedValue({ ...DEFAULT_SETTINGS,
         launchAtLogin: false,
         preventSleep: false,
-        sessionDuration: null,
+        defaultSessionDuration: null,
       });
       mockApi.session.getStatus.mockResolvedValue(null);
 
@@ -158,7 +158,7 @@ describe("renderer popover (index.ts)", () => {
       mockApi.settings.get.mockResolvedValue({ ...DEFAULT_SETTINGS,
         launchAtLogin: false,
         preventSleep: true,
-        sessionDuration: null,
+        defaultSessionDuration: null,
       });
       mockApi.session.getStatus.mockResolvedValue({
         isRunning: false,
@@ -180,7 +180,7 @@ describe("renderer popover (index.ts)", () => {
       mockApi.settings.get.mockResolvedValue({ ...DEFAULT_SETTINGS,
         launchAtLogin: false,
         preventSleep: true,
-        sessionDuration: null,
+        defaultSessionDuration: null,
       });
       mockApi.session.getStatus.mockResolvedValue({
         isRunning: true,
@@ -202,7 +202,7 @@ describe("renderer popover (index.ts)", () => {
       mockApi.settings.get.mockResolvedValue({ ...DEFAULT_SETTINGS,
         launchAtLogin: false,
         preventSleep: true,
-        sessionDuration: 120,
+        defaultSessionDuration: 120,
       });
       // 1h 30m = 5400 seconds
       mockApi.session.getStatus.mockResolvedValue({
@@ -228,7 +228,7 @@ describe("renderer popover (index.ts)", () => {
       mockApi.settings.get.mockResolvedValue({ ...DEFAULT_SETTINGS,
         launchAtLogin: false,
         preventSleep: true,
-        sessionDuration: 30,
+        defaultSessionDuration: 30,
       });
       // 25 minutes remaining = 1500 seconds
       mockApi.session.getStatus.mockResolvedValue({
@@ -256,7 +256,7 @@ describe("renderer popover (index.ts)", () => {
       mockApi.settings.get.mockResolvedValue({ ...DEFAULT_SETTINGS,
         launchAtLogin: false,
         preventSleep: true,
-        sessionDuration: null,
+        defaultSessionDuration: null,
       });
       mockApi.session.getStatus.mockResolvedValue(null);
 
@@ -273,7 +273,7 @@ describe("renderer popover (index.ts)", () => {
       mockApi.settings.get.mockResolvedValue({ ...DEFAULT_SETTINGS,
         launchAtLogin: false,
         preventSleep: false,
-        sessionDuration: null,
+        defaultSessionDuration: null,
       });
       mockApi.session.getStatus.mockResolvedValue(null);
 
@@ -293,7 +293,7 @@ describe("renderer popover (index.ts)", () => {
       mockApi.settings.get.mockResolvedValue({ ...DEFAULT_SETTINGS,
         launchAtLogin: false,
         preventSleep: false,
-        sessionDuration: null,
+        defaultSessionDuration: null,
       });
 
       vi.resetModules();
@@ -309,7 +309,7 @@ describe("renderer popover (index.ts)", () => {
       mockApi.settings.get.mockResolvedValue({ ...DEFAULT_SETTINGS,
         launchAtLogin: false,
         preventSleep: false,
-        sessionDuration: null,
+        defaultSessionDuration: null,
       });
 
       vi.resetModules();
@@ -325,7 +325,7 @@ describe("renderer popover (index.ts)", () => {
       mockApi.settings.get.mockResolvedValue({ ...DEFAULT_SETTINGS,
         launchAtLogin: false,
         preventSleep: false,
-        sessionDuration: null,
+        defaultSessionDuration: null,
       });
 
       vi.resetModules();
@@ -341,7 +341,7 @@ describe("renderer popover (index.ts)", () => {
       mockApi.settings.get.mockResolvedValue({ ...DEFAULT_SETTINGS,
         launchAtLogin: false,
         preventSleep: false,
-        sessionDuration: null,
+        defaultSessionDuration: null,
       });
 
       vi.resetModules();
@@ -371,7 +371,7 @@ describe("renderer popover (index.ts)", () => {
       mockApi.settings.get.mockResolvedValue({ ...DEFAULT_SETTINGS,
         launchAtLogin: false,
         preventSleep: false,
-        sessionDuration: null,
+        defaultSessionDuration: null,
       });
 
       vi.resetModules();
@@ -482,7 +482,7 @@ describe("renderer popover (index.ts)", () => {
       mockApi.settings.get.mockResolvedValue({ ...DEFAULT_SETTINGS,
         launchAtLogin: false,
         preventSleep: false,
-        sessionDuration: null,
+        defaultSessionDuration: null,
       });
 
       vi.resetModules();
@@ -498,7 +498,7 @@ describe("renderer popover (index.ts)", () => {
         ...DEFAULT_SETTINGS,
         launchAtLogin: false,
         preventSleep: true,
-        sessionDuration: null,
+        defaultSessionDuration: null,
       });
 
       // Wait for rAF
@@ -512,7 +512,7 @@ describe("renderer popover (index.ts)", () => {
       mockApi.settings.get.mockResolvedValue({ ...DEFAULT_SETTINGS,
         launchAtLogin: false,
         preventSleep: true,
-        sessionDuration: 30,
+        defaultSessionDuration: 30,
       });
       mockApi.session.getStatus.mockResolvedValue({
         isRunning: true,
@@ -548,7 +548,7 @@ describe("renderer popover (index.ts)", () => {
       mockApi.settings.get.mockResolvedValue({ ...DEFAULT_SETTINGS,
         launchAtLogin: false,
         preventSleep: true,
-        sessionDuration: 30,
+        defaultSessionDuration: 30,
       });
       mockApi.session.getStatus.mockResolvedValue({
         isRunning: true,
@@ -569,7 +569,7 @@ describe("renderer popover (index.ts)", () => {
         ...DEFAULT_SETTINGS,
         launchAtLogin: false,
         preventSleep: false,
-        sessionDuration: null,
+        defaultSessionDuration: null,
       });
 
       await vi.advanceTimersByTimeAsync(16);
@@ -586,7 +586,7 @@ describe("renderer popover (index.ts)", () => {
       mockApi.settings.get.mockResolvedValue({ ...DEFAULT_SETTINGS,
         launchAtLogin: false,
         preventSleep: false,
-        sessionDuration: 30,
+        defaultSessionDuration: 30,
       });
       mockApi.session.getStatus.mockResolvedValue({
         isRunning: true,
@@ -612,7 +612,7 @@ describe("renderer popover (index.ts)", () => {
       mockApi.settings.get.mockResolvedValue({ ...DEFAULT_SETTINGS,
         launchAtLogin: false,
         preventSleep: false,
-        sessionDuration: null,
+        defaultSessionDuration: null,
       });
       mockApi.session.getStatus.mockResolvedValue(null);
 
@@ -630,7 +630,7 @@ describe("renderer popover (index.ts)", () => {
       mockApi.settings.get.mockResolvedValue({ ...DEFAULT_SETTINGS,
         launchAtLogin: false,
         preventSleep: true,
-        sessionDuration: 15,
+        defaultSessionDuration: 15,
       });
       mockApi.session.getStatus.mockResolvedValue({
         isRunning: true,
@@ -655,7 +655,7 @@ describe("renderer popover (index.ts)", () => {
       mockApi.settings.get.mockResolvedValue({ ...DEFAULT_SETTINGS,
         launchAtLogin: false,
         preventSleep: true,
-        sessionDuration: 15,
+        defaultSessionDuration: 15,
       });
       mockApi.session.getStatus.mockResolvedValue({
         isRunning: true,

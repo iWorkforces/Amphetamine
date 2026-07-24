@@ -1,6 +1,6 @@
 {
   "name": "amphetamine",
-  "version": "1.9.4",
+  "version": "1.9.5",
   "author": "OCWorkforces Engineers",
   "authorEmail": "kennydizi@ocworkforces.com",
   "description": "A macOS menu bar app that keeps your Mac awake. Lives in the system tray, prevents the system from going to sleep, and stays out of the Dock.",
@@ -56,6 +56,7 @@
     "flip-fuses": "node build/flip-fuses.cjs",
     "typecheck": "tsc -b",
     "typecheck:tests": "tsc --project tsconfig.tests.json --noEmit",
+    "typecheck:sticky": "node scripts/check-sticky-ts.mjs",
     "test": "vitest run -c vitest.workspace.ts",
     "test:watch": "vitest -c vitest.workspace.ts",
     "test:coverage": "vitest run -c vitest.workspace.ts --coverage",

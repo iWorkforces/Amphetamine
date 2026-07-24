@@ -9,7 +9,14 @@ import {
   recordCountdownStart,
   recordCountdownStop,
 } from "./benchmark-countdown.js";
-import { STATUS_PREVENTING_SLEEP, STATUS_SLEEP_PREVENTION_OFF } from "./constants.js";
+import {
+  LABEL_CANCEL_SESSION,
+  LABEL_PREVENT_SLEEP,
+  LABEL_SESSION_DURATION,
+  SESSION_DURATION_CHIPS,
+  STATUS_PREVENTING_SLEEP,
+  STATUS_SLEEP_PREVENTION_OFF,
+} from "./constants.js";
 
 type SessionStatus = SessionStatusResponse | null;
 
@@ -39,6 +46,8 @@ let statusDotEl: HTMLElement | null = null;
 let statusTextEl: HTMLElement | null = null;
 let timerValueEl: HTMLElement | null = null;
 let statusErrorEl: HTMLElement | null = null;
+let preventSleepToggleEl: HTMLInputElement | null = null;
+let sessionActionsEl: HTMLElement | null = null;
 let rafId: number | null = null;
 
 function getApp(): HTMLElement | null {
@@ -138,25 +147,56 @@ function resizeToContent(): void {
   window.api.window.setHeight(targetH);
 }
 
+function paintControls(): void {
+  const active = isEffectivelyActive();
+  statusDotEl?.classList.toggle("active", active);
+  if (statusTextEl) {
+    statusTextEl.textContent = active
+      ? STATUS_PREVENTING_SLEEP
+      : STATUS_SLEEP_PREVENTION_OFF;
+  }
+  if (preventSleepToggleEl) {
+    preventSleepToggleEl.checked = settings.preventSleep;
+    preventSleepToggleEl.setAttribute("aria-checked", String(settings.preventSleep));
+  }
+  if (statusErrorEl) {
+    statusErrorEl.textContent = statusError ?? "";
+    statusErrorEl.classList.toggle("visible", statusError !== null);
+  }
+  paintSessionActions();
+}
+
+function paintSessionActions(): void {
+  if (!sessionActionsEl) return;
+  const running = Boolean(sessionStatus?.isRunning);
+  if (running) {
+    sessionActionsEl.innerHTML = `<button type="button" id="cancel-session-action" class="session-chip session-chip--cancel">${LABEL_CANCEL_SESSION}</button>`;
+    const cancelBtn = sessionActionsEl.querySelector<HTMLButtonElement>("#cancel-session-action");
+    cancelBtn?.addEventListener("click", () => {
+      void window.api.session.cancel().then(() => refreshSessionStatus());
+    });
+    return;
+  }
+  const chips = SESSION_DURATION_CHIPS.map(
+    (chip) =>
+      `<button type="button" class="session-chip" data-duration="${chip.minutes === null ? "" : String(chip.minutes)}">${chip.label}</button>`,
+  ).join("");
+  sessionActionsEl.innerHTML = `<span class="session-actions-label">${LABEL_SESSION_DURATION}</span><div class="session-chip-row">${chips}</div>`;
+  sessionActionsEl.querySelectorAll<HTMLButtonElement>(".session-chip").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const raw = btn.dataset["duration"] ?? "";
+      const duration: number | null = raw === "" ? null : parseInt(raw, 10);
+      void window.api.session.start(duration).then(() => refreshSessionStatus());
+    });
+  });
+}
+
 function updateStatusUI(): void {
   if (isLoading) return;
   // Skip rAF when timer text unchanged (59/60 ticks produce identical display)
   const currentTimerText = formatTimerValue();
   if (currentTimerText === lastRenderedTimerText) {
-    // Still update status dot/error since those can change independently
-    const active = isEffectivelyActive();
-    if (statusDotEl) {
-      statusDotEl.classList.toggle("active", active);
-    }
-    if (statusTextEl) {
-      statusTextEl.textContent = active
-        ? STATUS_PREVENTING_SLEEP
-        : STATUS_SLEEP_PREVENTION_OFF;
-    }
-    if (statusErrorEl) {
-      statusErrorEl.textContent = statusError ?? "";
-      statusErrorEl.classList.toggle("visible", statusError !== null);
-    }
+    paintControls();
     return;
   }
   if (rafId !== null) {
@@ -165,19 +205,9 @@ function updateStatusUI(): void {
   rafId = requestAnimationFrame(() => {
     rafId = null;
     lastRenderedTimerText = currentTimerText;
-    const active = isEffectivelyActive();
-    statusDotEl?.classList.toggle("active", active);
-    if (statusTextEl) {
-      statusTextEl.textContent = active
-        ? STATUS_PREVENTING_SLEEP
-        : STATUS_SLEEP_PREVENTION_OFF;
-    }
+    paintControls();
     if (timerValueEl) {
       timerValueEl.textContent = currentTimerText;
-    }
-    if (statusErrorEl) {
-      statusErrorEl.textContent = statusError ?? "";
-      statusErrorEl.classList.toggle("visible", statusError !== null);
     }
   });
 }
@@ -204,6 +234,8 @@ function bindEvents(): void {
   const settingsButton =
     app.querySelector<HTMLButtonElement>("#settings-action");
   const quitButton = app.querySelector<HTMLButtonElement>("#quit-action");
+  const preventToggle =
+    app.querySelector<HTMLInputElement>("#prevent-sleep-toggle");
 
   settingsButton?.addEventListener("click", () => {
     void window.api.settings.open();
@@ -212,6 +244,17 @@ function bindEvents(): void {
   quitButton?.addEventListener("click", () => {
     void window.api.app.quit();
   });
+
+  preventToggle?.addEventListener("change", () => {
+    const next = preventToggle.checked;
+    settings = { ...settings, preventSleep: next };
+    void window.api.settings.set({ preventSleep: next }).then((res) => {
+      settings = res.settings;
+      updateStatusUI();
+    });
+  });
+
+  paintSessionActions();
 }
 
 function renderLoading(): void {
@@ -252,7 +295,17 @@ function render(version: string): void {
 
       <p id="status-error" class="status-error${statusError !== null ? " visible" : ""}">${statusError ?? ""}</p>
 
+      <div class="popover-toggle-row">
+        <label class="popover-toggle-label" for="prevent-sleep-toggle">${LABEL_PREVENT_SLEEP}</label>
+        <label class="toggle-switch">
+          <input type="checkbox" id="prevent-sleep-toggle" class="toggle-input" role="switch" aria-checked="${settings.preventSleep}"${settings.preventSleep ? " checked" : ""} />
+          <span class="toggle-track"><span class="toggle-thumb"></span></span>
+        </label>
+      </div>
+
       <p id="timer-text" class="popover-timer"><span class="timer-icon">${TIMER_ICON_SVG}</span><span class="timer-value">${formatTimerValue()}</span></p>
+
+      <div id="session-actions" class="session-actions"></div>
 
       <div class="popover-divider" role="presentation"></div>
 
@@ -271,6 +324,8 @@ function render(version: string): void {
     statusTextEl = app.querySelector("#status-text");
     timerValueEl = app.querySelector(".timer-value");
     statusErrorEl = app.querySelector("#status-error");
+    preventSleepToggleEl = app.querySelector("#prevent-sleep-toggle");
+    sessionActionsEl = app.querySelector("#session-actions");
     resizeToContent();
 
     if (isPopoverVisible) {
@@ -346,6 +401,8 @@ function attachWindowEvents(): void {
     statusTextEl = null;
     timerValueEl = null;
     statusErrorEl = null;
+    preventSleepToggleEl = null;
+    sessionActionsEl = null;
     unsubscribeSessionStatus?.();
     unsubscribeSessionStatus = null;
     unsubscribeSettings?.();
@@ -385,6 +442,8 @@ async function init(): Promise<void> {
       statusTextEl = app.querySelector("#status-text");
       timerValueEl = app.querySelector(".timer-value");
       statusErrorEl = app.querySelector("#status-error");
+      preventSleepToggleEl = app.querySelector("#prevent-sleep-toggle");
+      sessionActionsEl = app.querySelector("#session-actions");
 
       isPopoverVisible = true;
       app.classList.add("visible");

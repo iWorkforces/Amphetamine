@@ -4,12 +4,12 @@ A macOS menu bar app that keeps your Mac awake. Lives in the system tray, preven
 
 ## Features
 
-- **Sleep Prevention**: blocks system and display sleep via Electron's `powerSaveBlocker` (`prevent-display-sleep`).
-- **Session Timer**: start timed sessions (configurable duration) or run indefinitely. Runtime state uses monotonic `performance.now()`; timed sessions also keep a wall-clock anchor so expiry survives macOS sleep.
+- **Sleep Prevention**: blocks system and/or display sleep via Electron's `powerSaveBlocker` (configurable display vs system-only mode).
+- **Session Timer**: start timed sessions (configurable duration) or run indefinitely from the tray popover or Settings. Runtime state is separate from the saved default duration preference.
 - **Battery-Aware Auto-Disable**: polls `pmset` and automatically stops sleep prevention when battery drops below a configurable threshold.
 - **Global Shortcut**: toggle sleep prevention with `Cmd+Shift+A` (configurable).
 - **Launch at Login**: optional macOS login item, managed through native APIs.
-- **Tray-Only UX**: no Dock icon by default (`LSUIElement`). The settings window appears in the Dock only while open.
+- **Tray-Only UX**: no Dock icon by default (`LSUIElement`). The popover provides prevent-sleep toggle and quick session start; the settings window appears in the Dock only while open.
 - **Settings Window**: configure launch-at-login, sleep prevention default, session duration, battery threshold, and the keyboard shortcut.
 - **Auto-Updater**: checks GitHub releases via `electron-updater` shortly after launch and every 4 hours, with exponential backoff up to 24h on failure. Manual "Check for Updates" available from the tray menu.
 - **Secure IPC**: sandboxed preload exposes a strictly typed `window.api` bridge. Main-side handlers validate sender origin against an allowlist; all 15 channels are typed end-to-end.
@@ -36,6 +36,7 @@ bun run build:main        # Build main process only (rslib)
 bun run build:preload     # Build preload only (rslib)
 bun run build:renderer    # Build renderer only (rsbuild)
 bun run typecheck         # tsc -b for src/
+bun run typecheck:sticky  # assert sticky strict TS flags
 bun run typecheck:tests   # tsc for tests/
 bun run test              # Run Vitest workspace (~391 tests across 23 files)
 bun run test:watch        # Vitest in watch mode
@@ -94,6 +95,8 @@ Notes on packaging:
 - **Updates**: published to GitHub releases (`OCWorkforces/Amphetamine`).
 
 CI builds arm64 and x64 artifacts only for pushes to `main` after lint and tests pass. CD runs from the successful CI workflow, tags `v<package.json version>` when missing, downloads those artifacts, and publishes the GitHub release.
+
+Pushes to `develop` (including merged PRs) run CI lint/test **and** the **Beta** workflow, which packages arm64 and x64 DMG/ZIP artifacts with a `-beta` filename suffix (e.g. `Amphetamine-1.9.5-arm64-beta.dmg`), uploads Actions artifacts, and publishes a GitHub **prerelease** tagged `v{version}-beta.{run_number}` (not marked latest). Production releases remain `vX.Y.Z` from `main` via CD.
 
 ### Install to Applications
 

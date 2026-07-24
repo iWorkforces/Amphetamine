@@ -29,8 +29,10 @@ jobs:
             echo "ERROR: 'OCWorkforces' string found in src/ (org does not exist on GitHub)"
             exit 1
           fi
-      - run: bun run lint
       - run: bun run typecheck
+      - run: bun run typecheck:tests
+      - run: bun run typecheck:sticky
+      - run: bun run lint
 
   test:
     runs-on: ubuntu-latest

@@ -46,14 +46,14 @@ describe("broadcastToWindows", () => {
       ...DEFAULT_SETTINGS,
       launchAtLogin: false,
       preventSleep: true,
-      sessionDuration: null,
+      defaultSessionDuration: null,
     });
 
     expect(mockSend).toHaveBeenCalledWith("settings:changed", {
       ...DEFAULT_SETTINGS,
       launchAtLogin: false,
       preventSleep: true,
-      sessionDuration: null,
+      defaultSessionDuration: null,
     });
   });
 
