@@ -1,5 +1,4 @@
 import type {
-  AppSettings,
   IpcResponse,
   PerfTimestamp,
   PushChannel,
@@ -27,10 +26,6 @@ export interface SessionState {
  * construction time by `createSessionTimer`.
  */
 export interface SessionTimerDeps {
-  /** Called when session state transitions trigger a settings update. */
-  onStateChange: (updates: Partial<AppSettings>) => void;
-  /** Reads the current settings snapshot for reconciliation. */
-  getSettings: () => AppSettings;
   /** Broadcasts session status pushes to renderer windows. */
   broadcast: <K extends PushChannel>(channel: K, data: IpcResponse<K>) => void;
   /**
@@ -89,17 +84,11 @@ type InternalSessionState =
  * setter-based DI is gone.
  */
 export function createSessionTimer(deps: SessionTimerDeps): SessionTimerHandle {
-  if (typeof deps.onStateChange !== "function") {
-    throw new TypeError("createSessionTimer: deps.onStateChange must be a function");
-  }
-  if (typeof deps.getSettings !== "function") {
-    throw new TypeError("createSessionTimer: deps.getSettings must be a function");
-  }
   if (typeof deps.broadcast !== "function") {
     throw new TypeError("createSessionTimer: deps.broadcast must be a function");
   }
 
-  const { onStateChange, getSettings, broadcast } = deps;
+  const { broadcast } = deps;
   const onSessionActiveChange = deps.onSessionActiveChange;
   const powerMonitor = deps.powerMonitor;
 
@@ -116,7 +105,6 @@ export function createSessionTimer(deps: SessionTimerDeps): SessionTimerHandle {
     clearTimedExpiryTimer();
     state = { kind: "idle" };
     try {
-      onStateChange({ sessionDuration: null });
       onSessionActiveChange?.(false);
       broadcastSessionUpdate();
     } catch (err) {
@@ -166,19 +154,11 @@ export function createSessionTimer(deps: SessionTimerDeps): SessionTimerHandle {
   };
 
   /**
-   * Reconcile in-memory session state against settings.
-   *
-   * The discriminated-union state is now authoritative — settings drift is no
-   * longer possible because state transitions always notify the coordinator.
-   * Kept as a no-op safety shim: if settings somehow report no session
-   * but module state still holds one, clear it to match.
+   * Runtime session state is authoritative and is no longer mirrored into settings.
+   * Kept as a no-op for call-site compatibility (coordinator may still invoke it).
    */
   const reconcileSessionState = (): void => {
-    if (state.kind !== "idle" && getSettings().sessionDuration === null) {
-      clearTimedExpiryTimer();
-      state = { kind: "idle" };
-      onSessionActiveChange?.(false);
-    }
+    // Intentionally empty — preference fields must not cancel a live session.
   };
 
   const startSession = (durationMinutes: number | null): SessionState => {
@@ -188,7 +168,6 @@ export function createSessionTimer(deps: SessionTimerDeps): SessionTimerHandle {
     if (durationMinutes === null) {
       const startedAt = perfNow();
       state = { kind: "indefinite", startedAt };
-      onStateChange({ sessionDuration: null });
       if (!wasActive) onSessionActiveChange?.(true);
       broadcastSessionUpdate();
       return {
@@ -222,7 +201,6 @@ export function createSessionTimer(deps: SessionTimerDeps): SessionTimerHandle {
       expiryTimer,
     };
 
-    onStateChange({ sessionDuration: durationMinutes });
     if (!wasActive) onSessionActiveChange?.(true);
     broadcastSessionUpdate();
 
@@ -238,7 +216,6 @@ export function createSessionTimer(deps: SessionTimerDeps): SessionTimerHandle {
     const wasActive = state.kind !== "idle";
     clearTimedExpiryTimer();
     state = { kind: "idle" };
-    onStateChange({ sessionDuration: null });
     if (wasActive) onSessionActiveChange?.(false);
     broadcastSessionUpdate();
     return {

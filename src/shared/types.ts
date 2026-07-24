@@ -191,25 +191,37 @@ export const PUSH_CHANNELS = [
 
 export type PushChannel = (typeof PUSH_CHANNELS)[number];
 
+/** Sleep prevention powerSaveBlocker mode */
+export type SleepBlockMode = "prevent-display-sleep" | "prevent-app-suspension";
+
 /** Application settings */
 export interface AppSettings {
   /** Whether to launch the app at login (auto-start on system restart) */
   launchAtLogin: boolean;
   /** Whether to prevent the Mac from sleeping */
   preventSleep: boolean;
-  /** Session duration in minutes, null = indefinite */
-  sessionDuration: number | null;
+  /**
+   * Default session duration preference in minutes (`null` = indefinite).
+   * Preference only — runtime session state lives in the session timer, not settings.
+   */
+  defaultSessionDuration: number | null;
   /** Battery threshold (0-100) — auto-stop sleep prevention when on battery below threshold. 0 = disabled */
   batteryThreshold: number;
   /** Global keyboard shortcut to toggle sleep prevention (e.g. Cmd+Shift+A). Empty string = use default */
   shortcut: string;
+  /**
+   * powerSaveBlocker type. `prevent-display-sleep` keeps the display on (default);
+   * `prevent-app-suspension` allows the display to sleep while keeping the system awake.
+   */
+  sleepBlockMode: SleepBlockMode;
 }
 
 /** Default settings values */
 export const DEFAULT_SETTINGS: Readonly<AppSettings> = {
   launchAtLogin: false,
   preventSleep: false,
-  sessionDuration: null,
+  defaultSessionDuration: null,
   batteryThreshold: 0,
   shortcut: "",
+  sleepBlockMode: "prevent-display-sleep",
 };
