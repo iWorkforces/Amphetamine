@@ -16,7 +16,7 @@ Electron main process for lifecycle, tray, IPC, settings persistence, sleep prev
 | `ipc-utils.ts` | Sender allowlist and typed handler utilities |
 | `settings.ts` | Async JSON settings, EventEmitter, write mutex, corrupt backup, `flushSettingsWriteChain()` |
 | `settings-window.ts` | BrowserWindow singleton; Dock visibility while open |
-| `auto-updater.ts` | GitHub release polling, backoff, one-open-per-version guard, `checkForUpdatesNow()` |
+| `auto-updater.ts` | Hybrid updates: check/download/install when possible; browser fallback; `checkForUpdatesNow()` |
 | `auto-updater-utils.ts` | Pure updater helpers |
 | `benchmark.ts` | Benchmark-mode measurement flow and stdout result artifact |
 | `benchmark-env.ts` | Benchmark env names and mode guard |
@@ -67,6 +67,7 @@ Electron main process for lifecycle, tray, IPC, settings persistence, sleep prev
 - Module-level delegators (`startSession`, …) fail fast if `setActiveSessionTimer` has not been called.
 - `reconcileSessionState()` is a no-op: preference null must not kill a live session.
 - Auto-updater waits 3s after startup, repeats every 4h, and backs off failures to 24h max.
+- Hybrid update policy: `autoDownload` stays false for background checks. Tray/IPC **Check for Updates** sets user-initiated mode → `downloadUpdate()` → dialog → `quitAndInstall()` when the platform allows (signed macOS + ZIP/`latest-mac.yml`). On download/install failure, open the GitHub release page. Background `update-available` only broadcasts status (no browser popup).
 
 ## Tray Rules
 
