@@ -35,11 +35,15 @@ Workflow definitions for lint/test/build, production release publishing, and dev
 
 - Beta triggers on **`push` to `develop`** (covers PR merges) and `workflow_dispatch` (manual re-run).
 - **Why not `workflow_run`?** GitHub only registers `workflow_run` listeners from workflow files on the **default branch** (`main`). `beta.yml` is develop-oriented and is not required on `main`, so a `workflow_run` listener would never fire.
-- Jobs: `lint` + `test`, then `package` (needs both).
+- Jobs: `lint` + `test` → `package` (matrix) → **`release`** (GitHub prerelease).
 - Packaging matrix matches main: arm64 on `macos-latest`, x64 on `macos-15-intel`.
 - After `electron-builder`, DMG/ZIP basenames get a `-beta` suffix (e.g. `Amphetamine-1.9.5-arm64-beta.dmg`).
-- Artifacts upload as `dist-mac-beta-arm64` and `dist-mac-beta-x64` for 14 days.
-- Beta does **not** create GitHub Releases or tags (production releases stay on main via CD).
+- Artifacts also upload as Actions artifacts `dist-mac-beta-arm64` / `dist-mac-beta-x64` for 14 days.
+- **`release` job** publishes a GitHub **prerelease** (not latest production):
+  - Tag: `v{package.json.version}-beta.{run_number}` (unique per develop build)
+  - `prerelease: true`, `make_latest: false` so it does not replace production `vX.Y.Z` releases
+  - Attaches `*-beta.dmg` / `*-beta.zip`
+- Production CD still owns non-prerelease tags `vX.Y.Z` from `main`.
 - Concurrency group is `beta-${{ github.ref }}` with `cancel-in-progress: true`.
 - Local equivalent suffix: `./build-macOS-dmg.sh --environment beta --arch arm64`.
 

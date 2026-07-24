@@ -30,7 +30,7 @@ Package scripts use:
 | Pipeline | Branch | Artifact names | Fuses flipped in workflow? |
 |----------|--------|----------------|----------------------------|
 | CI `build` job | `main` push | `dist-mac-{arch}` (`*.dmg`, `*.zip`) | No (raw electron-builder) |
-| Beta workflow | push to `develop` | `dist-mac-beta-{arch}` (`*-beta.dmg`, `*-beta.zip`) | No (raw electron-builder + rename) |
+| Beta workflow | push to `develop` | Actions artifacts + GitHub **prerelease** `vX.Y.Z-beta.{run}` (`*-beta.dmg`/`*.zip`) | No (raw electron-builder + rename) |
 | Local `bun run package*` | developer machine | `dist/*` then flip-fuses | Yes |
 
 If changing release packaging, keep CI/CD/Beta and local package scripts intentional about fuse/signing equivalence.
@@ -55,7 +55,7 @@ If changing release packaging, keep CI/CD/Beta and local package scripts intenti
 - Never remove JIT/unsigned executable memory entitlements without testing macOS launch.
 - Never sign DMG by default in `electron-builder.yml`; keep local ad-hoc behavior in `build-macOS-dmg.sh`.
 - Never write generated package output under `build/`; use `dist/`.
-- Never upload develop beta builds as production GitHub Releases (main CD only).
+- Never mark develop beta prereleases as latest production; tags must stay `vX.Y.Z-beta.*` with `prerelease: true`.
 
 ## Commands
 

@@ -96,7 +96,7 @@ Notes on packaging:
 
 CI builds arm64 and x64 artifacts only for pushes to `main` after lint and tests pass. CD runs from the successful CI workflow, tags `v<package.json version>` when missing, downloads those artifacts, and publishes the GitHub release.
 
-Pushes to `develop` (including merged PRs) run CI lint/test **and** the **Beta** workflow, which packages arm64 and x64 DMG/ZIP artifacts with a `-beta` filename suffix (e.g. `Amphetamine-1.9.5-arm64-beta.dmg`) and uploads them as workflow artifacts for 14 days. Beta builds do not create GitHub Releases.
+Pushes to `develop` (including merged PRs) run CI lint/test **and** the **Beta** workflow, which packages arm64 and x64 DMG/ZIP artifacts with a `-beta` filename suffix (e.g. `Amphetamine-1.9.5-arm64-beta.dmg`), uploads Actions artifacts, and publishes a GitHub **prerelease** tagged `v{version}-beta.{run_number}` (not marked latest). Production releases remain `vX.Y.Z` from `main` via CD.
 
 ### Install to Applications
 

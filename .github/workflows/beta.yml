@@ -1,14 +1,13 @@
 name: Beta
 
-# Package beta-suffixed macOS DMG/ZIP on every push to develop (including PR merges).
+# Package beta-suffixed macOS DMG/ZIP on every push to develop (including PR merges),
+# then publish them as a GitHub *prerelease* (not a production release).
 #
 # NOTE: Do NOT use workflow_run here. GitHub only schedules workflow_run listeners
-# from workflow files that exist on the repository default branch (main). beta.yml
-# lives on develop-first workflows and would never register as a listener on main.
+# from workflow files that exist on the repository default branch (main).
 on:
   push:
     branches: [develop]
-  # Allow manual re-runs without another merge
   workflow_dispatch:
 
 concurrency:
@@ -125,7 +124,6 @@ jobs:
             base=$(basename "$f")
             ext="${base##*.}"
             name="${base%.*}"
-            # Skip if already suffixed (idempotent re-runs)
             if [[ "$name" == *-beta ]]; then
               echo "Already beta-suffixed: $f"
               continue
@@ -155,3 +153,70 @@ jobs:
           if-no-files-found: error
           compression-level: 0
           retention-days: 14
+
+  # Publish packaged beta builds to the GitHub Releases page as a prerelease.
+  # Production CD still owns non-prerelease tags vX.Y.Z from main.
+  release:
+    needs: package
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          fetch-depth: 0
+
+      - name: Extract version from package.json
+        id: version
+        run: |
+          VERSION=$(jq -r .version package.json)
+          SHORT_SHA=$(echo "${GITHUB_SHA}" | cut -c1-7)
+          # Unique prerelease tag per develop build (same package version can ship many betas)
+          TAG="v${VERSION}-beta.${{ github.run_number }}"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "short_sha=${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+          echo "Using beta tag: ${TAG}"
+
+      - name: Download arm64 beta artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: dist-mac-beta-arm64
+          path: artifacts/arm64
+
+      - name: Download x64 beta artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: dist-mac-beta-x64
+          path: artifacts/x64
+
+      - name: Verify release artifacts
+        run: |
+          DMG_COUNT=$(find artifacts -name '*-beta.dmg' 2>/dev/null | wc -l | tr -d ' ')
+          ZIP_COUNT=$(find artifacts -name '*-beta.zip' 2>/dev/null | wc -l | tr -d ' ')
+          echo "Found ${DMG_COUNT} beta DMG(s), ${ZIP_COUNT} beta ZIP(s)"
+          find artifacts -type f | sort
+          if [ "$DMG_COUNT" -eq 0 ] && [ "$ZIP_COUNT" -eq 0 ]; then
+            echo 'ERROR: No beta DMG or ZIP artifacts found to release'
+            exit 1
+          fi
+
+      - name: Create GitHub prerelease
+        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3.0.0
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: Amphetamine ${{ steps.version.outputs.version }} beta (${{ steps.version.outputs.short_sha }})
+          prerelease: true
+          make_latest: false
+          generate_release_notes: true
+          body: |
+            Pre-release build from `develop` (commit `${{ github.sha }}`).
+
+            - **Not** a production release — production tags remain `vX.Y.Z` from `main` / CD
+            - Artifacts are filename-suffixed with `-beta`
+            - Install may require removing quarantine if unsigned / ad-hoc signed
+          files: |
+            artifacts/**/*-beta.dmg
+            artifacts/**/*-beta.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
