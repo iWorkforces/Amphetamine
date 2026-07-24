@@ -110,7 +110,7 @@ bun run clean                  # remove lib/dist outputs
 - Login items use `openAsHidden: true`.
 - Settings window temporarily shows the Dock icon; tray-only mode returns on close.
 - Popover hide on blur uses typed `window:hide`, not DOM `CustomEvent`.
-- Auto-updater is notification-only: tray/menu check + GitHub release open at most once per version; no auto-install.
+- Auto-updater is hybrid: **Check for Updates** tries in-app download/install when possible; falls back to the GitHub release page on failure. Background checks do not auto-download or open the browser.
 - Electron pin is `^43.0.0`; do not downgrade below the patched line referenced by security comments.
 - Runtime deps are only `electron-log` and `electron-updater`; they are externalized in Rslib. Renderer must not import `electron-log`.
 - Production Rslib/Rsbuild builds drop console output.
