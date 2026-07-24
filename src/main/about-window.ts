@@ -7,6 +7,15 @@ import { getPackageInfo } from "./utils/packageInfo.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 /** Reference to the singleton About BrowserWindow (null when not open). */
 let aboutWindow: BrowserWindow | null = null;
 
@@ -31,12 +40,17 @@ export function showAbout(_mainWindow?: BrowserWindow): void {
   }
 
   const pkg = getPackageInfo();
+  const productName = escapeHtml(pkg.productName);
+  const version = escapeHtml(pkg.version);
+  const description = escapeHtml(pkg.description);
+  const repository = escapeHtml(pkg.repository);
 
   const html = `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<title>About ${pkg.productName}</title>
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; script-src 'unsafe-inline';" />
+<title>About ${productName}</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
@@ -63,6 +77,17 @@ export function showAbout(_mainWindow?: BrowserWindow): void {
     }
     button:hover { background: rgba(255, 255, 255, 0.12); }
     button:active { background: rgba(255, 255, 255, 0.16); }
+    @media (prefers-color-scheme: light) {
+      body { background: #f5f5f7; color: #1d1d1f; }
+      .version, .description { color: #6e6e73; }
+      button {
+        border: 1px solid rgba(0, 0, 0, 0.12);
+        background: rgba(0, 0, 0, 0.06);
+        color: #1d1d1f;
+      }
+      button:hover { background: rgba(0, 0, 0, 0.1); }
+      button:active { background: rgba(0, 0, 0, 0.14); }
+    }
   .app-icon {
     width: 96px;
     height: 96px;
@@ -99,10 +124,10 @@ export function showAbout(_mainWindow?: BrowserWindow): void {
 </style>
 </head>
 <body>
-  <img class="app-icon" src="${ABOUT_ICON_DATA_URI}" alt="${pkg.productName} icon" draggable="false" onclick="window.open('${pkg.repository}', '_blank')" style="cursor:pointer" title="View source on GitHub" />
-  <h1>${pkg.productName}</h1>
-  <div class="version">Version ${pkg.version}</div>
-  <div class="description">${pkg.description}</div>
+  <img class="app-icon" src="${ABOUT_ICON_DATA_URI}" alt="${productName} icon" draggable="false" onclick="window.open('${repository}', '_blank')" style="cursor:pointer" title="View source on GitHub" />
+  <h1>${productName}</h1>
+  <div class="version">Version ${version}</div>
+  <div class="description">${description}</div>
   <button onclick="window.close()">Close</button>
 </body>
 </html>`;
