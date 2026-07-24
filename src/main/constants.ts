@@ -5,7 +5,8 @@ import { isBenchmarkMode } from "./benchmark-env.js";
 export const MAIN_WINDOW_WIDTH = 360;
 export const MAIN_WINDOW_HEIGHT = 480;
 export const SETTINGS_WINDOW_WIDTH = 520;
-export const SETTINGS_WINDOW_HEIGHT = 540;
+/** Tall enough for titlebar, hero, six setting rows (incl. sleep mode), and footer. */
+export const SETTINGS_WINDOW_HEIGHT = 640;
 export const ABOUT_WINDOW_WIDTH = 340;
 export const ABOUT_WINDOW_HEIGHT = 380;
 

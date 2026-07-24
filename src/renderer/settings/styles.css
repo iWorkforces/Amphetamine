@@ -54,13 +54,13 @@
 html,
 body {
   width: 520px;
-  height: 540px;
+  height: 640px;
   background: transparent;
 }
 
 #app {
   width: 520px;
-  height: 540px;
+  height: 640px;
   backdrop-filter: blur(10px) saturate(180%);
   -webkit-backdrop-filter: blur(10px) saturate(180%);
   border: 1px solid var(--border);
@@ -134,11 +134,13 @@ body {
 /* ---- Settings content ---- */
 .settings-content {
   flex: 1;
+  min-height: 0;
   padding: 0 0 10px;
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  overflow: hidden;
+  justify-content: flex-start;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 /* ---- Setting row ---- */
@@ -406,6 +408,11 @@ body {
 
 #battery-threshold-select.setting-select {
   width: 90px;
+}
+
+/* Longer labels: "Prevent display sleep" / "System only (...)" */
+#sleep-block-mode-select.setting-select {
+  width: 168px;
 }
 
 @media (prefers-color-scheme: dark) {

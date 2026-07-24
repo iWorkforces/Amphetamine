@@ -25,7 +25,7 @@ describe("constants", () => {
 
     it("has correct settings window dimensions", () => {
       expect(SETTINGS_WINDOW_WIDTH).toBe(520);
-      expect(SETTINGS_WINDOW_HEIGHT).toBe(540);
+      expect(SETTINGS_WINDOW_HEIGHT).toBe(640);
     });
   });
 

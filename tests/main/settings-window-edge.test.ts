@@ -128,9 +128,9 @@ describe("settings-window — edge cases", () => {
     };
 
     expect(callArgs.width).toBe(520);
-    expect(callArgs.height).toBe(540);
+    expect(callArgs.height).toBe(640);
     expect(callArgs.minWidth).toBe(520);
-    expect(callArgs.minHeight).toBe(540);
+    expect(callArgs.minHeight).toBe(640);
     expect(callArgs.resizable).toBe(false);
     expect(callArgs.minimizable).toBe(false);
     expect(callArgs.maximizable).toBe(false);
