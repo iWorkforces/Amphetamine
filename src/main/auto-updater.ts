@@ -201,6 +201,21 @@ export function stopAutoUpdater(): void {
 }
 
 /**
+ * Manually trigger an update check (tray menu / IPC).
+ * No-op when not packaged. Errors are logged; does not throw.
+ */
+export function checkForUpdatesNow(): void {
+  if (!app.isPackaged) {
+    log.info("[auto-updater] checkForUpdatesNow skipped (not packaged)");
+    return;
+  }
+  log.info("[auto-updater] Manual update check requested");
+  void autoUpdater.checkForUpdates().catch((err: unknown) => {
+    log.warn("[auto-updater] Manual update check failed:", err);
+  });
+}
+
+/**
  * Register the auto-updater IPC handler.
  * Allows renderer to manually trigger an update check.
  */

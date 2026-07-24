@@ -1,18 +1,31 @@
 import { powerSaveBlocker } from "electron";
 import log from "electron-log";
+import type { SleepBlockMode } from "../shared/types.js";
 
 let blockerId: number | null = null;
+let activeMode: SleepBlockMode = "prevent-display-sleep";
 
-export function startPreventingSleep(): void {
-  if (blockerId !== null && powerSaveBlocker.isStarted(blockerId)) {
+export function startPreventingSleep(
+  mode: SleepBlockMode = "prevent-display-sleep",
+): void {
+  if (
+    blockerId !== null &&
+    powerSaveBlocker.isStarted(blockerId) &&
+    activeMode === mode
+  ) {
     return;
   }
-  const id = powerSaveBlocker.start("prevent-display-sleep");
+  // Mode change while active: stop then restart with the new type.
+  if (blockerId !== null) {
+    stopPreventingSleep();
+  }
+  const id = powerSaveBlocker.start(mode);
   if (id >= 0) {
     blockerId = id;
-    log.info(`[sleep-prevention] Started preventing sleep (id: ${blockerId})`);
+    activeMode = mode;
+    log.info(`[sleep-prevention] Started ${mode} (id: ${blockerId})`);
   } else {
-    log.error(`[sleep-prevention] Failed to start preventing sleep (id: ${id})`);
+    log.error(`[sleep-prevention] Failed to start ${mode} (id: ${id})`);
   }
 }
 
@@ -30,9 +43,16 @@ export function isPreventingSleep(): boolean {
   return blockerId !== null && powerSaveBlocker.isStarted(blockerId);
 }
 
-export function syncPreventSleep(enabled: boolean): void {
+export function getActiveSleepBlockMode(): SleepBlockMode {
+  return activeMode;
+}
+
+export function syncPreventSleep(
+  enabled: boolean,
+  mode: SleepBlockMode = "prevent-display-sleep",
+): void {
   if (enabled) {
-    startPreventingSleep();
+    startPreventingSleep(mode);
   } else {
     stopPreventingSleep();
   }

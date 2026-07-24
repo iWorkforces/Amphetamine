@@ -14,6 +14,7 @@ import { showAbout as openAboutWindow } from "./about-window.js";
 import {
   ACCELERATOR_QUIT,
   MENU_ABOUT,
+  MENU_CHECK_UPDATES,
   MENU_PREVENT_SLEEP,
   MENU_QUIT,
   MENU_SETTINGS,
@@ -72,6 +73,7 @@ export interface TrayDeps {
    */
   onActiveStateChanged: (callback: () => void) => () => void;
   openSettings: () => void;
+  checkForUpdates: () => void;
 }
 
 export function setupTray(deps: TrayDeps): () => void {
@@ -180,6 +182,7 @@ export function setupTray(deps: TrayDeps): () => void {
       { type: "separator" },
       { label: MENU_SETTINGS, click: () => deps.openSettings() },
       { label: MENU_ABOUT, click: () => showAbout() },
+      { label: MENU_CHECK_UPDATES, click: () => deps.checkForUpdates() },
       { label: MENU_QUIT, accelerator: ACCELERATOR_QUIT, click: () => app.quit() },
     ];
     return Menu.buildFromTemplate(template);
@@ -201,7 +204,14 @@ export function setupTray(deps: TrayDeps): () => void {
       clearTimeout(themeDebounceTimer);
       themeDebounceTimer = null;
     }
-    tray = null;
+    if (tray !== null) {
+      try {
+        tray.destroy();
+      } catch (err) {
+        log.error("[tray] Failed to destroy tray:", err);
+      }
+      tray = null;
+    }
     cachedMenu = null;
     iconCache.clear();
   };

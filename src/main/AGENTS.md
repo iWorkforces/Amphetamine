@@ -1,30 +1,30 @@
 # Main Process - Electron Backend
 
-Electron main process for lifecycle, tray, IPC, settings persistence, sleep prevention, sessions, battery policy, global shortcut, auto-updater, and benchmark mode. `coordinator.ts` owns settings-to-system synchronization.
+Electron main process for lifecycle, tray, IPC, settings persistence, sleep prevention, sessions, battery policy, global shortcut, auto-updater, and benchmark mode. `coordinator.ts` owns settings-to-system synchronization. `index.ts` owns the single quit orchestrator.
 
 ## Files
 
 | File | Role |
 |------|------|
-| `index.ts` | App bootstrap, window creation, security hooks, benchmark entry |
-| `coordinator.ts` | Central hub: settings diffing, sleep/session/tray/shortcut/battery sync |
-| `session-timer.ts` | Idle/timed/indefinite state machine; monotonic timing |
-| `sleep-prevention.ts` | Only `powerSaveBlocker` wrapper |
-| `battery-monitor.ts` | `pmset` polling; pure threshold detector |
-| `tray.ts` | Tray icon/menu cache, theme debounce, benchmark menu proxy |
+| `index.ts` | App bootstrap, window creation, security hooks, quit orchestrator, benchmark entry |
+| `coordinator.ts` | Central hub: settings diffing, sleep/session/tray/shortcut/battery/updater sync |
+| `session-timer.ts` | Idle/timed/indefinite state machine; monotonic timing; no settings writes |
+| `sleep-prevention.ts` | Only `powerSaveBlocker` wrapper; accepts `SleepBlockMode` |
+| `battery-monitor.ts` | `pmset` polling; pure threshold detector + `reconfigure()` |
+| `tray.ts` | Tray icon/menu cache, theme debounce, Check for Updates, destroy on cleanup |
 | `ipc.ts` | Typed IPC handler registration via `typedHandle()` |
 | `ipc-utils.ts` | Sender allowlist and typed handler utilities |
-| `settings.ts` | Async JSON settings, EventEmitter, write mutex, corrupt backup |
+| `settings.ts` | Async JSON settings, EventEmitter, write mutex, corrupt backup, `flushSettingsWriteChain()` |
 | `settings-window.ts` | BrowserWindow singleton; Dock visibility while open |
-| `auto-updater.ts` | GitHub release polling, backoff, one-open-per-version guard |
+| `auto-updater.ts` | GitHub release polling, backoff, one-open-per-version guard, `checkForUpdatesNow()` |
 | `auto-updater-utils.ts` | Pure updater helpers |
 | `benchmark.ts` | Benchmark-mode measurement flow and stdout result artifact |
 | `benchmark-env.ts` | Benchmark env names and mode guard |
 | `benchmark-metrics.ts` | Pure benchmark artifact summaries |
-| `global-shortcut.ts` | Accelerator registration and toggle behavior |
-| `auto-launch.ts` | macOS login item integration |
+| `global-shortcut.ts` | Accelerator registration; broadcasts `SHORTCUT_REGISTRATION_FAILED` on failure |
+| `auto-launch.ts` | macOS login item integration (`openAsHidden: true`) |
 | `security.ts` | WebContents hardening and navigation allowlist |
-| `about-window.ts` | Native About panel options |
+| `about-window.ts` | Custom About BrowserWindow (escaped HTML, CSP, light/dark) |
 | `utils/broadcast.ts` | Generic typed push helper |
 | `utils/packageInfo.ts` | Cached package metadata with runtime guard |
 
@@ -32,10 +32,23 @@ Electron main process for lifecycle, tray, IPC, settings persistence, sleep prev
 
 - Initialize settings before reading them; `getSettings()` throws before `initSettings()`.
 - Effective sleep prevention is `settings.preventSleep || sessionActiveCache`.
+- `recomputeSleepPrevention` passes `settings.sleepBlockMode` into `syncPreventSleep`.
 - Low-battery auto-stop persists `preventSleep: false` and cancels any active session.
 - Battery monitor detects only; coordinator owns policy and side effects.
+- On `batteryThreshold` change, call `batteryMonitor.reconfigure()` so polling re-arms without a sleep toggle.
+- On `sleepBlockMode` change while prevention is active, recompute so the blocker restarts with the new type.
 - Session active changes recompute sleep prevention and tray state without clobbering user intent.
-- Settings changes diff previous values before touching launch item, shortcut, session, tray, or renderer broadcasts.
+- Session timer **does not** write settings; preference field `defaultSessionDuration` is UI/settings-only.
+- Settings changes diff previous values before touching launch item, shortcut, battery, sleep mode, tray, or renderer broadcasts.
+- `getTrayDeps()` supplies `checkForUpdates` → `checkForUpdatesNow()`.
+- `cleanupCoordinator()` must call `sessionTimer?.cleanup()` before nulling the handle.
+
+## Quit Orchestrator (`index.ts`)
+
+- Single `before-quit` owner (not `settings.ts`).
+- Flow: `preventDefault` → await `flushSettingsWriteChain()` (2s timeout) → tray cleanup (`destroy`) → `cleanupCoordinator()` → destroy main window → `app.exit(0)`.
+- Guard with `didRunQuitCleanup` so re-entry is idempotent.
+- `settings.ts` exports `flushSettingsWriteChain()` only; it must not register its own quit handler.
 
 ## IPC and Security
 
@@ -50,8 +63,18 @@ Electron main process for lifecycle, tray, IPC, settings persistence, sleep prev
 - Session elapsed timing uses `performance.now()` branded with `asPerf(n)`.
 - `Date.now()` is allowed only for the wall-clock expiry anchor in `session-timer.ts`.
 - Timer and polling handles should call `.unref()` so they do not pin the event loop.
-- `createSessionTimer()` and module-level delegators fail fast if deps/active handle are missing.
+- `createSessionTimer({ broadcast, onSessionActiveChange?, powerMonitor? })` — no `onStateChange` / settings deps.
+- Module-level delegators (`startSession`, …) fail fast if `setActiveSessionTimer` has not been called.
+- `reconcileSessionState()` is a no-op: preference null must not kill a live session.
 - Auto-updater waits 3s after startup, repeats every 4h, and backs off failures to 24h max.
+
+## Tray Rules
+
+- Icon reflects **effective** active state (`getEffectiveActive`).
+- Menu checkbox reflects **user intent** (`getPreventSleep`) only.
+- Menu: Prevent Sleep, Settings, About, Check for Updates…, Quit.
+- Cleanup must call `tray.destroy()` before nulling the reference.
+- Icon load: `nativeImage.createFromPath()` only (asar-safe).
 
 ## Benchmark Mode
 
@@ -67,11 +90,14 @@ Electron main process for lifecycle, tray, IPC, settings persistence, sleep prev
 - Never add settings validation branches in main; extend shared `VALIDATORS`.
 - Never load tray icons with `fs.readFileSync()`; use `nativeImage.createFromPath()` for asar compatibility.
 - Never hardcode tray/menu UI strings outside `constants.ts`.
+- Never write session runtime duration into settings from the timer.
+- Never register a second `before-quit` handler that races the quit orchestrator.
 
 ## Commands
 
 ```bash
 bun run test -- tests/main
 bun run typecheck
+bun run typecheck:sticky
 bun run benchmark:performance  # after bun run build
 ```

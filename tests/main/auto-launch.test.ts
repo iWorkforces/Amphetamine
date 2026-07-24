@@ -55,7 +55,7 @@ describe("auto-launch", () => {
       setAutoLaunch(true);
       expect(mockSetLoginItemSettings).toHaveBeenCalledWith({
         openAtLogin: true,
-        openAsHidden: false,
+        openAsHidden: true,
       });
     });
 
@@ -63,7 +63,7 @@ describe("auto-launch", () => {
       setAutoLaunch(false);
       expect(mockSetLoginItemSettings).toHaveBeenCalledWith({
         openAtLogin: false,
-        openAsHidden: false,
+        openAsHidden: true,
       });
     });
 
@@ -81,7 +81,7 @@ describe("auto-launch", () => {
       syncAutoLaunch(true);
       expect(mockSetLoginItemSettings).toHaveBeenCalledWith({
         openAtLogin: true,
-        openAsHidden: false,
+        openAsHidden: true,
       });
     });
 
@@ -90,7 +90,7 @@ describe("auto-launch", () => {
       syncAutoLaunch(false);
       expect(mockSetLoginItemSettings).toHaveBeenCalledWith({
         openAtLogin: false,
-        openAsHidden: false,
+        openAsHidden: true,
       });
     });
 

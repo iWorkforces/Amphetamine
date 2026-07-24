@@ -23,7 +23,17 @@ Package scripts use:
 
 `package:dir` builds an unpacked app only and does not automatically flip fuses.
 
-`build-macOS-dmg.sh` is the local wrapper: install deps, clean `dist/`, build, package, sign Developer ID if available, otherwise deep ad-hoc re-sign the `.app` without hardened runtime, ad-hoc sign the DMG, and append the environment suffix.
+`build-macOS-dmg.sh` is the local wrapper: install deps, clean `dist/`, build, package, sign Developer ID if available, otherwise deep ad-hoc re-sign the `.app` without hardened runtime, ad-hoc sign the DMG, and append the environment suffix (e.g. `--environment beta` → `*-beta.dmg`).
+
+## CI Packaging Paths
+
+| Pipeline | Branch | Artifact names | Fuses flipped in workflow? |
+|----------|--------|----------------|----------------------------|
+| CI `build` job | `main` push | `dist-mac-{arch}` (`*.dmg`, `*.zip`) | No (raw electron-builder) |
+| Beta workflow | successful CI on `develop` | `dist-mac-beta-{arch}` (`*-beta.dmg`, `*-beta.zip`) | No (raw electron-builder + rename) |
+| Local `bun run package*` | developer machine | `dist/*` then flip-fuses | Yes |
+
+If changing release packaging, keep CI/CD/Beta and local package scripts intentional about fuse/signing equivalence.
 
 ## electron-builder Constraints
 
@@ -38,8 +48,6 @@ Package scripts use:
 
 `flip-fuses.cjs` disables RunAsNode, inspect args, and `NODE_OPTIONS`; requires app load from ASAR; enables ASAR integrity and cookie encryption.
 
-CI currently invokes raw `electron-builder` in workflow packaging. If changing release packaging, ensure the CI/CD path and local package scripts have equivalent fuse/signing behavior.
-
 ## Anti-Patterns
 
 - Never distribute an app bundle before the intended fuse hardening path has run.
@@ -47,6 +55,7 @@ CI currently invokes raw `electron-builder` in workflow packaging. If changing r
 - Never remove JIT/unsigned executable memory entitlements without testing macOS launch.
 - Never sign DMG by default in `electron-builder.yml`; keep local ad-hoc behavior in `build-macOS-dmg.sh`.
 - Never write generated package output under `build/`; use `dist/`.
+- Never upload develop beta builds as production GitHub Releases (main CD only).
 
 ## Commands
 
@@ -54,5 +63,6 @@ CI currently invokes raw `electron-builder` in workflow packaging. If changing r
 bun run package
 bun run package:x64
 bun run package:dir
+./build-macOS-dmg.sh --environment beta --arch arm64
 ./build-macOS-dmg.sh --environment stable --arch arm64
 ```

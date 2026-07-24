@@ -138,35 +138,47 @@ export default [
       eqeqeq: ["error", "always"],
       "no-throw-literal": "error",
 
-      // Relax overly strict rules
-      "@typescript-eslint/no-explicit-any": "error",
-
       // Security (Electron)
       "no-eval": "error",
       "no-new-func": "error",
 
-      // Type safety / async correctness
+      // --- STICKY type-safety (do not downgrade for src/; CI asserts via typecheck:sticky) ---
+      "@typescript-eslint/no-explicit-any": "error",
       "@typescript-eslint/no-floating-promises": "error",
       "@typescript-eslint/consistent-type-imports": "error",
-
-      // Strict typing rules (added by Wave 5)
       "@typescript-eslint/strict-boolean-expressions": ["error", {
         allowNullableBoolean: true,
         allowNullableString: true,
         allowNullableNumber: false,
         allowAny: false,
       }],
-      "@typescript-eslint/no-unnecessary-condition": "warn",
+      "@typescript-eslint/no-unnecessary-condition": "error",
       "@typescript-eslint/no-unsafe-argument": "error",
       "@typescript-eslint/no-unsafe-assignment": "error",
       "@typescript-eslint/no-unsafe-call": "error",
       "@typescript-eslint/no-unsafe-member-access": "error",
       "@typescript-eslint/no-unsafe-return": "error",
+      "@typescript-eslint/ban-ts-comment": [
+        "error",
+        {
+          "ts-expect-error": true,
+          "ts-ignore": true,
+          "ts-nocheck": true,
+          "ts-check": false,
+        },
+      ],
+      "@typescript-eslint/consistent-type-assertions": [
+        "error",
+        { assertionStyle: "as", objectLiteralTypeAssertions: "allow" },
+      ],
+      "@typescript-eslint/no-non-null-assertion": "error",
     },
   },
   {
     // Tests use vi.hoisted/vi.fn which return `any`-typed mocks by design.
     // Disable unsafe-* in tests to avoid false positives on mock surfaces.
+    // Non-null assertions and occasional @ts-expect-error are common in fixtures;
+    // sticky bans still apply to src/ only.
     files: ["tests/**/*.ts"],
     rules: {
       "@typescript-eslint/no-unsafe-argument": "off",
@@ -174,6 +186,18 @@ export default [
       "@typescript-eslint/no-unsafe-call": "off",
       "@typescript-eslint/no-unsafe-member-access": "off",
       "@typescript-eslint/no-unsafe-return": "off",
+      "@typescript-eslint/no-non-null-assertion": "off",
+      "@typescript-eslint/ban-ts-comment": [
+        "error",
+        {
+          "ts-expect-error": "allow-with-description",
+          "ts-ignore": true,
+          "ts-nocheck": true,
+          "ts-check": false,
+          minimumDescriptionLength: 3,
+        },
+      ],
+      "@typescript-eslint/no-unnecessary-condition": "off",
     },
   },
   prettier, // Prettier must be last to override formatting rules

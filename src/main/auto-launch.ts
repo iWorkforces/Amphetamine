@@ -23,7 +23,7 @@ export function setAutoLaunch(enabled: boolean): void {
   try {
     app.setLoginItemSettings({
       openAtLogin: enabled,
-      openAsHidden: false,
+      openAsHidden: true,
     });
     log.info(`[auto-launch] ${enabled ? "Enabled" : "Disabled"} launch at login`);
   } catch (err) {

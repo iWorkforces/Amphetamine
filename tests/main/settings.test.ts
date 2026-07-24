@@ -193,7 +193,14 @@ describe("settings", () => {
       const result = await updateSettings({ launchAtLogin: true });
 
       expect(Object.keys(result.settings).sort()).toEqual(
-        ["launchAtLogin", "preventSleep", "sessionDuration", "batteryThreshold", "shortcut"].sort(),
+        [
+          "launchAtLogin",
+          "preventSleep",
+          "defaultSessionDuration",
+          "batteryThreshold",
+          "shortcut",
+          "sleepBlockMode",
+        ].sort(),
       );
     });
 
@@ -224,44 +231,44 @@ describe("settings", () => {
   });
 
   describe("validation edge cases", () => {
-    it("rejects NaN sessionDuration (no change)", async () => {
-      await updateSettings({ sessionDuration: 60 });
-      const before = getSettings().sessionDuration;
+    it("rejects NaN defaultSessionDuration (no change)", async () => {
+      await updateSettings({ defaultSessionDuration: 60 });
+      const before = getSettings().defaultSessionDuration;
 
-      const result = await updateSettings({ sessionDuration: Number.NaN });
+      const result = await updateSettings({ defaultSessionDuration: Number.NaN });
 
-      expect(result.settings.sessionDuration).toBe(before);
-      expect(result.settings.sessionDuration).toBe(60);
-      expect(result.rejectedKeys).toContain("sessionDuration");
+      expect(result.settings.defaultSessionDuration).toBe(before);
+      expect(result.settings.defaultSessionDuration).toBe(60);
+      expect(result.rejectedKeys).toContain("defaultSessionDuration");
     });
 
-    it("rejects Infinity sessionDuration (no change)", async () => {
-      await updateSettings({ sessionDuration: 60 });
-      const before = getSettings().sessionDuration;
+    it("rejects Infinity defaultSessionDuration (no change)", async () => {
+      await updateSettings({ defaultSessionDuration: 60 });
+      const before = getSettings().defaultSessionDuration;
 
-      const result = await updateSettings({ sessionDuration: Number.POSITIVE_INFINITY });
+      const result = await updateSettings({ defaultSessionDuration: Number.POSITIVE_INFINITY });
 
-      expect(result.settings.sessionDuration).toBe(before);
-      expect(result.settings.sessionDuration).toBe(60);
+      expect(result.settings.defaultSessionDuration).toBe(before);
+      expect(result.settings.defaultSessionDuration).toBe(60);
 
-      const result2 = await updateSettings({ sessionDuration: Number.NEGATIVE_INFINITY });
-      expect(result2.settings.sessionDuration).toBe(60);
+      const result2 = await updateSettings({ defaultSessionDuration: Number.NEGATIVE_INFINITY });
+      expect(result2.settings.defaultSessionDuration).toBe(60);
     });
   });
 
   describe("concurrent updateSettings", () => {
     it("final state matches the last call when fired rapidly", async () => {
-      await updateSettings({ sessionDuration: 10 });
+      await updateSettings({ defaultSessionDuration: 10 });
 
-      const p1 = updateSettings({ sessionDuration: 30 });
-      const p2 = updateSettings({ sessionDuration: 60 });
-      const p3 = updateSettings({ sessionDuration: 90 });
+      const p1 = updateSettings({ defaultSessionDuration: 30 });
+      const p2 = updateSettings({ defaultSessionDuration: 60 });
+      const p3 = updateSettings({ defaultSessionDuration: 90 });
 
       const results = await Promise.all([p1, p2, p3]);
 
       // Final result observed by caller and cache must reflect the last update
-      expect(results[2].settings.sessionDuration).toBe(90);
-      expect(getSettings().sessionDuration).toBe(90);
+      expect(results[2].settings.defaultSessionDuration).toBe(90);
+      expect(getSettings().defaultSessionDuration).toBe(90);
     });
   });
 
@@ -300,7 +307,7 @@ describe("settings", () => {
     });
 
     it("throws and leaves settingsCache unchanged when writeFile rejects", async () => {
-      await _settings.updateSettings({ launchAtLogin: false, sessionDuration: 60 });
+      await _settings.updateSettings({ launchAtLogin: false, defaultSessionDuration: 60 });
       const before = _settings.getSettings();
 
       fsMockState.failWriteFile = true;
@@ -339,13 +346,13 @@ describe("settings", () => {
     it("shows error dialog after 3 consecutive save failures", async () => {
       fsMockState.failWriteFile = true;
 
-      await expect(_settings.updateSettings({ sessionDuration: 30 })).rejects.toThrow();
+      await expect(_settings.updateSettings({ defaultSessionDuration: 30 })).rejects.toThrow();
       expect(dialog.showErrorBox).not.toHaveBeenCalled();
 
-      await expect(_settings.updateSettings({ sessionDuration: 60 })).rejects.toThrow();
+      await expect(_settings.updateSettings({ defaultSessionDuration: 60 })).rejects.toThrow();
       expect(dialog.showErrorBox).not.toHaveBeenCalled();
 
-      await expect(_settings.updateSettings({ sessionDuration: 90 })).rejects.toThrow();
+      await expect(_settings.updateSettings({ defaultSessionDuration: 90 })).rejects.toThrow();
       expect(dialog.showErrorBox).toHaveBeenCalledWith(
         "Settings Cannot Be Saved",
         "Disk may be full. Changes will be lost on restart.",
@@ -354,17 +361,17 @@ describe("settings", () => {
 
     it("resets consecutive failure counter on successful save", async () => {
       fsMockState.failWriteFile = true;
-      await expect(_settings.updateSettings({ sessionDuration: 30 })).rejects.toThrow();
-      await expect(_settings.updateSettings({ sessionDuration: 60 })).rejects.toThrow();
+      await expect(_settings.updateSettings({ defaultSessionDuration: 30 })).rejects.toThrow();
+      await expect(_settings.updateSettings({ defaultSessionDuration: 60 })).rejects.toThrow();
 
       // Recover
       fsMockState.failWriteFile = false;
-      await _settings.updateSettings({ sessionDuration: 90 });
+      await _settings.updateSettings({ defaultSessionDuration: 90 });
 
       // Two more failures should NOT trigger dialog (counter reset)
       fsMockState.failWriteFile = true;
-      await expect(_settings.updateSettings({ sessionDuration: 120 })).rejects.toThrow();
-      await expect(_settings.updateSettings({ sessionDuration: 150 })).rejects.toThrow();
+      await expect(_settings.updateSettings({ defaultSessionDuration: 120 })).rejects.toThrow();
+      await expect(_settings.updateSettings({ defaultSessionDuration: 150 })).rejects.toThrow();
 
       expect(dialog.showErrorBox).not.toHaveBeenCalled();
     });

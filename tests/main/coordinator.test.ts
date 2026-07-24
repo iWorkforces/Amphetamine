@@ -33,11 +33,13 @@ const mockIsPreventingSleep = vi.hoisted(() => vi.fn());
 const mockBatteryInit = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 const mockBatteryCleanup = vi.hoisted(() => vi.fn());
 const mockBatteryOnPreventSleepChange = vi.hoisted(() => vi.fn());
+const mockBatteryReconfigure = vi.hoisted(() => vi.fn());
 const mockCreateBatteryMonitor = vi.hoisted(() =>
   vi.fn(() => ({
     initBatteryMonitoring: mockBatteryInit,
     cleanupBatteryMonitoring: mockBatteryCleanup,
     onPreventSleepChange: mockBatteryOnPreventSleepChange,
+    reconfigure: mockBatteryReconfigure,
   })),
 );
 
@@ -129,9 +131,10 @@ describe("coordinator", () => {
   const defaultSettings = {
     launchAtLogin: false,
     preventSleep: false,
-    sessionDuration: null as number | null,
+    defaultSessionDuration: null as number | null,
     batteryThreshold: 0,
     shortcut: "",
+    sleepBlockMode: "prevent-display-sleep" as const,
   };
 
   beforeEach(async () => {
@@ -143,6 +146,7 @@ describe("coordinator", () => {
       initBatteryMonitoring: mockBatteryInit,
       cleanupBatteryMonitoring: mockBatteryCleanup,
       onPreventSleepChange: mockBatteryOnPreventSleepChange,
+      reconfigure: mockBatteryReconfigure,
     });
     mockCreateSessionTimer.mockReturnValue({
       startSession: mockSessionStart,
@@ -180,7 +184,7 @@ describe("coordinator", () => {
       mockGetSettings.mockReturnValue({ ...defaultSettings, preventSleep: true });
       await initCoordinator();
 
-      expect(mockSyncPreventSleep).toHaveBeenCalledWith(true);
+      expect(mockSyncPreventSleep).toHaveBeenCalledWith(true, "prevent-display-sleep");
     });
 
     it("constructs the session timer with explicit deps", async () => {
@@ -188,8 +192,6 @@ describe("coordinator", () => {
 
       expect(mockCreateSessionTimer).toHaveBeenCalledTimes(1);
       const deps = firstCallArg<Record<string, unknown>>(mockCreateSessionTimer);
-      expect(typeof deps.onStateChange).toBe("function");
-      expect(typeof deps.getSettings).toBe("function");
       expect(typeof deps.broadcast).toBe("function");
     });
 
@@ -299,7 +301,7 @@ describe("coordinator", () => {
 
       settingsCallback({ ...defaultSettings, preventSleep: true });
 
-      expect(mockSyncPreventSleep).toHaveBeenCalledWith(true);
+      expect(mockSyncPreventSleep).toHaveBeenCalledWith(true, "prevent-display-sleep");
     });
 
     it("syncs autoLaunch on settings change", async () => {
@@ -322,7 +324,7 @@ describe("coordinator", () => {
 
       expect(mockSessionCancel).not.toHaveBeenCalled();
       // sleep prevention recomputed: userIntent=false, sessionActive=false (no session in test) → false
-      expect(mockSyncPreventSleep).toHaveBeenCalledWith(false);
+      expect(mockSyncPreventSleep).toHaveBeenCalledWith(false, "prevent-display-sleep");
     });
 
     it("does not cancel session when preventSleep stays false", async () => {
@@ -400,7 +402,7 @@ describe("coordinator", () => {
       expect(mockSessionCancel).not.toHaveBeenCalled();
       // Sleep recomputed exactly once.
       expect(mockSyncPreventSleep).toHaveBeenCalledTimes(1);
-      expect(mockSyncPreventSleep).toHaveBeenCalledWith(false);
+      expect(mockSyncPreventSleep).toHaveBeenCalledWith(false, "prevent-display-sleep");
     });
 
     it("skips sync + broadcast when settings are identical (shallow-equal)", async () => {
@@ -445,7 +447,7 @@ describe("coordinator", () => {
 
       settingsCallback({ ...defaultSettings, preventSleep: true });
 
-      expect(mockSyncPreventSleep).toHaveBeenCalledWith(true);
+      expect(mockSyncPreventSleep).toHaveBeenCalledWith(true, "prevent-display-sleep");
     });
   });
 

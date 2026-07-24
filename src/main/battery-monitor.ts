@@ -44,6 +44,12 @@ export interface BatteryMonitorHandle {
    * Starts/stops the periodic battery polling loop based on (onBattery && active).
    */
   onPreventSleepChange: (active: boolean) => void;
+  /**
+   * Re-evaluate polling after threshold (or other policy input) changes.
+   * Stops any interval, restarts if gates pass, and runs an immediate check
+   * when threshold is enabled and sleep prevention is active.
+   */
+  reconfigure: () => void;
 }
 
 /**
@@ -182,7 +188,25 @@ export function createBatteryMonitor(deps: BatteryDeps): BatteryMonitorHandle {
     }
   };
 
-  return { initBatteryMonitoring, cleanupBatteryMonitoring, onPreventSleepChange };
+  /**
+   * Threshold (or other policy) changed — restart the polling loop from current
+   * gates so enabling auto-disable while already preventing sleep on battery
+   * actually starts monitoring.
+   */
+  const reconfigure = (): void => {
+    stopPeriodicBatteryChecks();
+    startPeriodicBatteryChecks();
+    if (isThresholdEnabled(getThreshold()) && isPreventingSleep()) {
+      runGuardedBatteryCheck("[battery-monitor] Reconfigure battery check error:");
+    }
+  };
+
+  return {
+    initBatteryMonitoring,
+    cleanupBatteryMonitoring,
+    onPreventSleepChange,
+    reconfigure,
+  };
 }
 
 /**

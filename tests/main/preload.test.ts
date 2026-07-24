@@ -113,7 +113,7 @@ describe("preload", () => {
 
     // Simulate settings push from main process
     const listener = mockOn.mock.calls[0]![1];
-    const testSettings = { preventSleep: true, launchAtLogin: false, sessionDuration: null };
+    const testSettings = { preventSleep: true, launchAtLogin: false, defaultSessionDuration: null };
     listener({}, testSettings);
     expect(callback).toHaveBeenCalledWith(testSettings);
 

@@ -144,21 +144,15 @@ export async function updateSettings(
   return result;
 }
 
-// --- before-quit write-chain flush (T19) ---
-// Ensure queued settings writes complete before the app quits — without this,
-// a queued write can be cut mid-flight when the user quits during a debounced save.
-let didFlushWriteChain = false;
-app.on("before-quit", (event) => {
-  if (didFlushWriteChain) return;
-  event.preventDefault();
-  didFlushWriteChain = true;
-  writeChain
-    .catch(() => {
-      /* errors already logged inside updateSettings */
-    })
-    .finally(() => {
-      app.quit();
-    });
-});
+/**
+ * Await the settings write mutex so in-flight atomic saves finish.
+ * Called by the single quit orchestrator in `index.ts` — do not register a
+ * separate `before-quit` handler here (avoids dual-handler races).
+ */
+export async function flushSettingsWriteChain(): Promise<void> {
+  await writeChain.catch(() => {
+    /* errors already logged inside updateSettings */
+  });
+}
 
 

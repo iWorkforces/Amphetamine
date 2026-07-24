@@ -1,5 +1,5 @@
 import { DEFAULT_SETTINGS } from "./types.js";
-import type { AppSettings } from "./types.js";
+import type { AppSettings, SleepBlockMode } from "./types.js";
 
 export const isBoolean = (v: unknown): v is boolean => typeof v === "boolean";
 
@@ -10,6 +10,9 @@ export const isClamped0to100 = (v: unknown): v is number =>
   typeof v === "number" && Number.isFinite(v) && v >= 0 && v <= 100;
 
 export const isNonEmptyString = (v: unknown): v is string => typeof v === "string" && v.length > 0;
+
+export const isSleepBlockMode = (v: unknown): v is SleepBlockMode =>
+  v === "prevent-display-sleep" || v === "prevent-app-suspension";
 
 /**
  * Validates a macOS Electron accelerator string (e.g. "Cmd+Shift+A").
@@ -57,9 +60,6 @@ export const isValidAccelerator = (s: unknown): s is string => {
  * Validates a shortcut settings value. Accepts either:
  *  - an empty string (sentinel for "use default shortcut", see AppSettings.shortcut)
  *  - a valid Electron accelerator (see {@link isValidAccelerator})
- *
- * Single source of truth shared by {@link validateRawSettings} (disk load) and
- * {@link VALIDATORS.shortcut} (incremental updates).
  */
 export const isValidShortcutSetting = (v: unknown): v is string =>
   v === "" || isValidAccelerator(v);
@@ -79,39 +79,6 @@ export function validateNonEmptyString(value: unknown, defaultValue: string): st
   return isNonEmptyString(value) ? value : defaultValue;
 }
 
-/**
- * Validates raw settings from disk JSON ({@link initSettings}) against expected shape.
- *
- * Uses inline per-field validation rather than the {@link VALIDATORS} dispatch table
- * ({@link mergeValidatedPartial}) because:
- * 1. validateRawSettings operates on `Record<string, unknown>` — the raw parsed JSON
- *    with arbitrary keys that must be filtered to known {@link AppSettings} fields.
- * 2. mergeValidatedPartial operates on `Partial<AppSettings>` — already-typed input
- *    from runtime callers where keys are known at compile time.
- * 3. The VALIDATORS table provides per-field type guards; validateRawSettings
- *    additionally handles unknown-key filtering and sessionDuration null special case.
- *
- * The two functions serve DIFFERENT call paths (disk load vs incremental update)
- * and must be kept manually in sync when {@link AppSettings} fields change.
- */
-export function validateRawSettings(raw: Record<string, unknown>): AppSettings {
-  return {
-    launchAtLogin: validateBoolean(raw.launchAtLogin, DEFAULT_SETTINGS.launchAtLogin),
-    preventSleep: validateBoolean(raw.preventSleep, DEFAULT_SETTINGS.preventSleep),
-    sessionDuration: validatePositiveNumber(raw.sessionDuration, DEFAULT_SETTINGS.sessionDuration),
-    batteryThreshold: validateClampedNumber(
-      raw.batteryThreshold,
-      DEFAULT_SETTINGS.batteryThreshold,
-    ),
-    shortcut: isValidShortcutSetting(raw.shortcut) ? raw.shortcut : DEFAULT_SETTINGS.shortcut,
-  };
-}
-
-/**
- * Validates raw JSON from disk against AppSettings shape. Filters unknown keys
- * and handles sessionDuration's null sentinel (indefinite session marker).
- * Kept separate from VALIDATORS dispatch because input type differs (Record vs Partial).
- */
 type SettingsValidator<K extends keyof AppSettings> = (
   value: unknown,
   fallback: AppSettings[K],
@@ -120,12 +87,13 @@ type SettingsValidator<K extends keyof AppSettings> = (
 export const VALIDATORS: { [K in keyof AppSettings]: SettingsValidator<K> } = {
   launchAtLogin: (v, f) => (isBoolean(v) ? v : f),
   preventSleep: (v, f) => (isBoolean(v) ? v : f),
-  sessionDuration: (v, f) => {
-    if (v === null) return null; // null = indefinite session marker
+  defaultSessionDuration: (v, f) => {
+    if (v === null) return null;
     return isPositiveNumber(v) ? v : f;
   },
   batteryThreshold: (v, f) => (isClamped0to100(v) ? v : f),
   shortcut: (v, f) => (isValidShortcutSetting(v) ? v : f),
+  sleepBlockMode: (v, f) => (isSleepBlockMode(v) ? v : f),
 };
 
 function applyValidator<K extends keyof AppSettings>(
@@ -134,6 +102,44 @@ function applyValidator<K extends keyof AppSettings>(
   fallback: AppSettings[K],
 ): AppSettings[K] {
   return VALIDATORS[key](value, fallback);
+}
+
+/**
+ * Map legacy disk keys into current AppSettings shape before validation.
+ * `sessionDuration` (pre-split) → `defaultSessionDuration`.
+ */
+export function migrateRawSettingsRecord(raw: Record<string, unknown>): Record<string, unknown> {
+  const next: Record<string, unknown> = { ...raw };
+  if (!("defaultSessionDuration" in next) && "sessionDuration" in next) {
+    next.defaultSessionDuration = next.sessionDuration;
+  }
+  delete next.sessionDuration;
+  return next;
+}
+
+/**
+ * Validates raw settings from disk JSON against expected shape.
+ * Single path: migrate legacy keys → filter known fields → mergeValidatedPartial(DEFAULTS).
+ */
+export function validateRawSettings(raw: Record<string, unknown>): AppSettings {
+  const migrated = migrateRawSettingsRecord(raw);
+  const partial: Partial<AppSettings> = {};
+  for (const key of Object.keys(VALIDATORS) as (keyof AppSettings)[]) {
+    if (key in migrated) {
+      // Assign through a narrow helper so exactOptionalPropertyTypes is satisfied.
+      assignPartial(partial, key, migrated[key]);
+    }
+  }
+  return mergeValidatedPartial(DEFAULT_SETTINGS, partial).merged;
+}
+
+function assignPartial<K extends keyof AppSettings>(
+  target: Partial<AppSettings>,
+  key: K,
+  value: unknown,
+): void {
+  // Store raw; mergeValidatedPartial re-validates.
+  (target as Record<string, unknown>)[key] = value;
 }
 
 export function mergeValidatedPartial(
