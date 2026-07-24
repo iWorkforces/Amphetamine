@@ -25,11 +25,15 @@ Workflow definitions for lint/test/build, production release publishing, and dev
 ## CD Rules
 
 - CD triggers from successful CI `workflow_run` on `main`, not directly from tags.
-- It checks out the CI head SHA and reads `package.json.version`.
+- It checks out the CI head SHA with full history (`fetch-depth: 0`) and fetches tags.
 - It creates and pushes `v<version>` only if missing.
+- It resolves the previous **production** tag (`vX.Y.Z` only) and calls GitHub
+  `GET /repos/{owner}/{repo}/releases/generate-notes` for auto release notes.
+- Release body includes a short production preamble plus the generated "What's Changed" section.
 - It downloads `dist-mac-arm64` and `dist-mac-x64` artifacts from that CI run.
-- It verifies at least one DMG or ZIP before `softprops/action-gh-release` publishes with generated notes.
+- It verifies at least one DMG or ZIP before `softprops/action-gh-release` publishes.
 - Release concurrency is global `release` with `cancel-in-progress: false`.
+- **CD workflow file must exist on the default branch (`main`)** for `workflow_run` to fire.
 
 ## Beta Rules
 
@@ -41,6 +45,8 @@ Workflow definitions for lint/test/build, production release publishing, and dev
 - Artifacts also upload as Actions artifacts `dist-mac-beta-arm64` / `dist-mac-beta-x64` for 14 days.
 - **`release` job** publishes a GitHub **prerelease** (not latest production):
   - Tag: `v{package.json.version}-beta.{run_number}` (unique per develop build)
+  - Auto release notes via GitHub generate-notes API (range: previous `v*-beta.*`, else latest production `vX.Y.Z`)
+  - Body: beta preamble + generated "What's Changed"
   - `prerelease: true`, `make_latest: false` so it does not replace production `vX.Y.Z` releases
   - Attaches `*-beta.dmg` / `*-beta.zip`
 - Production CD still owns non-prerelease tags `vX.Y.Z` from `main`.

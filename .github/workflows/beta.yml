@@ -154,6 +154,7 @@ jobs:
           compression-level: 0
           retention-days: 14
 
+
   # Publish packaged beta builds to the GitHub Releases page as a prerelease.
   # Production CD still owns non-prerelease tags vX.Y.Z from main.
   release:
@@ -166,6 +167,9 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Fetch tags
+        run: git fetch --tags --force origin
+
       - name: Extract version from package.json
         id: version
         run: |
@@ -177,6 +181,76 @@ jobs:
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
           echo "short_sha=${SHORT_SHA}" >> "$GITHUB_OUTPUT"
           echo "Using beta tag: ${TAG}"
+
+      - name: Resolve previous beta tag
+        id: prev
+        run: |
+          set -euo pipefail
+          CURRENT="${{ steps.version.outputs.tag }}"
+          # Prefer previous beta prerelease tag for develop changelog range
+          PREV=$(git tag -l 'v*-beta.*' --sort=-v:refname             | grep -vxF "$CURRENT"             | head -n 1 || true)
+          if [ -z "${PREV}" ]; then
+            # Fall back to latest production tag if no prior beta exists
+            PREV=$(git tag -l 'v*' --sort=-v:refname               | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$'               | head -n 1 || true)
+          fi
+          if [ -n "${PREV}" ]; then
+            echo "tag=${PREV}" >> "$GITHUB_OUTPUT"
+            echo "previous tag for notes: ${PREV}"
+          else
+            echo "tag=" >> "$GITHUB_OUTPUT"
+            echo "no previous tag for notes range"
+          fi
+
+      - name: Generate release notes
+        id: notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.version.outputs.tag }}"
+          PREV="${{ steps.prev.outputs.tag }}"
+          TARGET="${GITHUB_SHA}"
+
+          ARGS=(repos/${{ github.repository }}/releases/generate-notes -f "tag_name=${TAG}" -f "target_commitish=${TARGET}")
+          if [ -n "${PREV}" ]; then
+            ARGS+=(-f "previous_tag_name=${PREV}")
+          fi
+
+          RESPONSE=$(gh api "${ARGS[@]}")
+          BODY=$(echo "$RESPONSE" | jq -r '.body // empty')
+          NAME=$(echo "$RESPONSE" | jq -r --arg n "Amphetamine ${{ steps.version.outputs.version }} beta (${{ steps.version.outputs.short_sha }})" '.name // $n')
+
+          {
+            echo "name<<EOF"
+            echo "${NAME}"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+          {
+            echo "body<<EOF"
+            echo "## Amphetamine ${{ steps.version.outputs.version }} beta"
+            echo ""
+            echo "Pre-release build from \`develop\` (commit \`${GITHUB_SHA}\`)."
+            echo ""
+            echo "- **Not** a production release — production tags remain \`vX.Y.Z\` from \`main\` / CD"
+            echo "- Artifacts are filename-suffixed with \`-beta\`"
+            echo "- Install may require removing quarantine if unsigned / ad-hoc signed"
+            echo ""
+            if [ -n "${PREV}" ]; then
+              echo "Changes since **${PREV}**."
+            else
+              echo "No previous tag found; notes cover available history."
+            fi
+            echo ""
+            echo "---"
+            echo ""
+            if [ -n "${BODY}" ]; then
+              echo "${BODY}"
+            else
+              echo "_No auto-generated commit range available._"
+            fi
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Download arm64 beta artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -205,16 +279,12 @@ jobs:
         uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3.0.0
         with:
           tag_name: ${{ steps.version.outputs.tag }}
-          name: Amphetamine ${{ steps.version.outputs.version }} beta (${{ steps.version.outputs.short_sha }})
+          name: ${{ steps.notes.outputs.name }}
+          body: ${{ steps.notes.outputs.body }}
           prerelease: true
           make_latest: false
-          generate_release_notes: true
-          body: |
-            Pre-release build from `develop` (commit `${{ github.sha }}`).
-
-            - **Not** a production release — production tags remain `vX.Y.Z` from `main` / CD
-            - Artifacts are filename-suffixed with `-beta`
-            - Install may require removing quarantine if unsigned / ad-hoc signed
+          # Body already includes API-generated notes
+          generate_release_notes: false
           files: |
             artifacts/**/*-beta.dmg
             artifacts/**/*-beta.zip
