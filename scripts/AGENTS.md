@@ -1,6 +1,6 @@
 # Scripts - Local Tooling
 
-Developer-only Bun/Node scripts. Runtime app code must not import from here. Scripts own dev orchestration, generated assets, and benchmark harness execution.
+Developer-only Bun/Node scripts. Runtime app code must not import from here. Scripts own dev orchestration, generated assets, benchmark harness execution, and sticky typecheck guards.
 
 ## Files
 
@@ -8,6 +8,7 @@ Developer-only Bun/Node scripts. Runtime app code must not import from here. Scr
 |------|------|
 | `dev.ts` | Starts Rslib main/preload watchers, Rsbuild dev server, waits for readiness, launches Electron |
 | `benchmark-performance.ts` | Runs built app in benchmark mode and writes harness JSON artifact |
+| `check-sticky-ts.mjs` | Asserts sticky TypeScript compiler flags via `tsc --showConfig` |
 | `generate-app-icon.mjs` | Generates `build/icon.icns` and `src/assets/settings-hero-icon.png` |
 | `generate-coffee-tray-icons.mjs` | Generates 8 tray PNGs for active/inactive x light/dark x scale |
 
@@ -22,6 +23,13 @@ Developer-only Bun/Node scripts. Runtime app code must not import from here. Scr
 5. TCP-connect to `localhost:5173` before Electron launch.
 6. Launch `bun x electron . --disable-gpu-sandbox --log-level=3` with `DEV_SERVER_URL`.
 7. Kill child processes on Electron exit or signals.
+
+## Sticky Typecheck Guard
+
+- `check-sticky-ts.mjs` runs `tsc -p tsconfig.json --showConfig` and `tsconfig.tests.json`.
+- Fails if sticky flags are missing or not `true` (`strict` family + project extras).
+- Invoked by `bun run typecheck:sticky` and the CI lint job.
+- Do not weaken the flag list without an intentional sticky-policy change in root `AGENTS.md`.
 
 ## Benchmark Harness
 
@@ -45,12 +53,14 @@ Developer-only Bun/Node scripts. Runtime app code must not import from here. Scr
 - Never add runtime app dependencies on `scripts/` files.
 - Never rename tray icon outputs without updating generator scripts, `src/assets/AGENTS.md`, and `src/main/tray.ts`.
 - Never treat benchmark output as source; it is generated evidence.
+- Never remove sticky flags from `check-sticky-ts.mjs` to greenwash a failing build.
 
 ## Commands
 
 ```bash
 bun run dev
 bun run build && bun run benchmark:performance
+bun run typecheck:sticky
 bun scripts/generate-app-icon.mjs
 bun scripts/generate-coffee-tray-icons.mjs
 ```

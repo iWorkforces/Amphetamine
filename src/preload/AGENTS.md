@@ -33,6 +33,7 @@ onXxx: (callback: (data: T) => void) => {
 - Always return an unsubscribe function.
 - Listener payload types come from `IpcChannelMap` or push-channel response types.
 - Renderer owns cleanup; preload owns narrow exposure.
+- Settings UI must subscribe to `onShortcutRegistrationFailed` for registration failures from main.
 
 ## Type Safety
 
@@ -40,6 +41,7 @@ onXxx: (callback: (data: T) => void) => {
 - `invoke<K>()` is parameterized by shared `IpcChannelMap`; never hand-write request/response shapes.
 - `WiredChannels` plus `_ExhaustivenessCheck` intentionally fails typecheck if shared channels are not wired here.
 - `benchmark.isEnabled()` should remain read-only and side-effect free.
+- `settings.set` accepts `Partial<AppSettings>`; response is `{ settings, rejectedKeys }`.
 
 ## Anti-Patterns
 

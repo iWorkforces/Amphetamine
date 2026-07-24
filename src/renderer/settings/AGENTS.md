@@ -1,35 +1,51 @@
 # Settings Renderer - Window UI
 
-Separate Rsbuild renderer entry for the settings BrowserWindow. Vanilla TypeScript form logic, no framework, no direct Electron imports.
+Separate Rsbuild renderer entry for the settings BrowserWindow. Vanilla TypeScript form logic, no framework, no direct Electron or `electron-log` imports.
 
 ## Files
 
 | File | Role |
 |------|------|
-| `index.ts` | Settings form render, event delegation, debounced saves, shortcut recording |
+| `index.ts` | Settings form render, listeners, debounced saves, shortcut recording, shortcut-failure push |
 | `index.html` | CSP-protected settings window shell |
-| `constants.ts` | Settings labels, shortcut placeholder, save indicator strings |
-| `styles.css` | iOS/macOS-style controls, dropdowns, sliders, responsive layout |
+| `constants.ts` | Save indicator, shortcut placeholder/recording, shortcut-failure prefix strings |
+| `styles.css` | iOS/macOS-style controls, dropdowns, responsive layout |
 
 ## Form Flow
 
-- Render into `#app` and use event delegation for click/change/input handling.
-- Load settings through `window.api.settings.get()`; save through `window.api.settings.set(partial)`.
+- Render into `#app` and attach listeners after each full render (or targeted updates via `updateSettingsUI`).
+- Load settings through `window.api.settings.get()`; save through `window.api.settings.set` (debounced full snapshot after local merge).
 - Subscribe to `window.api.onSettingsChanged()` for cross-window synchronization.
-- Keep active running session duration visible; settings pushes contain stored disk duration and must not overwrite live session display.
+- Subscribe to `window.api.onShortcutRegistrationFailed()` and surface the accelerator on the error line.
+- While a session is running, optionally show live `durationMinutes` in the duration dropdown; disk preference is `defaultSessionDuration`.
+- Duration select change: `session.start(duration)` **and** save `defaultSessionDuration` (starts session + updates preference).
+- Sleep block mode select persists `sleepBlockMode` only.
+
+## Controls
+
+| Control | Settings field / action |
+|---------|-------------------------|
+| Launch at Login | `launchAtLogin` |
+| Prevent Sleep | `preventSleep` |
+| Activate for | `defaultSessionDuration` + `session.start` |
+| Battery threshold | `batteryThreshold` |
+| Sleep block mode | `sleepBlockMode` |
+| Toggle shortcut | `shortcut` (recorder) |
 
 ## Save Rules
 
-- Saves are debounced.
+- Saves are debounced (~300ms).
 - If a save is in flight, queue the latest snapshot and flush it after the current save resolves.
 - Never drop user changes silently when multiple controls change quickly.
-- Display save state with constants, not hardcoded text.
+- Display save state with constants (`SAVED_INDICATOR`), not hardcoded text.
+- Errors use `textContent` (not `innerHTML`) on the error element.
 
 ## Shortcut Recorder
 
 - Recording state is local UI state; persisted value still goes through `settings.set({ shortcut })`.
 - Respect shared shortcut validation rules for reserved Cmd aliases.
-- Shortcut registration failures arrive via preload push and should not require DOM custom events.
+- Registration failures arrive via `onShortcutRegistrationFailed` push (main `global-shortcut.ts`); show `${SHORTCUT_REGISTRATION_FAILED_PREFIX}: ${accelerator}`.
+- Unsubscribe push listeners on `beforeunload`.
 
 ## Styling
 
@@ -39,7 +55,7 @@ Separate Rsbuild renderer entry for the settings BrowserWindow. Vanilla TypeScri
 
 ## Anti-Patterns
 
-- Never import Electron or Node APIs.
-- Never attach per-control global listeners when `#app` event delegation covers the interaction.
-- Never hardcode settings UI strings in `index.ts`.
+- Never import Electron, Node APIs, or `electron-log`.
+- Never hardcode settings UI strings in `index.ts` (use `constants.ts`).
 - Never duplicate shared settings validation in renderer logic; rely on shared/main validation through IPC.
+- Never treat `defaultSessionDuration` as live session state after the timer stops writing settings.
