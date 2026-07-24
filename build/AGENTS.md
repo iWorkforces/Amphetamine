@@ -30,7 +30,7 @@ Package scripts use:
 | Pipeline | Branch | Artifact names | Fuses flipped in workflow? |
 |----------|--------|----------------|----------------------------|
 | CI `build` job | `main` push | `dist-mac-{arch}` (`*.dmg`, `*.zip`) | No (raw electron-builder) |
-| Beta workflow | successful CI on `develop` | `dist-mac-beta-{arch}` (`*-beta.dmg`, `*-beta.zip`) | No (raw electron-builder + rename) |
+| Beta workflow | push to `develop` | `dist-mac-beta-{arch}` (`*-beta.dmg`, `*-beta.zip`) | No (raw electron-builder + rename) |
 | Local `bun run package*` | developer machine | `dist/*` then flip-fuses | Yes |
 
 If changing release packaging, keep CI/CD/Beta and local package scripts intentional about fuse/signing equivalence.

@@ -33,13 +33,14 @@ Workflow definitions for lint/test/build, production release publishing, and dev
 
 ## Beta Rules
 
-- Beta triggers from successful CI `workflow_run` on `develop` (covers PR merges into `develop`).
-- It checks out the CI head SHA (same commit CI validated).
+- Beta triggers on **`push` to `develop`** (covers PR merges) and `workflow_dispatch` (manual re-run).
+- **Why not `workflow_run`?** GitHub only registers `workflow_run` listeners from workflow files on the **default branch** (`main`). `beta.yml` is develop-oriented and is not required on `main`, so a `workflow_run` listener would never fire.
+- Jobs: `lint` + `test`, then `package` (needs both).
 - Packaging matrix matches main: arm64 on `macos-latest`, x64 on `macos-15-intel`.
-- After `electron-builder`, DMG/ZIP basenames get a `-beta` suffix (e.g. `Amphetamine-1.9.4-arm64-beta.dmg`).
+- After `electron-builder`, DMG/ZIP basenames get a `-beta` suffix (e.g. `Amphetamine-1.9.5-arm64-beta.dmg`).
 - Artifacts upload as `dist-mac-beta-arm64` and `dist-mac-beta-x64` for 14 days.
 - Beta does **not** create GitHub Releases or tags (production releases stay on main via CD).
-- Concurrency group is global `beta` with `cancel-in-progress: true` (newer develop merges supersede older beta builds).
+- Concurrency group is `beta-${{ github.ref }}` with `cancel-in-progress: true`.
 - Local equivalent suffix: `./build-macOS-dmg.sh --environment beta --arch arm64`.
 
 ## Gotchas
@@ -49,5 +50,5 @@ Workflow definitions for lint/test/build, production release publishing, and dev
 - If CI packaging remains raw `electron-builder`, check it stays equivalent to local `package*` scripts for fuse/signing expectations.
 - Runtime updater opens GitHub release URLs derived from package metadata; release tags must match `v<package.json.version>`.
 - Do not put generated artifacts under workflow source directories; CI downloads into temporary `artifacts/` paths.
-- `workflow_run` workflows need `actions: read` to resolve the triggering run; beta only needs package artifacts, not release permissions.
+- CD still uses `workflow_run` and must remain defined on the default branch path that receives main CI successes.
 - Do not confuse main artifacts (`dist-mac-arm64`) with beta artifacts (`dist-mac-beta-arm64`).
