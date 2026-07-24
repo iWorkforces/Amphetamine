@@ -1,13 +1,17 @@
 import "./styles.css";
-import log from "electron-log";
 import type { AppSettings } from "../../shared/types.js";
 import { DEFAULT_SETTINGS } from "../../shared/types.js";
-import { SAVED_INDICATOR, SHORTCUT_PLACEHOLDER, SHORTCUT_RECORDING } from "./constants.js";
+import {
+  SAVED_INDICATOR,
+  SHORTCUT_PLACEHOLDER,
+  SHORTCUT_RECORDING,
+  SHORTCUT_REGISTRATION_FAILED_PREFIX,
+} from "./constants.js";
 
 const heroIcon = new URL("../../assets/settings-hero-icon.png", import.meta.url).toString();
 
 let settings: AppSettings = { ...DEFAULT_SETTINGS };
-/** Duration from an actively-running session; overrides stored sessionDuration in the UI. Cleared when the user explicitly picks a new duration. */
+/** Duration from an actively-running session; overrides stored defaultSessionDuration in the UI. Cleared when the user explicitly picks a new duration. */
 let runningSessionDuration: number | null = null;
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
 let errorMessage: string | null = null;
@@ -129,12 +133,12 @@ function buildSettingsForm(): string {
         <div class="setting-control">
           <span class="save-indicator" id="duration-save-indicator"></span>
           <select id="session-duration-select" class="setting-select">
-            <option value=""${settings.sessionDuration === null ? " selected" : ""}>Indefinitely</option>
-            <option value="15"${settings.sessionDuration === 15 ? " selected" : ""}>15 Minutes</option>
-            <option value="30"${settings.sessionDuration === 30 ? " selected" : ""}>30 Minutes</option>
-            <option value="60"${settings.sessionDuration === 60 ? " selected" : ""}>1 Hour</option>
-            <option value="120"${settings.sessionDuration === 120 ? " selected" : ""}>2 Hours</option>
-            <option value="240"${settings.sessionDuration === 240 ? " selected" : ""}>4 Hours</option>
+            <option value=""${settings.defaultSessionDuration === null ? " selected" : ""}>Indefinitely</option>
+            <option value="15"${settings.defaultSessionDuration === 15 ? " selected" : ""}>15 Minutes</option>
+            <option value="30"${settings.defaultSessionDuration === 30 ? " selected" : ""}>30 Minutes</option>
+            <option value="60"${settings.defaultSessionDuration === 60 ? " selected" : ""}>1 Hour</option>
+            <option value="120"${settings.defaultSessionDuration === 120 ? " selected" : ""}>2 Hours</option>
+            <option value="240"${settings.defaultSessionDuration === 240 ? " selected" : ""}>4 Hours</option>
           </select>
         </div>
       </div>
@@ -153,6 +157,21 @@ function buildSettingsForm(): string {
             <option value="10"${settings.batteryThreshold === 10 ? " selected" : ""}>10%</option>
             <option value="15"${settings.batteryThreshold === 15 ? " selected" : ""}>15%</option>
             <option value="20"${settings.batteryThreshold === 20 ? " selected" : ""}>20%</option>
+          </select>
+        </div>
+      </div>
+      <div class="setting-row setting-row--select">
+        <div class="setting-row-inner">
+          <label class="setting-label" for="sleep-block-mode-select">
+            💡 Sleep Block Mode
+          </label>
+          <span class="setting-description">Display on keeps the screen awake; System only allows the display to sleep</span>
+        </div>
+        <div class="setting-control">
+          <span class="save-indicator" id="sleep-mode-save-indicator"></span>
+          <select id="sleep-block-mode-select" class="setting-select">
+            <option value="prevent-display-sleep"${settings.sleepBlockMode === "prevent-display-sleep" ? " selected" : ""}>Prevent display sleep</option>
+            <option value="prevent-app-suspension"${settings.sleepBlockMode === "prevent-app-suspension" ? " selected" : ""}>System only (allow display sleep)</option>
           </select>
         </div>
       </div>
@@ -238,7 +257,7 @@ function attachFormListeners(): void {
       const duration: number | null = raw === "" ? null : parseInt(raw, 10);
       // User explicitly chose a new duration — stop overriding from running session
       runningSessionDuration = null;
-      settings.sessionDuration = duration;
+      settings.defaultSessionDuration = duration;
       void (async () => {
         try {
           const resp = await window.api.session.start(duration);
@@ -255,7 +274,7 @@ function attachFormListeners(): void {
           setErrorMessage("Failed to start session");
         }
       })();
-      void saveSettings({ sessionDuration: duration }, "duration-save-indicator");
+      void saveSettings({ defaultSessionDuration: duration }, "duration-save-indicator");
     });
   }
 
@@ -266,6 +285,18 @@ function attachFormListeners(): void {
     batterySelect.addEventListener("change", () => {
       const parsed = parseInt(batterySelect.value, 10);
       void saveSettings({ batteryThreshold: parsed }, "battery-save-indicator");
+    });
+  }
+
+  const sleepModeSelect = document.getElementById(
+    "sleep-block-mode-select",
+  ) as HTMLSelectElement | null;
+  if (sleepModeSelect) {
+    sleepModeSelect.addEventListener("change", () => {
+      const mode = sleepModeSelect.value;
+      if (mode === "prevent-display-sleep" || mode === "prevent-app-suspension") {
+        void saveSettings({ sleepBlockMode: mode }, "sleep-mode-save-indicator");
+      }
     });
   }
 
@@ -317,7 +348,7 @@ function updateSettingsUI(s: AppSettings): void {
     "session-duration-select",
   ) as HTMLSelectElement | null;
   if (durationSelect) {
-    durationSelect.value = s.sessionDuration === null ? "" : String(s.sessionDuration);
+    durationSelect.value = s.defaultSessionDuration === null ? "" : String(s.defaultSessionDuration);
   }
 
   const batterySelect = document.getElementById(
@@ -325,6 +356,13 @@ function updateSettingsUI(s: AppSettings): void {
   ) as HTMLSelectElement | null;
   if (batterySelect) {
     batterySelect.value = String(s.batteryThreshold);
+  }
+
+  const sleepModeSelect = document.getElementById(
+    "sleep-block-mode-select",
+  ) as HTMLSelectElement | null;
+  if (sleepModeSelect) {
+    sleepModeSelect.value = s.sleepBlockMode;
   }
 
   const shortcutBtn = document.getElementById("shortcut-input") as HTMLButtonElement | null;
@@ -398,31 +436,38 @@ async function saveSettings(
 async function init(): Promise<void> {
   try {
     settings = await window.api.settings.get();
-  } catch (e1) {
-    log.info("[settings] Failed to load settings, using defaults", e1);
+  } catch {
+    // Keep DEFAULT_SETTINGS snapshot already in `settings`.
   }
 
   try {
     const status = await window.api.session.getStatus();
     if (!isSaving && status.isRunning) {
       runningSessionDuration = status.durationMinutes;
-      settings.sessionDuration = runningSessionDuration;
+      settings = { ...settings, defaultSessionDuration: runningSessionDuration };
     }
-  } catch (e2) {
-    log.info("[settings] Failed to get session status", e2);
+  } catch {
+    // Session status is optional for the settings form.
   }
 
   render();
 
-  window.api.onSettingsChanged((newSettings: AppSettings) => {
+  const cleanupSettings = window.api.onSettingsChanged((newSettings: AppSettings) => {
     settings = newSettings;
-    // If a session is actively running, keep the running duration visible
-    // in the dropdown — the push carries the stored (disk) sessionDuration,
-    // not the live session duration, so we must not overwrite it.
+    // Prefer live session duration in the dropdown while a session is running.
     if (runningSessionDuration !== null) {
-      settings = { ...settings, sessionDuration: runningSessionDuration };
+      settings = { ...settings, defaultSessionDuration: runningSessionDuration };
     }
     updateSettingsUI(settings);
+  });
+
+  const cleanupShortcutFailed = window.api.onShortcutRegistrationFailed((data) => {
+    setErrorMessage(`${SHORTCUT_REGISTRATION_FAILED_PREFIX}: ${data.accelerator}`);
+  });
+
+  window.addEventListener("beforeunload", () => {
+    cleanupSettings();
+    cleanupShortcutFailed();
   });
 }
 

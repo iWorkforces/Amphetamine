@@ -8,7 +8,7 @@ const mockApi = {
   app: { getVersion: vi.fn().mockResolvedValue("1.0.0"), quit: vi.fn() },
   settings: {
     get: vi.fn<() => Promise<AppSettings>>(),
-    set: vi.fn<(settings: AppSettings) => Promise<AppSettings>>(),
+    set: vi.fn(),
     open: vi.fn(),
   },
   session: {
@@ -17,6 +17,9 @@ const mockApi = {
     getStatus: vi.fn<() => Promise<SessionStatusResponse | null>>(),
   },
   onSettingsChanged: vi.fn<(_cb: (s: AppSettings) => void) => () => void>(() => vi.fn()),
+  onShortcutRegistrationFailed: vi.fn<(_cb: (d: { accelerator: string }) => void) => () => void>(() => vi.fn()),
+  onWindowHide: vi.fn(() => vi.fn()),
+  onSessionStatusUpdate: vi.fn(() => vi.fn()),
   autoUpdater: {
     checkForUpdates: vi.fn(),
     onStatus: vi.fn(() => vi.fn()),
@@ -41,7 +44,7 @@ describe("renderer settings", () => {
     ...DEFAULT_SETTINGS,
     launchAtLogin: false,
     preventSleep: false,
-    sessionDuration: null,
+    defaultSessionDuration: null,
   };
 
   beforeEach(() => {
@@ -50,17 +53,20 @@ describe("renderer settings", () => {
     setupDom();
 
     mockApi.settings.get.mockResolvedValue({ ...defaultSettings });
-    mockApi.settings.set.mockImplementation(async (s: AppSettings) => s);
+    mockApi.settings.set.mockImplementation(async (s: Partial<AppSettings>) => ({
+      settings: { ...defaultSettings, ...s },
+      rejectedKeys: [] as string[],
+    }));
     mockApi.session.getStatus.mockResolvedValue(null);
 
     Object.defineProperty(globalThis, "window", {
       value: {
         ...globalThis.window,
         api: mockApi,
-        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+         
         addEventListener: globalThis.window?.addEventListener?.bind(globalThis.window) ?? vi.fn(),
         removeEventListener:
-        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+         
           globalThis.window?.removeEventListener?.bind(globalThis.window) ?? vi.fn(),
       },
       writable: true,
@@ -126,7 +132,7 @@ describe("renderer settings", () => {
     it("selects correct duration option based on settings", async () => {
       mockApi.settings.get.mockResolvedValue({
         ...defaultSettings,
-        sessionDuration: 60,
+        defaultSessionDuration: 60,
       });
       mockApi.session.getStatus.mockResolvedValue({
         isRunning: true,
@@ -288,7 +294,7 @@ describe("renderer settings", () => {
       expect(mockApi.session.start).toHaveBeenCalledWith(30);
     });
 
-    it("sets sessionDuration when duration selected (no longer conflates preventSleep)", async () => {
+    it("sets defaultSessionDuration when duration selected (no longer conflates preventSleep)", async () => {
       vi.resetModules();
       await import("../../src/renderer/settings/index.js");
       document.dispatchEvent(new Event("DOMContentLoaded"));
@@ -306,15 +312,15 @@ describe("renderer settings", () => {
       const calls = mockApi.settings.set.mock.calls.map((c: unknown[]) => c[0]);
       const durationCall = calls.find(
         (c): c is Record<string, unknown> =>
-          typeof c === "object" && c !== null && "sessionDuration" in c,
+          typeof c === "object" && c !== null && "defaultSessionDuration" in c,
       );
-      expect(durationCall).toEqual(expect.objectContaining({ sessionDuration: 60, preventSleep: false }));
+      expect(durationCall).toEqual(expect.objectContaining({ defaultSessionDuration: 60, preventSleep: false }));
     });
 
     it("sends null duration when Indefinitely selected", async () => {
       mockApi.settings.get.mockResolvedValue({
         ...defaultSettings,
-        sessionDuration: 30,
+        defaultSessionDuration: 30,
         preventSleep: true,
       });
 
@@ -333,7 +339,7 @@ describe("renderer settings", () => {
 
       expect(mockApi.settings.set).toHaveBeenCalledWith(
         expect.objectContaining({
-          sessionDuration: null,
+          defaultSessionDuration: null,
           preventSleep: true,
         }),
       );
@@ -376,7 +382,7 @@ describe("renderer settings", () => {
       const callback = mockApi.onSettingsChanged.mock.calls.at(-1)![0];
       callback({
         ...defaultSettings,
-        sessionDuration: 120,
+        defaultSessionDuration: 120,
         preventSleep: true,
       });
 
@@ -400,12 +406,12 @@ describe("renderer settings", () => {
       expect(select.value).toBe("60"); // init from running session
 
       // Simulate a SETTINGS_CHANGED push (e.g., tray toggled preventSleep)
-      // The push carries the stored sessionDuration (null, not the running 60)
+      // The push carries the stored defaultSessionDuration (null, not the running 60)
       const callback = mockApi.onSettingsChanged.mock.calls[0]![0];
       callback({
         ...defaultSettings,
         preventSleep: true,
-        sessionDuration: null, // stored value on disk
+        defaultSessionDuration: null, // stored value on disk
       });
 
       // Dropdown must NOT revert to stored null — running session duration wins
@@ -418,9 +424,9 @@ describe("renderer settings", () => {
     it("queues the latest snapshot when a save is already in flight", async () => {
       const resolvers: Array<(v: AppSettings) => void> = [];
       mockApi.settings.set.mockImplementation(
-        (s: AppSettings) =>
-          new Promise<AppSettings>((resolve) => {
-            resolvers.push(() => resolve(s));
+        (s: Partial<AppSettings>) =>
+          new Promise((resolve) => {
+            resolvers.push(() => resolve({ settings: { ...defaultSettings, ...s }, rejectedKeys: [] }));
           }),
       );
 
@@ -461,9 +467,9 @@ describe("renderer settings", () => {
     it("collapses multiple in-flight changes into a single latest-snapshot save", async () => {
       const resolvers: Array<(v: AppSettings) => void> = [];
       mockApi.settings.set.mockImplementation(
-        (s: AppSettings) =>
-          new Promise<AppSettings>((resolve) => {
-            resolvers.push(() => resolve(s));
+        (s: Partial<AppSettings>) =>
+          new Promise((resolve) => {
+            resolvers.push(() => resolve({ settings: { ...defaultSettings, ...s }, rejectedKeys: [] }));
           }),
       );
 
@@ -509,8 +515,7 @@ describe("renderer settings", () => {
       const resolvers: Array<() => void> = [];
       const rejectors: Array<(e: Error) => void> = [];
       mockApi.settings.set.mockImplementation(
-        (s: AppSettings) =>
-          new Promise<AppSettings>((resolve, reject) => {
+        (s: Partial<AppSettings>) => new Promise((resolve, reject) => {
             callCount += 1;
             if (callCount === 1) {
               rejectors.push(() => reject(new Error("Disk full")));
@@ -549,7 +554,7 @@ describe("renderer settings", () => {
   });
 
   describe("session status on init", () => {
-    it("sets sessionDuration from running session status", async () => {
+    it("sets defaultSessionDuration from running session status", async () => {
       mockApi.session.getStatus.mockResolvedValue({
         isRunning: true,
         startedAt: asPerf(Date.now()),
