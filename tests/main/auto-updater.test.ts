@@ -24,6 +24,10 @@ const mockShellOpenExternal = vi.hoisted(() => vi.fn().mockResolvedValue(undefin
 const mockShowMessageBox = vi.hoisted(() =>
   vi.fn().mockResolvedValue({ response: 1, checkboxChecked: false }),
 );
+const mockAppFocus = vi.hoisted(() => vi.fn());
+const mockEnterForegroundMode = vi.hoisted(() => vi.fn());
+const mockEnterTrayOnlyMode = vi.hoisted(() => vi.fn());
+const mockIsSettingsWindowOpen = vi.hoisted(() => vi.fn().mockReturnValue(false));
 const mockGetPackageInfo = vi.hoisted(() =>
   vi.fn().mockReturnValue({
     name: "amphetamine",
@@ -53,6 +57,7 @@ vi.mock("electron", () => ({
   app: {
     isPackaged: true,
     getAppPath: () => "/path/to/app.asar",
+    focus: mockAppFocus,
   },
   BrowserWindow: {
     getAllWindows: mockGetAllWindows,
@@ -70,6 +75,15 @@ vi.mock("electron", () => ({
 
 vi.mock("../../src/main/utils/packageInfo.js", () => ({
   getPackageInfo: mockGetPackageInfo,
+}));
+
+vi.mock("../../src/main/platform/index.js", () => ({
+  enterForegroundMode: mockEnterForegroundMode,
+  enterTrayOnlyMode: mockEnterTrayOnlyMode,
+}));
+
+vi.mock("../../src/main/settings-window.js", () => ({
+  isSettingsWindowOpen: mockIsSettingsWindowOpen,
 }));
 
 vi.mock("electron-log", () => ({
@@ -97,6 +111,7 @@ describe("auto-updater", () => {
     mockDownloadUpdate.mockResolvedValue(undefined);
     mockGetAllWindows.mockReturnValue([]);
     mockShowMessageBox.mockResolvedValue({ response: 1, checkboxChecked: false });
+    mockIsSettingsWindowOpen.mockReturnValue(false);
 
     const mod = await import("../../src/main/auto-updater.js");
     initAutoUpdater = mod.initAutoUpdater;
@@ -315,7 +330,55 @@ describe("auto-updater", () => {
         expect(mockShowMessageBox).toHaveBeenCalledWith(
           expect.objectContaining({
             message: "You're up to date",
+            detail: "Amphetamine 1.0.0 is the latest version.",
           }),
+        );
+      });
+      expect(mockEnterForegroundMode).toHaveBeenCalled();
+      expect(mockAppFocus).toHaveBeenCalledWith({ steal: true });
+      await vi.waitFor(() => {
+        expect(mockEnterTrayOnlyMode).toHaveBeenCalled();
+      });
+    });
+
+    it("keeps foreground when settings window is open after dialog", async () => {
+      mockIsSettingsWindowOpen.mockReturnValue(true);
+      initAutoUpdater();
+      checkForUpdatesNow();
+      getHandler("update-not-available")({ version: "1.0.0", releaseDate: "2025-01-01" });
+
+      await vi.waitFor(() => {
+        expect(mockShowMessageBox).toHaveBeenCalled();
+      });
+      await Promise.resolve();
+      expect(mockEnterForegroundMode).toHaveBeenCalled();
+      expect(mockEnterTrayOnlyMode).not.toHaveBeenCalled();
+    });
+
+    it("shows check-failed dialog on user-initiated error with no known version", async () => {
+      initAutoUpdater();
+      checkForUpdatesNow();
+      getHandler("error")(new Error("Network error ENOTFOUND"));
+
+      await vi.waitFor(() => {
+        expect(mockShowMessageBox).toHaveBeenCalledWith(
+          expect.objectContaining({
+            message: "Could not check for updates",
+          }),
+        );
+      });
+      expect(mockShellOpenExternal).not.toHaveBeenCalled();
+    });
+
+    it("opens releases list when user chooses Open Releases on check failure", async () => {
+      mockShowMessageBox.mockResolvedValueOnce({ response: 1, checkboxChecked: false });
+      initAutoUpdater();
+      checkForUpdatesNow();
+      getHandler("error")(new Error("Network error"));
+
+      await vi.waitFor(() => {
+        expect(mockShellOpenExternal).toHaveBeenCalledWith(
+          "https://github.com/OCWorkforces/Amphetamine/releases",
         );
       });
     });
@@ -579,6 +642,59 @@ describe("auto-updater", () => {
       mockCheckForUpdates.mockClear();
       checkForUpdatesNow();
       expect(mockCheckForUpdates).toHaveBeenCalled();
+    });
+
+    it("shows updates-unavailable dialog when not packaged", async () => {
+      const { app } = await import("electron");
+      const originalDescriptor = Object.getOwnPropertyDescriptor(app, "isPackaged");
+      try {
+        Object.defineProperty(app, "isPackaged", {
+          value: false,
+          configurable: true,
+          writable: true,
+        });
+
+        vi.resetModules();
+        const freshMod = await import("../../src/main/auto-updater.js");
+        mockShowMessageBox.mockClear();
+        mockCheckForUpdates.mockClear();
+        freshMod.checkForUpdatesNow();
+
+        await vi.waitFor(() => {
+          expect(mockShowMessageBox).toHaveBeenCalledWith(
+            expect.objectContaining({
+              message: "Updates unavailable",
+            }),
+          );
+        });
+        expect(mockCheckForUpdates).not.toHaveBeenCalled();
+      } finally {
+        if (originalDescriptor) {
+          Object.defineProperty(app, "isPackaged", originalDescriptor);
+        } else {
+          Object.defineProperty(app, "isPackaged", {
+            value: true,
+            configurable: true,
+            writable: true,
+          });
+        }
+        vi.resetModules();
+        await import("../../src/main/auto-updater.js");
+      }
+    });
+
+    it("shows check-failed dialog when checkForUpdates rejects with no known version", async () => {
+      mockCheckForUpdates.mockRejectedValueOnce(new Error("offline"));
+      initAutoUpdater();
+      checkForUpdatesNow();
+
+      await vi.waitFor(() => {
+        expect(mockShowMessageBox).toHaveBeenCalledWith(
+          expect.objectContaining({
+            message: "Could not check for updates",
+          }),
+        );
+      });
     });
   });
 });

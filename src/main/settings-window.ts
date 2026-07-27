@@ -110,6 +110,14 @@ export function createSettingsWindow(): BrowserWindow {
 }
 
 /**
+ * True when the settings utility window is open (needs Dock/foreground on macOS).
+ * Used by auto-updater dialogs so they do not force accessory mode while Settings is open.
+ */
+export function isSettingsWindowOpen(): boolean {
+  return settingsWindow !== null && !settingsWindow.isDestroyed();
+}
+
+/**
  * Closes the settings window if open.
  * Called from app quit handler.
  */

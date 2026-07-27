@@ -1,5 +1,5 @@
 import { autoUpdater, type UpdateInfo, type ProgressInfo } from "electron-updater";
-import { app, shell, dialog } from "electron";
+import { app, shell, dialog, type MessageBoxOptions, type MessageBoxReturnValue } from "electron";
 import log from "electron-log";
 import {
   IPC_CHANNELS,
@@ -14,6 +14,8 @@ import {
 } from "./constants.js";
 import { typedHandle, validateSender } from "./ipc-utils.js";
 import { categorizeUpdaterError, getReleaseUrlBase } from "./auto-updater-utils.js";
+import { enterForegroundMode, enterTrayOnlyMode } from "./platform/index.js";
+import { isSettingsWindowOpen } from "./settings-window.js";
 
 let checkIntervalId: ReturnType<typeof setInterval> | null = null;
 let initialCheckTimerId: ReturnType<typeof setTimeout> | null = null;
@@ -47,6 +49,24 @@ function toUpdateMeta(info: UpdateInfo): UpdateMeta {
 }
 
 /**
+ * Present a native dialog for tray-only apps.
+ *
+ * macOS `accessory` activation policy often leaves `dialog.showMessageBox` invisible.
+ * Briefly switch to regular presentation, then restore tray-only unless Settings is open.
+ */
+async function presentUserDialog(options: MessageBoxOptions): Promise<MessageBoxReturnValue> {
+  enterForegroundMode();
+  try {
+    app.focus({ steal: true });
+    return await dialog.showMessageBox(options);
+  } finally {
+    if (!isSettingsWindowOpen()) {
+      enterTrayOnlyMode();
+    }
+  }
+}
+
+/**
  * Open the GitHub release page for a version (browser fallback).
  * Used when in-app download/install is unavailable or fails (unsigned builds, etc.).
  */
@@ -65,8 +85,91 @@ function openReleasePageInBrowser(version: string): void {
   void shell.openExternal(url);
 }
 
+/** Open the repository releases list (no specific version). */
+function openReleasesListInBrowser(): void {
+  const base = getReleaseUrlBase();
+  if (base === null) {
+    log.warn("[auto-updater] Skipping releases list — no derivable repository URL");
+    return;
+  }
+  // base ends with "/releases/tag/v" — strip tag suffix for the list page.
+  const listUrl = base.replace(/\/releases\/tag\/v$/, "/releases");
+  log.info("[auto-updater] Opening releases list:", listUrl);
+  void shell.openExternal(listUrl);
+}
+
 function clearUserInitiated(): void {
   userInitiatedCheck = false;
+}
+
+/**
+ * Finish a failed user-initiated check with browser fallback or a dialog.
+ * No-ops if event handlers already consumed the user-initiated flag.
+ */
+function finishUserInitiatedFailure(): void {
+  if (!userInitiatedCheck) {
+    return;
+  }
+  const version = lastAvailableVersion;
+  clearUserInitiated();
+  if (version !== null) {
+    openReleasePageInBrowser(version);
+  } else {
+    showCheckFailedDialog();
+  }
+}
+
+/** User-facing dialog when this build is already the latest. */
+function showUpToDateDialog(version: string): void {
+  void presentUserDialog({
+    type: "info",
+    buttons: ["OK"],
+    defaultId: 0,
+    title: "Amphetamine",
+    message: "You're up to date",
+    detail: `Amphetamine ${version} is the latest version.`,
+  }).catch((err: unknown) => {
+    log.warn("[auto-updater] Failed to show up-to-date dialog:", err);
+  });
+}
+
+/** User-facing dialog when a manual check fails and we have no update payload. */
+function showCheckFailedDialog(): void {
+  void presentUserDialog({
+    type: "warning",
+    buttons: ["OK", "Open Releases"],
+    defaultId: 0,
+    cancelId: 0,
+    title: "Amphetamine",
+    message: "Could not check for updates",
+    detail:
+      "Amphetamine could not reach the update server. Check your network connection and try again, " +
+      "or open the GitHub releases page to download manually.",
+  })
+    .then((result) => {
+      if (result.response === 1) {
+        openReleasesListInBrowser();
+      }
+    })
+    .catch((err: unknown) => {
+      log.warn("[auto-updater] Failed to show check-failed dialog:", err);
+    });
+}
+
+/** User-facing dialog when update checks are unavailable (unpackaged / dev). */
+function showUpdatesUnavailableDialog(): void {
+  void presentUserDialog({
+    type: "info",
+    buttons: ["OK"],
+    defaultId: 0,
+    title: "Amphetamine",
+    message: "Updates unavailable",
+    detail:
+      "Update checks only work in a packaged release build of Amphetamine. " +
+      "This development or unpackaged build cannot download updates.",
+  }).catch((err: unknown) => {
+    log.warn("[auto-updater] Failed to show updates-unavailable dialog:", err);
+  });
 }
 
 /** Handle "checking-for-update" event */
@@ -127,18 +230,7 @@ function onUpdateNotAvailable(info: UpdateInfo): void {
 
   if (userInitiatedCheck) {
     clearUserInitiated();
-    void dialog
-      .showMessageBox({
-        type: "info",
-        buttons: ["OK"],
-        defaultId: 0,
-        title: "Amphetamine",
-        message: "You're up to date",
-        detail: `Amphetamine ${info.version} is the latest version.`,
-      })
-      .catch((err: unknown) => {
-        log.warn("[auto-updater] Failed to show up-to-date dialog:", err);
-      });
+    showUpToDateDialog(info.version);
   }
 }
 
@@ -174,18 +266,17 @@ function onUpdateDownloaded(info: UpdateInfo): void {
 
   clearUserInitiated();
 
-  void dialog
-    .showMessageBox({
-      type: "info",
-      buttons: ["Restart Now", "Later"],
-      defaultId: 0,
-      cancelId: 1,
-      title: "Update Ready",
-      message: `Version ${info.version} is ready to install`,
-      detail:
-        "Restart Amphetamine to apply the update. If automatic install is not available " +
-        "(for example on unsigned builds), you can install from the GitHub release page instead.",
-    })
+  void presentUserDialog({
+    type: "info",
+    buttons: ["Restart Now", "Later"],
+    defaultId: 0,
+    cancelId: 1,
+    title: "Update Ready",
+    message: `Version ${info.version} is ready to install`,
+    detail:
+      "Restart Amphetamine to apply the update. If automatic install is not available " +
+      "(for example on unsigned builds), you can install from the GitHub release page instead.",
+  })
     .then((result) => {
       if (result.response === 0) {
         try {
@@ -215,13 +306,17 @@ function onError(err: Error): void {
     category: categorizeUpdaterError(err),
   });
 
-  // User-initiated path failed (check/download/signature): open release page when we know a version.
+  // User-initiated path failed (check/download/signature): open release page when we know a version;
+  // otherwise surface a dialog so Check for Updates never fails silently.
   if (userInitiatedCheck) {
     const version = lastAvailableVersion;
     clearUserInitiated();
     if (version !== null) {
       log.info("[auto-updater] Error during user-initiated update; falling back to browser");
       openReleasePageInBrowser(version);
+    } else {
+      log.info("[auto-updater] Error during user-initiated check with no known version");
+      showCheckFailedDialog();
     }
   }
 }
@@ -341,22 +436,20 @@ export function stopAutoUpdater(): void {
 /**
  * Manually trigger an update check (tray menu / IPC).
  * Marks the check as user-initiated so an available update will attempt download/install
- * with browser fallback. No-op when not packaged.
+ * with browser fallback. Always gives user-visible feedback (dialog or browser fallback).
  */
 export function checkForUpdatesNow(): void {
   if (!app.isPackaged) {
     log.info("[auto-updater] checkForUpdatesNow skipped (not packaged)");
+    showUpdatesUnavailableDialog();
     return;
   }
   log.info("[auto-updater] Manual update check requested (hybrid path)");
   userInitiatedCheck = true;
   void autoUpdater.checkForUpdates().catch((err: unknown) => {
     log.warn("[auto-updater] Manual update check failed:", err);
-    const version = lastAvailableVersion;
-    clearUserInitiated();
-    if (version !== null) {
-      openReleasePageInBrowser(version);
-    }
+    // Prefer event-handler path (onError / onUpdateNotAvailable) when it already ran.
+    finishUserInitiatedFailure();
   });
 }
 
@@ -368,6 +461,7 @@ export function registerAutoUpdaterIpc(): void {
   typedHandle(IPC_CHANNELS.AUTO_UPDATER_CHECK, async (event) => {
     if (!validateSender(event)) return null;
     if (!app.isPackaged) {
+      showUpdatesUnavailableDialog();
       return null;
     }
     userInitiatedCheck = true;
@@ -383,11 +477,7 @@ export function registerAutoUpdaterIpc(): void {
       return null;
     } catch (err) {
       log.warn("[auto-updater] Failed to check for updates:", err);
-      const version = lastAvailableVersion;
-      clearUserInitiated();
-      if (version !== null) {
-        openReleasePageInBrowser(version);
-      }
+      finishUserInitiatedFailure();
       return null;
     }
   });
