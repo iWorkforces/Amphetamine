@@ -1,6 +1,6 @@
 # Windows Support — Multi-Wave Development Plan (Single PR)
 
-**Status:** Wave 0 in progress / ready for review  
+**Status:** Wave 0 done; Wave 1 in progress / ready for review  
 **Branch:** `support-windows`  
 **Delivery model:** One PR, ordered waves with human review between waves. Each wave is merge-ready locally (typecheck/lint/tests green) before the next starts.
 

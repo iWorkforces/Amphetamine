@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { ABOUT_WINDOW_WIDTH, ABOUT_WINDOW_HEIGHT } from "./constants.js";
 import { hardenWebContents } from "./security.js";
 import { getPackageInfo } from "./utils/packageInfo.js";
+import { aboutWindowChrome } from "./platform/index.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -140,10 +141,8 @@ export function showAbout(_mainWindow?: BrowserWindow): void {
     maximizable: false,
     fullscreenable: false,
     alwaysOnTop: true,
-    titleBarStyle: "hiddenInset",
-    vibrancy: "under-window",
-    visualEffectState: "active",
     show: false,
+    ...aboutWindowChrome(),
     webPreferences: {
       sandbox: true,
       contextIsolation: true,

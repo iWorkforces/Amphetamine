@@ -87,7 +87,10 @@ Electron main process for lifecycle, tray, IPC, settings persistence, sleep prev
 ## Platform Rules
 
 - Prefer `isDarwin()` / `isWin32()` from `platform/` over raw `process.platform` compares.
-- After Wave 1, never call macOS-only Electron APIs without an `isDarwin()` guard.
+- Tray-only boot: `enterTrayOnlyMode()` (darwin activation policy; no-op on Windows).
+- Window chrome: `popoverWindowChrome` / `settingsWindowChrome` / `aboutWindowChrome` — never set `vibrancy` unguarded.
+- Login items: `buildLoginItemSettings()` — never pass `openAsHidden` on non-darwin.
+- Settings open: `enterForegroundMode()` + `setDockIcon()`; close: `enterTrayOnlyMode()`.
 - Battery percent providers (Wave 2) own OS-specific charge reads; the monitor stays a pure detector.
 
 ## Anti-Patterns

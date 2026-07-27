@@ -1,5 +1,6 @@
 import { app } from "electron";
 import log from "electron-log";
+import { buildLoginItemSettings } from "./platform/index.js";
 
 /**
  * Get the current auto-launch (login item) status.
@@ -17,14 +18,12 @@ export function getAutoLaunchStatus(): boolean {
 
 /**
  * Enable or disable auto-launch at login.
+ * macOS uses openAsHidden; Windows only sets openAtLogin (see platform/shell).
  * @param enabled - Whether to launch the app at login
  */
 export function setAutoLaunch(enabled: boolean): void {
   try {
-    app.setLoginItemSettings({
-      openAtLogin: enabled,
-      openAsHidden: true,
-    });
+    app.setLoginItemSettings(buildLoginItemSettings(enabled));
     log.info(`[auto-launch] ${enabled ? "Enabled" : "Disabled"} launch at login`);
   } catch (err) {
     log.error("[auto-launch] Failed to set login item:", err);

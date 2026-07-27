@@ -1,4 +1,4 @@
-import { app, BrowserWindow, nativeImage } from "electron";
+import { BrowserWindow, nativeImage } from "electron";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -8,17 +8,26 @@ import {
   isDev,
 } from "./constants.js";
 import { hardenWebContents } from "./security.js";
+import {
+  appIconFileName,
+  enterForegroundMode,
+  enterTrayOnlyMode,
+  setDockIcon,
+  settingsWindowChrome,
+} from "./platform/index.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// Resolve icon.icns path:
-//   Dev:      lib/main/ → ../../build/icon.icns
+// Resolve app icon path:
+//   Dev:      lib/main/ → ../../build/<icon>
 //   Packaged: app.asar/lib/main/ → build resources at process.resourcesPath
+// Dock icon is only applied on macOS (see setDockIcon); Windows uses .ico in Wave 4 packaging.
 function getAppIconPath(): string {
+  const fileName = appIconFileName();
   if (isDev) {
-    return path.join(__dirname, "..", "..", "build", "icon.icns");
+    return path.join(__dirname, "..", "..", "build", fileName);
   }
-  return path.join(process.resourcesPath, "icon.icns");
+  return path.join(process.resourcesPath, fileName);
 }
 
 /** Cached dock icon to avoid re-reading from disk on every settings open */
@@ -36,7 +45,8 @@ let settingsWindow: BrowserWindow | null = null;
 /**
  * Creates or focuses the settings window.
  * Singleton pattern - only one settings window at a time.
- * Shows in Dock when open, closes normally (not hide-on-close).
+ * macOS: shows in Dock while open. Windows: appears on the taskbar (skipTaskbar false).
+ * Closes normally (not hide-on-close).
  */
 export function createSettingsWindow(): BrowserWindow {
   // Return existing window if already open and focus it
@@ -54,10 +64,8 @@ export function createSettingsWindow(): BrowserWindow {
     minimizable: false,
     maximizable: false,
     fullscreenable: false,
-    titleBarStyle: "hiddenInset",
-    vibrancy: "under-window",
-    visualEffectState: "active",
     show: false,
+    ...settingsWindowChrome(),
     webPreferences: {
       preload: path.join(__dirname, "..", "preload", "index.cjs"),
       sandbox: true,
@@ -80,16 +88,16 @@ export function createSettingsWindow(): BrowserWindow {
   win.once("ready-to-show", () => {
     if (win.isDestroyed()) return;
     win.show();
-    // Switch to regular app so Dock icon appears with settings window
-    app.setActivationPolicy("regular");
-    app.dock?.setIcon(getDockIcon());
+    // macOS: regular activation + Dock icon. Windows: no-op shell helpers.
+    enterForegroundMode();
+    setDockIcon(getDockIcon());
   });
 
   // Clean up reference on close
   win.on("closed", () => {
     settingsWindow = null;
-    // Return to accessory mode when settings window closes (tray-only app)
-    app.setActivationPolicy("accessory");
+    // macOS: return to accessory (tray-only). Windows: no-op.
+    enterTrayOnlyMode();
   });
 
   settingsWindow = win;
