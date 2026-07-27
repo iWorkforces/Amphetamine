@@ -4,13 +4,11 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { setupTray } from "./tray.js";
-import { registerIpcHandlers, type IpcDeps } from "./ipc.js";
+import { registerIpcHandlers } from "./ipc.js";
 import { getPackageInfo } from "./utils/packageInfo.js";
-import { initCoordinator, cleanupCoordinator, getTrayDeps } from "./coordinator.js";
-import { getSettings, updateSettings, flushSettingsWriteChain } from "./settings.js";
-import { createSettingsWindow } from "./settings-window.js";
-import { initAutoUpdater, registerAutoUpdaterIpc } from "./auto-updater.js";
-import * as sessionTimer from "./session-timer.js";
+import { createAppComposition, type AppComposition } from "./composition-root.js";
+import { flushSettingsWriteChain } from "./settings.js";
+import { initAutoUpdater } from "./auto-updater.js";
 import { stopPreventingSleep } from "./sleep-prevention.js";
 import { broadcastToWindows } from "./utils/broadcast.js";
 import {
@@ -63,6 +61,7 @@ let mainWindow: BrowserWindow | null = null;
 let isQuitting = false;
 let didRunQuitCleanup = false;
 let cleanupTray: (() => void) | null = null;
+let composition: AppComposition | null = null;
 
 const SETTINGS_FLUSH_TIMEOUT_MS = 2000;
 
@@ -90,10 +89,11 @@ async function runQuitCleanup(): Promise<void> {
   cleanupTray = null;
 
   try {
-    cleanupCoordinator();
+    composition?.cleanup();
   } catch (err) {
-    log.error("[main] Coordinator cleanup on quit failed:", err);
+    log.error("[main] Composition cleanup on quit failed:", err);
   }
+  composition = null;
 
   if (mainWindow !== null && !mainWindow.isDestroyed()) {
     mainWindow.destroy();
@@ -170,20 +170,11 @@ void app.whenReady().then(async () => {
   // Tray-only shell: macOS accessory policy; Windows uses skipTaskbar per window
   enterTrayOnlyMode();
   mainWindow = createWindow();
-  const ipcDeps: IpcDeps = {
-    getSettings,
-    updateSettings,
-    createSettingsWindow,
-    registerAutoUpdaterIpc,
-    sessionTimer: {
-      startSession: sessionTimer.startSession,
-      cancelSession: sessionTimer.cancelSession,
-      getStatus: sessionTimer.getStatus,
-    },
-  };
-  registerIpcHandlers(mainWindow, ipcDeps);
-  await initCoordinator();
-  cleanupTray = setupTray(getTrayDeps());
+  // Composition before IPC: handlers receive injected session handle (KD-6 / Wave 5).
+  composition = createAppComposition();
+  await composition.init();
+  registerIpcHandlers(mainWindow, composition.getIpcDeps());
+  cleanupTray = setupTray(composition.getTrayDeps());
   if (!isBenchmarkMode()) {
     initAutoUpdater();
   }

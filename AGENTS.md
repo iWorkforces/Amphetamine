@@ -21,7 +21,8 @@ src/domain/               Pure types/rules (settings, session, battery, validato
 src/application/          Use cases + ports (interfaces only until adapters land)
 src/main/                 Electron main process, tray, IPC, settings, timers, updater
   index.ts                bootstrap, single quit orchestrator, benchmark entry
-  coordinator.ts          settings -> system sync hub
+  composition-root.ts     createAppComposition — ports, use cases, IPC/tray deps
+  coordinator.ts          thin façade over composition (test/compat)
   platform/               OS adapters; public entry platform/index.ts
   benchmark*.ts           production benchmark mode and metrics
   utils/                  broadcastToWindows, packageInfo guard

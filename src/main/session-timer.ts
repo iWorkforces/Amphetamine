@@ -10,40 +10,20 @@ import { createNodeSchedule } from "../infrastructure/schedule/node-schedule.js"
 import { createElectronLogger } from "../infrastructure/logging/electron-logger.js";
 import { createBroadcastNotifier } from "../infrastructure/notification/broadcast-notifier.js";
 
-/** @deprecated Prefer SessionSnapshot from application; kept for public API stability. */
+/** Public snapshot alias (start/cancel return shape). */
 export type SessionState = SessionSnapshot;
 
 /**
  * Dependencies for the session timer façade.
- *
- * All fields are required — there is no silent fallback. Wiring is enforced at
- * construction time by `createSessionTimer`.
  */
 export interface SessionTimerDeps {
-  /** Broadcasts session status pushes to renderer windows. */
   broadcast: <K extends PushChannel>(channel: K, data: IpcResponse<K>) => void;
-  /**
-   * Notifies when `sessionActive` (state.kind !== "idle") transitions.
-   * Coordinator uses this to recompute `shouldBlockSleep` without overloading
-   * `settings.preventSleep` (which now means "user's standing preference" only).
-   */
   onSessionActiveChange?: (active: boolean) => void;
-  /**
-   * Optional Electron `powerMonitor`. When provided, the timer registers a
-   * `resume` listener so timed sessions can recover from system sleep.
-   * On macOS (and often on Windows S3 / Modern Standby), both `setTimeout` and
-   * `performance.now()` can pause while the machine is asleep, so a 60-min
-   * session started before sleep would otherwise fire late by the sleep duration.
-   * Wall-clock expiry (`Date.now`) is the source of truth after resume.
-   */
   powerMonitor?: typeof PowerMonitorType;
 }
 
 /**
  * Public handle returned by `createSessionTimer`.
- *
- * The handle owns the timer state in a closure. Replaces the previous
- * setter-based DI pattern.
  */
 export interface SessionTimerHandle {
   startSession: (durationMinutes: number | null) => SessionState;
@@ -52,15 +32,12 @@ export interface SessionTimerHandle {
   cleanup: () => void;
   reconcileSessionState: () => void;
   broadcastSessionUpdate: () => void;
-  /** True when a session is running (timed or indefinite). Authoritative runtime state. */
   readonly sessionActive: boolean;
 }
 
 /**
- * Create a session timer instance bound to the given dependencies.
- *
- * Thin presentation/infrastructure façade over `createSessionEngine`.
- * Throws synchronously if any dependency is missing — there are no silent fallbacks.
+ * Create a session timer bound to deps (thin façade over createSessionEngine).
+ * Callers must inject the returned handle — there are no module-level delegators.
  */
 export function createSessionTimer(deps: SessionTimerDeps): SessionTimerHandle {
   if (typeof deps.broadcast !== "function") {
@@ -102,51 +79,4 @@ export function createSessionTimer(deps: SessionTimerDeps): SessionTimerHandle {
       return engine.sessionActive;
     },
   };
-}
-
-// ---------------------------------------------------------------------------
-// Module-level delegators (temporary — removed when composition injects handles)
-// ---------------------------------------------------------------------------
-
-let activeHandle: SessionTimerHandle | null = null;
-
-/**
- * Publish the active session-timer handle. Called by the coordinator after
- * `createSessionTimer`. Pass `null` to detach (used by tests / cleanup).
- */
-export function setActiveSessionTimer(handle: SessionTimerHandle | null): void {
-  activeHandle = handle;
-}
-
-function requireHandle(): SessionTimerHandle {
-  if (activeHandle === null) {
-    throw new Error(
-      "[session-timer] No active handle. Call createSessionTimer() and setActiveSessionTimer() first.",
-    );
-  }
-  return activeHandle;
-}
-
-export function startSession(durationMinutes: number | null): SessionState {
-  return requireHandle().startSession(durationMinutes);
-}
-
-export function cancelSession(): SessionState {
-  return requireHandle().cancelSession();
-}
-
-export function getStatus(): SessionStatusResponse {
-  return requireHandle().getStatus();
-}
-
-export function cleanup(): void {
-  requireHandle().cleanup();
-}
-
-export function reconcileSessionState(): void {
-  requireHandle().reconcileSessionState();
-}
-
-export function broadcastSessionUpdate(): void {
-  requireHandle().broadcastSessionUpdate();
 }

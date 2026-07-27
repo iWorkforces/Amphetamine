@@ -9,7 +9,9 @@ Electron main process for lifecycle, tray, IPC, settings persistence, sleep prev
 | `index.ts` | App bootstrap, window creation, security hooks, quit orchestrator, benchmark entry |
 | `coordinator.ts` | Central hub: settings diffing, sleep/session/tray/shortcut/battery/updater sync |
 | `platform/` | OS adapters; public entry `platform/index.ts` (see `platform/AGENTS.md`) |
-| `session-timer.ts` | Thin façade over `application/session` engine + clock/schedule adapters; no settings writes |
+| `composition-root.ts` | `createAppComposition()` — ports, session, reactions, IPC/tray deps, ordered cleanup |
+| `coordinator.ts` | Thin compatibility façade over composition (`initCoordinator` / `cleanupCoordinator`) |
+| `session-timer.ts` | Thin façade over `application/session` engine + clock/schedule adapters; handle injection only |
 | `sleep-prevention.ts` | Façade over `infrastructure/sleep` (`SleepBlockerPort`); sole blocker owner |
 | `battery-monitor.ts` | Threshold detector + `reconfigure()`; charge percent via `platform/battery-percent` |
 | `tray.ts` | Tray icon/menu cache, theme debounce, Check for Updates, destroy on cleanup |
@@ -47,7 +49,8 @@ Electron main process for lifecycle, tray, IPC, settings persistence, sleep prev
 ## Quit Orchestrator (`index.ts`)
 
 - Single `before-quit` owner (not `settings.ts`).
-- Flow: `preventDefault` → await `flushSettingsWriteChain()` (2s timeout) → tray cleanup (`destroy`) → `cleanupCoordinator()` → destroy main window → `app.exit(0)`.
+- Flow: `preventDefault` → await `flushSettingsWriteChain()` (2s timeout) → tray cleanup (`destroy`) → `composition.cleanup()` → destroy main window → `app.exit(0)`.
+- Bootstrap: `createAppComposition()` → `await init()` → `registerIpcHandlers(..., getIpcDeps())` → `setupTray(getTrayDeps())`.
 - Guard with `didRunQuitCleanup` so re-entry is idempotent.
 - `settings.ts` exports `flushSettingsWriteChain()` only; it must not register its own quit handler.
 
@@ -65,7 +68,7 @@ Electron main process for lifecycle, tray, IPC, settings persistence, sleep prev
 - Elapsed timing uses `ClockPort.perfNow()` / `asPerf`; wall-clock resume uses `ClockPort.wallNow()`.
 - `setTimeout` + `.unref()` live only in the `SchedulePort` Node adapter (and other polling adapters).
 - `createSessionTimer({ broadcast, onSessionActiveChange?, powerMonitor? })` — thin façade; no `onStateChange` / settings deps.
-- Module-level delegators (`startSession`, …) fail fast if `setActiveSessionTimer` has not been called.
+- No module-level session delegators; composition injects the handle into `IpcDeps` (fail closed before `init`).
 - `reconcileSessionState()` is a no-op: preference null must not kill a live session.
 - Auto-updater waits 3s after startup, repeats every 4h, and backs off failures to 24h max.
 - Hybrid update policy: `autoDownload` stays false for background checks. Tray/IPC **Check for Updates** sets user-initiated mode → `downloadUpdate()` → dialog → `quitAndInstall()` when the platform allows (macOS ZIP/`latest-mac.yml`; Windows x64/arm64 EXE/`latest.yml`, preferably signed). On download/install failure, open the GitHub release page. Background `update-available` only broadcasts status (no browser popup).
