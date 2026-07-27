@@ -8,10 +8,10 @@ Electron main process for lifecycle, tray, IPC, settings persistence, sleep prev
 |------|------|
 | `index.ts` | App bootstrap, window creation, security hooks, quit orchestrator, benchmark entry |
 | `coordinator.ts` | Central hub: settings diffing, sleep/session/tray/shortcut/battery/updater sync |
-| `platform/` | OS identity + shell/chrome/battery adapters; see `platform/AGENTS.md` |
+| `platform/` | OS adapters; public entry `platform/index.ts` (see `platform/AGENTS.md`) |
 | `session-timer.ts` | Idle/timed/indefinite state machine; monotonic timing; no settings writes |
 | `sleep-prevention.ts` | Only `powerSaveBlocker` wrapper; accepts `SleepBlockMode` |
-| `battery-monitor.ts` | Threshold detector + `reconfigure()`; charge percent via platform provider (Wave 2) |
+| `battery-monitor.ts` | Threshold detector + `reconfigure()`; charge percent via `platform/battery-percent` |
 | `tray.ts` | Tray icon/menu cache, theme debounce, Check for Updates, destroy on cleanup |
 | `ipc.ts` | Typed IPC handler registration via `typedHandle()` |
 | `ipc-utils.ts` | Sender allowlist and typed handler utilities |
@@ -91,7 +91,7 @@ Electron main process for lifecycle, tray, IPC, settings persistence, sleep prev
 - Window chrome: `popoverWindowChrome` / `settingsWindowChrome` / `aboutWindowChrome` — never set `vibrancy` unguarded.
 - Login items: `buildLoginItemSettings()` — never pass `openAsHidden` on non-darwin.
 - Settings open: `enterForegroundMode()` + `setDockIcon()`; close: `enterTrayOnlyMode()`.
-- Battery percent providers (Wave 2) own OS-specific charge reads; the monitor stays a pure detector.
+- Battery percent: only `platform/battery-percent.ts` shells out (`pmset` / PowerShell); the monitor stays a pure detector.
 
 ## Anti-Patterns
 
