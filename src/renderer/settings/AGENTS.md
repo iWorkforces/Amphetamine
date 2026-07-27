@@ -43,7 +43,8 @@ Separate Rsbuild renderer entry for the settings BrowserWindow. Vanilla TypeScri
 ## Shortcut Recorder
 
 - Recording state is local UI state; persisted value still goes through `settings.set({ shortcut })`.
-- Respect shared shortcut validation rules for reserved Cmd aliases.
+- Shortcut display: macOS symbols (⌘); Windows textual Ctrl/Alt/Win via `window.api.platform.os`.
+- Respect shared shortcut validation rules for reserved accelerators.
 - Registration failures arrive via `onShortcutRegistrationFailed` push (main `global-shortcut.ts`); show `${SHORTCUT_REGISTRATION_FAILED_PREFIX}: ${accelerator}`.
 - Unsubscribe push listeners on `beforeunload`.
 

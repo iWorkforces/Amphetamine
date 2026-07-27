@@ -6,21 +6,24 @@ Workflow definitions for lint/test/build, production release publishing, and dev
 
 | File | Role |
 |------|------|
-| `ci.yml` | Lint, sticky typecheck, test; main-branch macOS package artifacts |
+| `ci.yml` | Lint, sticky typecheck, test; main-branch macOS + Windows package artifacts |
 | `cd.yml` | Release successful CI artifacts from main via `workflow_run` |
-| `beta.yml` | Beta-suffixed macOS package artifacts after successful CI on `develop` |
+| `beta.yml` | Beta-suffixed macOS + Windows package artifacts on `develop` |
 
 ## CI Rules
 
 - CI runs on push and pull request for `main` and `develop`.
-- Concurrency cancels in-progress runs per workflow/ref.
+- Concurrency: PR runs cancel outdated checks for the same PR number; push runs use
+  `github.sha` and do **not** cancel in-progress work (avoids aborted develop/main
+  merges when a second request for the same ref is queued).
 - Node is pinned to `26.3.0`; Bun is pinned to `1.3.14`.
 - Install uses `bun install --frozen-lockfile`.
 - Lint job includes a source guard: fail if `OCWorkforces` appears under `src/`.
 - Lint job runs: `typecheck`, `typecheck:tests`, `typecheck:sticky`, then `lint`.
-- Build job runs only for push to `main` after lint and test pass.
-- Build matrix packages arm64 on `macos-latest` and x64 on `macos-15-intel`.
-- Build artifacts upload `dist/*.dmg` and `dist/*.zip` as `dist-mac-{arch}` for 14 days (no `-beta` suffix).
+- Build jobs run only for push to `main` after lint and test pass.
+- macOS matrix packages arm64 on `macos-latest` and x64 on `macos-15-intel`.
+- Windows matrix packages **x64** on `windows-latest` and **arm64** on `windows-11-arm` (NSIS + portable `.exe`).
+- Artifacts: `dist-mac-{arch}` (dmg/zip) and `dist-win-{arch}` (`x64` / `arm64`, exe/yml/blockmap) for 14 days (no `-beta` suffix).
 
 ## CD Rules
 
@@ -30,8 +33,8 @@ Workflow definitions for lint/test/build, production release publishing, and dev
 - It resolves the previous **production** tag (`vX.Y.Z` only) and calls GitHub
   `GET /repos/{owner}/{repo}/releases/generate-notes` for auto release notes.
 - Release body includes a short production preamble plus the generated "What's Changed" section.
-- It downloads `dist-mac-arm64` and `dist-mac-x64` artifacts from that CI run.
-- It verifies at least one DMG or ZIP before `softprops/action-gh-release` publishes.
+- It downloads `dist-mac-arm64`, `dist-mac-x64`, `dist-win-x64`, and `dist-win-arm64` artifacts from that CI run.
+- It verifies at least one DMG, ZIP, or EXE before `softprops/action-gh-release` publishes.
 - Release concurrency is global `release` with `cancel-in-progress: false`.
 - **CD workflow file must exist on the default branch (`main`)** for `workflow_run` to fire.
 
@@ -39,16 +42,19 @@ Workflow definitions for lint/test/build, production release publishing, and dev
 
 - Beta triggers on **`push` to `develop`** (covers PR merges) and `workflow_dispatch` (manual re-run).
 - **Why not `workflow_run`?** GitHub only registers `workflow_run` listeners from workflow files on the **default branch** (`main`). `beta.yml` is develop-oriented and is not required on `main`, so a `workflow_run` listener would never fire.
-- Jobs: `lint` + `test` → `package` (matrix) → **`release`** (GitHub prerelease).
-- Packaging matrix matches main: arm64 on `macos-latest`, x64 on `macos-15-intel`.
-- After `electron-builder`, DMG/ZIP basenames get a `-beta` suffix (e.g. `Amphetamine-1.9.5-arm64-beta.dmg`).
-- Artifacts also upload as Actions artifacts `dist-mac-beta-arm64` / `dist-mac-beta-x64` for 14 days.
+- Jobs: `lint` + `test` → **`prepare`** (version + beta N) → `package` / `package-windows` → **`release`**.
+- Packaging: mac arm64/x64 plus Windows x64/arm64 (`package` + `package-windows` matrix).
+- After `electron-builder`, basenames get a **`-beta-{N}`** suffix (e.g. `Amphetamine-1.9.7-arm64-beta-1.dmg`).
+  Tag uses a dot (`v1.9.7-beta.1`); filenames use a hyphen before N (`-beta-1`).
+- Artifacts: `dist-mac-beta-{arch}` and `dist-win-beta-{arch}` (`x64` / `arm64`) for 14 days.
+- **`prepare` job** (after lint/test) computes a single N for the run so tags and filenames match.
 - **`release` job** publishes a GitHub **prerelease** (not latest production):
-  - Tag: `v{package.json.version}-beta.{run_number}` (unique per develop build)
+  - Tag: `v{package.json.version}-beta.{N}` where **N restarts at 1** for each package
+    version (max existing `vX.Y.Z-beta.*` + 1; not `github.run_number`)
   - Auto release notes via GitHub generate-notes API (range: previous `v*-beta.*`, else latest production `vX.Y.Z`)
   - Body: beta preamble + generated "What's Changed"
   - `prerelease: true`, `make_latest: false` so it does not replace production `vX.Y.Z` releases
-  - Attaches `*-beta.dmg` / `*-beta.zip`
+  - Attaches `*-beta-{N}.dmg` / `*-beta-{N}.zip` / `*-beta-{N}.exe`
 - Production CD still owns non-prerelease tags `vX.Y.Z` from `main`.
 - Concurrency group is `beta-${{ github.ref }}` with `cancel-in-progress: true`.
 - Local equivalent suffix: `./build-macOS-dmg.sh --environment beta --arch arm64`.

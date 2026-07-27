@@ -67,18 +67,18 @@ describe("shortcut", () => {
   });
 
   describe("registerGlobalShortcut", () => {
-    it("registers globalShortcut with default Cmd+Shift+A when shortcut is empty", () => {
+    it("registers globalShortcut with default CommandOrControl+Shift+A when shortcut is empty", () => {
       shortcut = "";
       registerGlobalShortcut(createDeps());
 
-      expect(mockRegister).toHaveBeenCalledWith("Cmd+Shift+A", expect.any(Function));
+      expect(mockRegister).toHaveBeenCalledWith("CommandOrControl+Shift+A", expect.any(Function));
     });
 
     it("registers globalShortcut with custom shortcut from settings", () => {
-      shortcut = "Cmd+Shift+K";
+      shortcut = "CommandOrControl+Shift+K";
       registerGlobalShortcut(createDeps());
 
-      expect(mockRegister).toHaveBeenCalledWith("Cmd+Shift+K", expect.any(Function));
+      expect(mockRegister).toHaveBeenCalledWith("CommandOrControl+Shift+K", expect.any(Function));
     });
 
     it("shortcut callback toggles preventSleep from false to true", () => {

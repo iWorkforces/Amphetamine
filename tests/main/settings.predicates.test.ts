@@ -20,6 +20,7 @@ import {
   isValidAccelerator,
   isValidShortcutSetting,
   mergeValidatedPartial,
+  normalizeAcceleratorForPlatform,
   validateRawSettings,
 } from "../../src/shared/settings-validators.js";
 import { DEFAULT_SETTINGS } from "../../src/shared/types.js";
@@ -83,13 +84,31 @@ describe("settings predicates", () => {
     });
   });
 
+  describe("normalizeAcceleratorForPlatform", () => {
+    it("rewrites pure Cmd/Command to CommandOrControl on win32", () => {
+      expect(normalizeAcceleratorForPlatform("Cmd+Shift+A", "win32")).toBe(
+        "CommandOrControl+Shift+A",
+      );
+      expect(normalizeAcceleratorForPlatform("Command+K", "win32")).toBe("CommandOrControl+K");
+    });
+    it("leaves accelerators unchanged on darwin", () => {
+      expect(normalizeAcceleratorForPlatform("Cmd+Shift+A", "darwin")).toBe("Cmd+Shift+A");
+    });
+    it("does not rewrite Control/Ctrl tokens on win32", () => {
+      expect(normalizeAcceleratorForPlatform("Control+Shift+A", "win32")).toBe("Control+Shift+A");
+      expect(normalizeAcceleratorForPlatform("CommandOrControl+Shift+A", "win32")).toBe(
+        "CommandOrControl+Shift+A",
+      );
+    });
+  });
+
   describe("isValidAccelerator", () => {
     it("accepts valid accelerators with modifier + key", () => {
-      expect(isValidAccelerator("Cmd+Shift+A")).toBe(true);
-      expect(isValidAccelerator("Cmd+Ctrl+X")).toBe(true);
-      expect(isValidAccelerator("Cmd+Option+K")).toBe(true);
-      expect(isValidAccelerator("Command+Shift+A")).toBe(true);
-      expect(isValidAccelerator("Alt+Shift+R")).toBe(true);
+      expect(isValidAccelerator("Cmd+Shift+A", "darwin")).toBe(true);
+      expect(isValidAccelerator("Cmd+Ctrl+X", "darwin")).toBe(true);
+      expect(isValidAccelerator("Cmd+Option+K", "darwin")).toBe(true);
+      expect(isValidAccelerator("Command+Shift+A", "darwin")).toBe(true);
+      expect(isValidAccelerator("Alt+Shift+R", "darwin")).toBe(true);
     });
     it("accepts Electron CommandOrControl / CmdOrCtrl aliases", () => {
       expect(isValidAccelerator("CommandOrControl+Shift+A")).toBe(true);
@@ -101,12 +120,12 @@ describe("settings predicates", () => {
       expect(isValidAccelerator("Shift")).toBe(false);
       expect(isValidAccelerator("Cmd+Shift")).toBe(false);
     });
-    it("rejects reserved/system-conflicting shortcuts", () => {
-      expect(isValidAccelerator("Cmd+Q")).toBe(false);
-      expect(isValidAccelerator("Cmd+W")).toBe(false);
-      expect(isValidAccelerator("Cmd+Tab")).toBe(false);
-      expect(isValidAccelerator("Cmd+Space")).toBe(false);
-      expect(isValidAccelerator("Command+Q")).toBe(false);
+    it("rejects reserved/system-conflicting shortcuts on darwin", () => {
+      expect(isValidAccelerator("Cmd+Q", "darwin")).toBe(false);
+      expect(isValidAccelerator("Cmd+W", "darwin")).toBe(false);
+      expect(isValidAccelerator("Cmd+Tab", "darwin")).toBe(false);
+      expect(isValidAccelerator("Cmd+Space", "darwin")).toBe(false);
+      expect(isValidAccelerator("Command+Q", "darwin")).toBe(false);
     });
     it("rejects reserved combos across Cmd-alias spellings", () => {
       expect(isValidAccelerator("CommandOrControl+Q")).toBe(false);
@@ -117,6 +136,15 @@ describe("settings predicates", () => {
       expect(isValidAccelerator("CmdOrCtrl+W")).toBe(false);
       expect(isValidAccelerator("CmdOrCtrl+Tab")).toBe(false);
       expect(isValidAccelerator("CmdOrCtrl+Space")).toBe(false);
+    });
+    it("rejects Windows reserved Ctrl+W and Alt+F4", () => {
+      expect(isValidAccelerator("Ctrl+W", "win32")).toBe(false);
+      expect(isValidAccelerator("Control+W", "win32")).toBe(false);
+      expect(isValidAccelerator("Alt+F4", "win32")).toBe(false);
+      expect(isValidAccelerator("Alt+F4", "darwin")).toBe(false);
+    });
+    it("allows Ctrl+W on darwin (not a macOS reserved combo in our list)", () => {
+      expect(isValidAccelerator("Ctrl+W", "darwin")).toBe(true);
     });
     it("rejects empty/non-string/non-modifier inputs", () => {
       expect(isValidAccelerator("")).toBe(false);

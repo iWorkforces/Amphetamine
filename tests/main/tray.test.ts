@@ -320,7 +320,8 @@ describe("tray", () => {
       expect(labels).toContain(MENU_QUIT);
     });
 
-    it("Quit menu item has Cmd+Q accelerator", async () => {
+    it("Quit menu item has CommandOrControl+Q accelerator", async () => {
+
       const { setupTray } = await import("../../src/main/tray.js");
       setupTray(createTrayDeps());
 

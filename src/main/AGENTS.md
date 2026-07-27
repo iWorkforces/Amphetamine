@@ -1,6 +1,6 @@
 # Main Process - Electron Backend
 
-Electron main process for lifecycle, tray, IPC, settings persistence, sleep prevention, sessions, battery policy, global shortcut, auto-updater, and benchmark mode. `coordinator.ts` owns settings-to-system synchronization. `index.ts` owns the single quit orchestrator.
+Electron main process for lifecycle, tray, IPC, settings persistence, sleep prevention, sessions, battery policy, global shortcut, auto-updater, and benchmark mode. `coordinator.ts` owns settings-to-system synchronization. `index.ts` owns the single quit orchestrator. OS differences (macOS vs Windows) live under `platform/`.
 
 ## Files
 
@@ -8,21 +8,22 @@ Electron main process for lifecycle, tray, IPC, settings persistence, sleep prev
 |------|------|
 | `index.ts` | App bootstrap, window creation, security hooks, quit orchestrator, benchmark entry |
 | `coordinator.ts` | Central hub: settings diffing, sleep/session/tray/shortcut/battery/updater sync |
+| `platform/` | OS adapters; public entry `platform/index.ts` (see `platform/AGENTS.md`) |
 | `session-timer.ts` | Idle/timed/indefinite state machine; monotonic timing; no settings writes |
 | `sleep-prevention.ts` | Only `powerSaveBlocker` wrapper; accepts `SleepBlockMode` |
-| `battery-monitor.ts` | `pmset` polling; pure threshold detector + `reconfigure()` |
+| `battery-monitor.ts` | Threshold detector + `reconfigure()`; charge percent via `platform/battery-percent` |
 | `tray.ts` | Tray icon/menu cache, theme debounce, Check for Updates, destroy on cleanup |
 | `ipc.ts` | Typed IPC handler registration via `typedHandle()` |
 | `ipc-utils.ts` | Sender allowlist and typed handler utilities |
 | `settings.ts` | Async JSON settings, EventEmitter, write mutex, corrupt backup, `flushSettingsWriteChain()` |
-| `settings-window.ts` | BrowserWindow singleton; Dock visibility while open |
+| `settings-window.ts` | BrowserWindow singleton; Dock (macOS) / taskbar (Windows) visibility while open |
 | `auto-updater.ts` | Hybrid updates: check/download/install when possible; browser fallback; `checkForUpdatesNow()` |
 | `auto-updater-utils.ts` | Pure updater helpers |
 | `benchmark.ts` | Benchmark-mode measurement flow and stdout result artifact |
 | `benchmark-env.ts` | Benchmark env names and mode guard |
 | `benchmark-metrics.ts` | Pure benchmark artifact summaries |
 | `global-shortcut.ts` | Accelerator registration; broadcasts `SHORTCUT_REGISTRATION_FAILED` on failure |
-| `auto-launch.ts` | macOS login item integration (`openAsHidden: true`) |
+| `auto-launch.ts` | Login item integration (macOS `openAsHidden`; Windows without that flag — Wave 1) |
 | `security.ts` | WebContents hardening and navigation allowlist |
 | `about-window.ts` | Custom About BrowserWindow (escaped HTML, CSP, light/dark) |
 | `utils/broadcast.ts` | Generic typed push helper |
@@ -67,7 +68,7 @@ Electron main process for lifecycle, tray, IPC, settings persistence, sleep prev
 - Module-level delegators (`startSession`, …) fail fast if `setActiveSessionTimer` has not been called.
 - `reconcileSessionState()` is a no-op: preference null must not kill a live session.
 - Auto-updater waits 3s after startup, repeats every 4h, and backs off failures to 24h max.
-- Hybrid update policy: `autoDownload` stays false for background checks. Tray/IPC **Check for Updates** sets user-initiated mode → `downloadUpdate()` → dialog → `quitAndInstall()` when the platform allows (signed macOS + ZIP/`latest-mac.yml`). On download/install failure, open the GitHub release page. Background `update-available` only broadcasts status (no browser popup).
+- Hybrid update policy: `autoDownload` stays false for background checks. Tray/IPC **Check for Updates** sets user-initiated mode → `downloadUpdate()` → dialog → `quitAndInstall()` when the platform allows (macOS ZIP/`latest-mac.yml`; Windows x64/arm64 EXE/`latest.yml`, preferably signed). On download/install failure, open the GitHub release page. Background `update-available` only broadcasts status (no browser popup).
 
 ## Tray Rules
 
@@ -83,6 +84,15 @@ Electron main process for lifecycle, tray, IPC, settings persistence, sleep prev
 - Benchmark mode skips auto-updater, samples popover/tray/settings responsiveness, then prints `AMPHETAMINE_BENCHMARK_RESULT:` JSON and quits.
 - `benchmark.ts` may dynamically import tray/settings modules for measurement; do not move those helpers into renderer code.
 
+## Platform Rules
+
+- Prefer `isDarwin()` / `isWin32()` from `platform/` over raw `process.platform` compares.
+- Tray-only boot: `enterTrayOnlyMode()` (darwin activation policy; no-op on Windows).
+- Window chrome: `popoverWindowChrome` / `settingsWindowChrome` / `aboutWindowChrome` — never set `vibrancy` unguarded.
+- Login items: `buildLoginItemSettings()` — never pass `openAsHidden` on non-darwin.
+- Settings open: `enterForegroundMode()` + `setDockIcon()`; close: `enterTrayOnlyMode()`.
+- Battery percent: only `platform/battery-percent.ts` shells out (`pmset` / PowerShell); the monitor stays a pure detector.
+
 ## Anti-Patterns
 
 - Never call `powerSaveBlocker.start/stop` outside `sleep-prevention.ts`.
@@ -93,6 +103,7 @@ Electron main process for lifecycle, tray, IPC, settings persistence, sleep prev
 - Never hardcode tray/menu UI strings outside `constants.ts`.
 - Never write session runtime duration into settings from the timer.
 - Never register a second `before-quit` handler that races the quit orchestrator.
+- Never call `app.setActivationPolicy`, `app.dock`, or set `vibrancy` / `openAsHidden` without a darwin guard (Wave 1+).
 
 ## Commands
 

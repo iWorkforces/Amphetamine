@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { ABOUT_WINDOW_WIDTH, ABOUT_WINDOW_HEIGHT } from "./constants.js";
 import { hardenWebContents } from "./security.js";
 import { getPackageInfo } from "./utils/packageInfo.js";
+import { aboutWindowChrome } from "./platform/index.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -54,7 +55,7 @@ export function showAbout(_mainWindow?: BrowserWindow): void {
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
-    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI Variable", "Segoe UI", "Helvetica Neue", sans-serif;
     -webkit-font-smoothing: antialiased;
     display: flex;
     flex-direction: column;
@@ -140,10 +141,10 @@ export function showAbout(_mainWindow?: BrowserWindow): void {
     maximizable: false,
     fullscreenable: false,
     alwaysOnTop: true,
-    titleBarStyle: "hiddenInset",
-    vibrancy: "under-window",
-    visualEffectState: "active",
     show: false,
+    // Packaged PNG under src/assets (asar-safe); matches settings window icon source
+    icon: path.join(__dirname, "..", "..", "src", "assets", "settings-hero-icon.png"),
+    ...aboutWindowChrome(),
     webPreferences: {
       sandbox: true,
       contextIsolation: true,

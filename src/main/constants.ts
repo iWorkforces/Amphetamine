@@ -55,5 +55,5 @@ export const MENU_ABOUT = "About Amphetamine" as const;
 export const MENU_CHECK_UPDATES = "Check for Updates…" as const;
 export const MENU_QUIT = "Quit" as const;
 
-/** Tray accelerator strings. */
-export const ACCELERATOR_QUIT = "Cmd+Q" as const;
+/** Tray accelerator strings. CommandOrControl → ⌘ on macOS, Ctrl on Windows. */
+export const ACCELERATOR_QUIT = "CommandOrControl+Q" as const;
