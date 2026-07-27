@@ -7,9 +7,9 @@ Thin main-process helpers that gate OS-specific Electron and shell behavior. Pro
 | File | Role | Wave |
 |------|------|------|
 | `os.ts` | Pure identity: `isDarwin`, `isWin32`, `resolvePlatformId`, `isSupportedPlatform` | 0 |
-| `index.ts` | Public re-exports + module map comments | 0 |
-| `shell.ts` | Activation policy, Dock/taskbar (planned) | 1 |
-| `window-chrome.ts` | BrowserWindow option builders (planned) | 1 |
+| `shell.ts` | Activation policy, Dock icon, login-item settings builders | 1 |
+| `window-chrome.ts` | BrowserWindow chrome fragments (popover / settings / about) | 1 |
+| `index.ts` | Public re-exports | 0+ |
 | `battery-percent.ts` | Charge percent providers (planned) | 2 |
 | `accelerators.ts` | Main-side accelerator defaults if needed (planned) | 3 |
 
@@ -18,8 +18,18 @@ Thin main-process helpers that gate OS-specific Electron and shell behavior. Pro
 - Prefer `isDarwin()` / `isWin32()` over raw `process.platform` string compares in main.
 - Optional `platform` parameters on pure helpers exist for unit tests; production omits them.
 - Do not put coordinator policy, settings validation, or renderer concerns here.
-- Do not import Electron in pure helpers (`os.ts`). Electron-touching adapters land in later wave modules.
-- Never call macOS-only APIs (`setActivationPolicy`, `app.dock`, vibrancy, `openAsHidden`) without a darwin guard once those call sites are migrated.
+- Pure helpers (`os.ts`, pure builders in `window-chrome.ts` / `buildLoginItemSettings`) must not import Electron side effects beyond type-only usage where needed.
+- `shell.ts` may import `app` for activation policy / Dock / (callers use login settings builders).
+- Never call macOS-only APIs (`setActivationPolicy`, `app.dock`, vibrancy, `openAsHidden`) without a darwin guard.
+
+## Call sites
+
+| Concern | Call site | Adapter |
+|---------|-----------|---------|
+| Tray-only boot | `index.ts` | `enterTrayOnlyMode()` |
+| Settings Dock / foreground | `settings-window.ts` | `enterForegroundMode`, `enterTrayOnlyMode`, `setDockIcon` |
+| Popover / settings / about chrome | `index.ts`, `settings-window.ts`, `about-window.ts` | `*WindowChrome()` |
+| Login items | `auto-launch.ts` | `buildLoginItemSettings` |
 
 ## Anti-Patterns
 

@@ -1,9 +1,12 @@
 /**
  * Platform adapters for main-process OS differences (macOS + Windows).
  *
- * Wave 0 ships identity helpers only. Later waves add:
- *   shell.ts            — activation policy, Dock/taskbar visibility
- *   window-chrome.ts    — BrowserWindow option builders
+ * Modules:
+ *   os.ts             — pure identity helpers
+ *   shell.ts          — activation policy, Dock icon, login items
+ *   window-chrome.ts  — BrowserWindow option builders
+ *
+ * Later waves:
  *   battery-percent.ts  — multi-OS charge percent providers
  *   accelerators.ts     — default/reserved shortcut helpers (if needed in main)
  *
@@ -21,3 +24,20 @@ export {
   isWin32,
   isSupportedPlatform,
 } from "./os.js";
+
+export {
+  type LoginItemWriteSettings,
+  shouldUseActivationPolicy,
+  enterTrayOnlyMode,
+  enterForegroundMode,
+  setDockIcon,
+  buildLoginItemSettings,
+} from "./shell.js";
+
+export {
+  type WindowChromeOptions,
+  popoverWindowChrome,
+  settingsWindowChrome,
+  aboutWindowChrome,
+  appIconFileName,
+} from "./window-chrome.js";
