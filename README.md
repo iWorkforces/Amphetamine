@@ -2,7 +2,7 @@
 
 A tray app that keeps your computer awake on **macOS** and **Windows**. Lives in the system tray, prevents sleep through user intent or timed sessions, and stays out of the Dock / taskbar when idle.
 
-**Current version:** 1.9.7
+**Current version:** 1.9.8
 
 ## Features
 
@@ -106,7 +106,7 @@ bun scripts/generate-app-icon.mjs       # build/icon.icns (mac) + build/icon.ico
 bun scripts/generate-coffee-tray-icons.mjs
 ```
 
-Outputs go to `dist/` (e.g. `Amphetamine-1.9.7-arm64.dmg`, `Amphetamine-1.9.7-x64.exe`, `Amphetamine-1.9.7-arm64.exe`, portable `*-portable.exe`).
+Outputs go to `dist/` (e.g. `Amphetamine-1.9.8-arm64.dmg`, `Amphetamine-1.9.8-x64.exe`, `Amphetamine-1.9.8-arm64.exe`, portable `*-portable.exe`).
 
 Local macOS helper:
 
