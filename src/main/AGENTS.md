@@ -9,7 +9,7 @@ Electron main process for lifecycle, tray, IPC, settings persistence, sleep prev
 | `index.ts` | App bootstrap, window creation, security hooks, quit orchestrator, benchmark entry |
 | `coordinator.ts` | Central hub: settings diffing, sleep/session/tray/shortcut/battery/updater sync |
 | `platform/` | OS adapters; public entry `platform/index.ts` (see `platform/AGENTS.md`) |
-| `session-timer.ts` | Idle/timed/indefinite state machine; monotonic timing; no settings writes |
+| `session-timer.ts` | Thin façade over `application/session` engine + clock/schedule adapters; no settings writes |
 | `sleep-prevention.ts` | Only `powerSaveBlocker` wrapper; accepts `SleepBlockMode` |
 | `battery-monitor.ts` | Threshold detector + `reconfigure()`; charge percent via `platform/battery-percent` |
 | `tray.ts` | Tray icon/menu cache, theme debounce, Check for Updates, destroy on cleanup |
@@ -61,10 +61,10 @@ Electron main process for lifecycle, tray, IPC, settings persistence, sleep prev
 
 ## Timing and State
 
-- Session elapsed timing uses `performance.now()` branded with `asPerf(n)`.
-- `Date.now()` is allowed only for the wall-clock expiry anchor in `session-timer.ts`.
-- Timer and polling handles should call `.unref()` so they do not pin the event loop.
-- `createSessionTimer({ broadcast, onSessionActiveChange?, powerMonitor? })` — no `onStateChange` / settings deps.
+- Session machine lives in `application/session/session-engine.ts` (`ClockPort` + `SchedulePort`).
+- Elapsed timing uses `ClockPort.perfNow()` / `asPerf`; wall-clock resume uses `ClockPort.wallNow()`.
+- `setTimeout` + `.unref()` live only in the `SchedulePort` Node adapter (and other polling adapters).
+- `createSessionTimer({ broadcast, onSessionActiveChange?, powerMonitor? })` — thin façade; no `onStateChange` / settings deps.
 - Module-level delegators (`startSession`, …) fail fast if `setActiveSessionTimer` has not been called.
 - `reconcileSessionState()` is a no-op: preference null must not kill a live session.
 - Auto-updater waits 3s after startup, repeats every 4h, and backs off failures to 24h max.
