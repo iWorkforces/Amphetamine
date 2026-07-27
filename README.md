@@ -1,15 +1,15 @@
 # Amphetamine
 
-A macOS menu bar app that keeps your Mac awake. Lives in the system tray, prevents the system from going to sleep, and stays out of the Dock.
+A tray app that keeps your computer awake on **macOS** and **Windows**. Lives in the system tray, prevents the system from going to sleep, and stays out of the Dock / taskbar when idle.
 
 ## Features
 
 - **Sleep Prevention**: blocks system and/or display sleep via Electron's `powerSaveBlocker` (configurable display vs system-only mode).
 - **Session Timer**: start timed sessions (configurable duration) or run indefinitely from the tray popover or Settings. Runtime state is separate from the saved default duration preference.
 - **Battery-Aware Auto-Disable**: polls system battery charge (macOS `pmset`, Windows PowerShell) and automatically stops sleep prevention when battery drops below a configurable threshold.
-- **Global Shortcut**: toggle sleep prevention with `Cmd+Shift+A` (configurable).
-- **Launch at Login**: optional macOS login item, managed through native APIs.
-- **Tray-Only UX**: no Dock icon by default (`LSUIElement`). The popover provides prevent-sleep toggle and quick session start; the settings window appears in the Dock only while open.
+- **Global Shortcut**: toggle sleep prevention with `CommandOrControl+Shift+A` (⌘/Ctrl; configurable).
+- **Launch at Login**: optional OS login item / start-at-login, managed through native APIs.
+- **Tray-Only UX**: no Dock icon by default on macOS (`LSUIElement`); Windows uses the notification area with `skipTaskbar`. The popover provides prevent-sleep toggle and quick session start; the settings window appears in the Dock/taskbar only while open.
 - **Settings Window**: configure launch-at-login, sleep prevention default, session duration, battery threshold, and the keyboard shortcut.
 - **Auto-Updater**: checks GitHub releases via `electron-updater` shortly after launch and every 4 hours, with exponential backoff up to 24h on failure. Manual "Check for Updates" available from the tray menu.
 - **Secure IPC**: sandboxed preload exposes a strictly typed `window.api` bridge. Main-side handlers validate sender origin against an allowlist; all 15 channels are typed end-to-end.
@@ -23,7 +23,7 @@ _Configure launch-at-login, sleep prevention, session duration, battery threshol
 
 ## Requirements
 
-- macOS 11 or later (Apple Silicon arm64 or Intel x64)
+- macOS 11 or later (Apple Silicon arm64 or Intel x64), **or** Windows 10/11 (x64)
 - Bun ≥ 1.3.14 (recommended) or Node.js `>=26 <27`
 
 ## Development
@@ -78,6 +78,8 @@ Packaging is handled by `electron-builder`, configured in `electron-builder.yml`
 bun run package             # arm64 DMG + ZIP, then flip Electron fuses
 bun run package:x64         # Intel x64 DMG + ZIP
 bun run package:universal   # Universal (arm64 + x64) DMG + ZIP
+bun run package:win         # Windows x64 NSIS installer + portable, then flip fuses
+bun run package:win:dir     # Windows unpacked dir only
 bun run package:dir         # Unpacked .app directory only (faster, for local testing)
 bun run flip-fuses arm64    # Apply fuses manually if needed
 ```
