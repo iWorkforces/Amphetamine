@@ -18,16 +18,20 @@ import {
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// Resolve app icon path:
-//   Dev:      lib/main/ → ../../build/<icon>
-//   Packaged: app.asar/lib/main/ → build resources at process.resourcesPath
-// Dock icon is only applied on macOS (see setDockIcon); Windows uses .ico in Wave 4 packaging.
+// Resolve app icon path (Dock / packager resources):
+//   Dev:      lib/main/ → ../../build/<icon.icns|icon.ico>
+//   Packaged: process.resourcesPath (electron-builder buildResources)
 function getAppIconPath(): string {
   const fileName = appIconFileName();
   if (isDev) {
     return path.join(__dirname, "..", "..", "build", fileName);
   }
   return path.join(process.resourcesPath, fileName);
+}
+
+/** Window taskbar/titlebar icon — packaged PNG (asar-safe on all platforms). */
+function getWindowIconPath(): string {
+  return path.join(__dirname, "..", "..", "src", "assets", "settings-hero-icon.png");
 }
 
 /** Cached dock icon to avoid re-reading from disk on every settings open */
@@ -65,6 +69,7 @@ export function createSettingsWindow(): BrowserWindow {
     maximizable: false,
     fullscreenable: false,
     show: false,
+    icon: getWindowIconPath(),
     ...settingsWindowChrome(),
     webPreferences: {
       preload: path.join(__dirname, "..", "preload", "index.cjs"),

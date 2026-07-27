@@ -142,6 +142,8 @@ export function showAbout(_mainWindow?: BrowserWindow): void {
     fullscreenable: false,
     alwaysOnTop: true,
     show: false,
+    // Packaged PNG under src/assets (asar-safe); matches settings window icon source
+    icon: path.join(__dirname, "..", "..", "src", "assets", "settings-hero-icon.png"),
     ...aboutWindowChrome(),
     webPreferences: {
       sandbox: true,

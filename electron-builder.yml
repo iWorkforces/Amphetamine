@@ -48,6 +48,7 @@ mac:
   extendInfo:
     LSUIElement: true
   notarize: false
+  icon: build/icon.icns
 
 # === DMG-SPECIFIC ===
 dmg:
@@ -57,6 +58,33 @@ dmg:
   shrink: true
   # Don't sign DMG (not required, causes notarization issues)
   sign: false
+
+# === WINDOWS ===
+# Unsigned by default (no Authenticode cert in CI). Enable signing later via
+# win.certificateFile / CSC_* env without changing targets.
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+    - target: portable
+      arch:
+        - x64
+  icon: build/icon.ico
+  # artifactName keeps arch in the filename for multi-arch releases later
+  artifactName: ${productName}-${version}-${arch}.${ext}
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  perMachine: false
+  # Tray app: Start Menu entry is enough; no desktop shortcut by default
+  createDesktopShortcut: false
+  createStartMenuShortcut: true
+  shortcutName: Amphetamine
+
+portable:
+  artifactName: ${productName}-${version}-${arch}-portable.${ext}
 
 afterPack: build/after-pack.cjs
 
