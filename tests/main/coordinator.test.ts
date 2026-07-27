@@ -95,6 +95,7 @@ vi.mock("../../src/main/settings.js", () => ({
 
 vi.mock("../../src/main/auto-launch.js", () => ({
   syncAutoLaunch: mockSyncAutoLaunch,
+  getAutoLaunchPort: () => ({ sync: mockSyncAutoLaunch }),
 }));
 
 vi.mock("../../src/main/global-shortcut.js", () => ({
@@ -127,6 +128,8 @@ vi.mock("../../src/main/session-timer.js", () => ({
 vi.mock("../../src/main/auto-updater.js", () => ({
   setBroadcastFn: vi.fn(),
   stopAutoUpdater: vi.fn(),
+  initAutoUpdater: vi.fn(),
+  checkForUpdatesNow: vi.fn(),
 }));
 
 vi.mock("../../src/main/settings-window.js", () => ({

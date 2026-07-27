@@ -1,6 +1,7 @@
 import { app } from "electron";
 import log from "electron-log";
 import { buildLoginItemSettings } from "./platform/index.js";
+import type { AutoLaunchPort } from "../application/ports/auto-launch.port.js";
 
 /**
  * Get the current auto-launch (login item) status.
@@ -19,7 +20,6 @@ export function getAutoLaunchStatus(): boolean {
 /**
  * Enable or disable auto-launch at login.
  * macOS uses openAsHidden; Windows only sets openAtLogin (see platform/shell).
- * @param enabled - Whether to launch the app at login
  */
 export function setAutoLaunch(enabled: boolean): void {
   try {
@@ -32,12 +32,19 @@ export function setAutoLaunch(enabled: boolean): void {
 
 /**
  * Sync the auto-launch setting with the system.
- * Call this when the app starts or when settings change.
- * @param enabled - Whether auto-launch should be enabled
  */
 export function syncAutoLaunch(enabled: boolean): void {
   const currentStatus = getAutoLaunchStatus();
   if (currentStatus !== enabled) {
     setAutoLaunch(enabled);
   }
+}
+
+/** AutoLaunchPort view for SettingsReactionService. */
+export function getAutoLaunchPort(): AutoLaunchPort {
+  return {
+    sync(launchAtLogin: boolean): void {
+      syncAutoLaunch(launchAtLogin);
+    },
+  };
 }

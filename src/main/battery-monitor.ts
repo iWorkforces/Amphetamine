@@ -1,14 +1,10 @@
 import { powerMonitor } from "electron";
 import log from "electron-log";
 import { getBatteryPercent } from "./platform/index.js";
+import { isThresholdEnabled } from "../domain/battery/threshold.js";
 
 /** Interval (ms) between periodic battery polls while on battery and preventing sleep. */
 const PERIODIC_BATTERY_CHECK_MS = 60_000;
-
-/** Returns true when `threshold` is a positive, finite percentage. 0 / non-positive ⇒ disabled. */
-function isThresholdEnabled(threshold: number): boolean {
-  return Number.isFinite(threshold) && threshold > 0;
-}
 
 /**
  * Dependencies for the battery monitor.
