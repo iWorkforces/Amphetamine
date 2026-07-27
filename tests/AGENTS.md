@@ -22,7 +22,8 @@ tests/
 | `main` | `node` | `tests/main/**/*.test.ts` | `src/main/**/*.ts`, `src/infrastructure/**/*.ts` |
 | `renderer` | `jsdom` | `tests/renderer/**/*.test.ts` | `src/renderer/**/*.ts` |
 
-- Root coverage `include`: `src/**/*.ts` (thresholds: lines 80 / functions 80 / branches 70).
+- Root coverage `include`: `src/**/*.ts` (thresholds: lines/functions/branches **90%**).
+- Coverage excludes type-only ports/barrels, the benchmark integration harness, and Electron UI entry shells (`main/index`, tray, about/settings windows, renderer popover/settings shells, auto-updater hybrid module) that are exercised via suite behavior and manual smoke rather than full unit branch coverage.
 - `passWithNoTests: true` for filtered project runs.
 - `typecheck:tests` uses `tsconfig.tests.json` (sticky strict; unused locals/params relaxed).
 - Sticky ESLint full strength on `src/`; tests relax `no-unsafe-*`, non-null assertions, `no-unnecessary-condition`.
