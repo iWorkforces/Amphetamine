@@ -289,8 +289,14 @@ function startUpdateCheckLoop(): void {
  *
  * Hybrid policy (option C):
  * - autoDownload stays false so background checks never pull payloads.
- * - "Check for Updates" tries download + quitAndInstall when the platform allows
- *   (signed macOS builds with ZIP/latest-mac.yml); otherwise falls back to GitHub.
+ * - "Check for Updates" tries download + quitAndInstall when the platform allows;
+ *   otherwise falls back to opening the GitHub release page.
+ *
+ * Feed metadata (electron-updater GitHub provider):
+ * - macOS: ZIP + `latest-mac.yml` (and optional blockmap) on the release
+ * - Windows: NSIS/portable EXE + `latest.yml` (and optional blockmap) on the release
+ * Unsigned or incomplete feeds still check for availability; install then falls back
+ * to the browser. CD attaches these artifacts when present.
  */
 export function initAutoUpdater(): void {
   if (!app.isPackaged) {
@@ -299,8 +305,9 @@ export function initAutoUpdater(): void {
 
   autoUpdater.logger = log;
   // Keep background auto-download off. User-initiated flow calls downloadUpdate() explicitly.
-  // Code-signature verification on macOS ZIP updates is performed by electron-updater / Squirrel.Mac
-  // when quitAndInstall runs. Browser fallback covers unsigned or failed install paths.
+  // macOS: code-signature verification runs via electron-updater / Squirrel.Mac on quitAndInstall.
+  // Windows: in-app install works when Authenticode-signed and latest.yml is published; otherwise
+  // browser fallback covers unsigned CI builds and download/install failures.
   autoUpdater.autoDownload = false;
   autoUpdater.autoInstallOnAppQuit = false;
 

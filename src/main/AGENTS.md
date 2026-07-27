@@ -68,7 +68,7 @@ Electron main process for lifecycle, tray, IPC, settings persistence, sleep prev
 - Module-level delegators (`startSession`, …) fail fast if `setActiveSessionTimer` has not been called.
 - `reconcileSessionState()` is a no-op: preference null must not kill a live session.
 - Auto-updater waits 3s after startup, repeats every 4h, and backs off failures to 24h max.
-- Hybrid update policy: `autoDownload` stays false for background checks. Tray/IPC **Check for Updates** sets user-initiated mode → `downloadUpdate()` → dialog → `quitAndInstall()` when the platform allows (signed macOS + ZIP/`latest-mac.yml`). On download/install failure, open the GitHub release page. Background `update-available` only broadcasts status (no browser popup).
+- Hybrid update policy: `autoDownload` stays false for background checks. Tray/IPC **Check for Updates** sets user-initiated mode → `downloadUpdate()` → dialog → `quitAndInstall()` when the platform allows (macOS ZIP/`latest-mac.yml`; Windows EXE/`latest.yml`, preferably signed). On download/install failure, open the GitHub release page. Background `update-available` only broadcasts status (no browser popup).
 
 ## Tray Rules
 
