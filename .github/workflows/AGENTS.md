@@ -42,16 +42,19 @@ Workflow definitions for lint/test/build, production release publishing, and dev
 
 - Beta triggers on **`push` to `develop`** (covers PR merges) and `workflow_dispatch` (manual re-run).
 - **Why not `workflow_run`?** GitHub only registers `workflow_run` listeners from workflow files on the **default branch** (`main`). `beta.yml` is develop-oriented and is not required on `main`, so a `workflow_run` listener would never fire.
-- Jobs: `lint` + `test` → `package` (matrix) → **`release`** (GitHub prerelease).
+- Jobs: `lint` + `test` → **`prepare`** (version + beta N) → `package` / `package-windows` → **`release`**.
 - Packaging: mac arm64/x64 plus Windows x64/arm64 (`package` + `package-windows` matrix).
-- After `electron-builder`, basenames get a `-beta` suffix (e.g. `Amphetamine-1.9.5-arm64-beta.dmg`, `*-beta.exe`).
+- After `electron-builder`, basenames get a **`-beta-{N}`** suffix (e.g. `Amphetamine-1.9.7-arm64-beta-1.dmg`).
+  Tag uses a dot (`v1.9.7-beta.1`); filenames use a hyphen before N (`-beta-1`).
 - Artifacts: `dist-mac-beta-{arch}` and `dist-win-beta-{arch}` (`x64` / `arm64`) for 14 days.
+- **`prepare` job** (after lint/test) computes a single N for the run so tags and filenames match.
 - **`release` job** publishes a GitHub **prerelease** (not latest production):
-  - Tag: `v{package.json.version}-beta.{run_number}` (unique per develop build)
+  - Tag: `v{package.json.version}-beta.{N}` where **N restarts at 1** for each package
+    version (max existing `vX.Y.Z-beta.*` + 1; not `github.run_number`)
   - Auto release notes via GitHub generate-notes API (range: previous `v*-beta.*`, else latest production `vX.Y.Z`)
   - Body: beta preamble + generated "What's Changed"
   - `prerelease: true`, `make_latest: false` so it does not replace production `vX.Y.Z` releases
-  - Attaches `*-beta.dmg` / `*-beta.zip` / `*-beta.exe`
+  - Attaches `*-beta-{N}.dmg` / `*-beta-{N}.zip` / `*-beta-{N}.exe`
 - Production CD still owns non-prerelease tags `vX.Y.Z` from `main`.
 - Concurrency group is `beta-${{ github.ref }}` with `cancel-in-progress: true`.
 - Local equivalent suffix: `./build-macOS-dmg.sh --environment beta --arch arm64`.
