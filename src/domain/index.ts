@@ -2,6 +2,7 @@
 
 export type { PerfTimestamp } from "./time/perf-timestamp.js";
 export { asPerf } from "./time/perf-timestamp.js";
+export { MS_PER_MINUTE } from "./time/units.js";
 
 export type { SleepBlockMode } from "./settings/sleep-block-mode.js";
 export type { AppSettings } from "./settings/app-settings.js";
