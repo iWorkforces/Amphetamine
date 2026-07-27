@@ -50,7 +50,7 @@ Unsigned by default (`CSC_IDENTITY_AUTO_DISCOVERY: false` in CI). No native Node
 |----------|--------|----------------|----------------------------|
 | CI `build` job | `main` push | `dist-mac-{arch}` (`*.dmg`, `*.zip`) | No (raw electron-builder) |
 | CI `build-windows` matrix | `main` push | `dist-win-x64`, `dist-win-arm64` | No (raw electron-builder) |
-| Beta workflow | push to `develop` | mac beta + `dist-win-beta-x64` + `dist-win-beta-arm64` | No (raw electron-builder + rename) |
+| Beta workflow | push to `develop` | mac/win beta artifacts renamed `*-beta-{N}.*` | No (raw electron-builder + rename) |
 | Local `bun run package*` | developer machine | `dist/*` then flip-fuses | Yes |
 
 Windows matrix runners: `windows-latest` (x64), `windows-11-arm` (arm64 native). If arm runners are unavailable for the repo, fall back to cross-compile `--arm64` on `windows-latest` (document in PR).
@@ -86,7 +86,8 @@ node build/flip-fuses.cjs arm64       # legacy mac alias
 - Never remove JIT/unsigned executable memory entitlements without testing macOS launch.
 - Never sign DMG by default in `electron-builder.yml`; keep local ad-hoc behavior in `build-macOS-dmg.sh`.
 - Never write generated package output under `build/`; use `dist/`.
-- Never mark develop beta prereleases as latest production; tags must stay `vX.Y.Z-beta.*` with `prerelease: true`.
+- Never mark develop beta prereleases as latest production; tags must stay `vX.Y.Z-beta.N` with `prerelease: true`.
+- Beta **filenames** use `-beta-N` (hyphen), e.g. `Amphetamine-1.9.7-arm64-beta-1.dmg`, matching tag sequence N.
 - Never assume Windows artifacts are x64-only; release notes and CD must include arm64 when packaging both.
 
 ## Commands

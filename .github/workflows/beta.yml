@@ -54,8 +54,58 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun run test
 
-  package:
+  # Resolve package version + next per-version beta index once; packaging jobs and
+  # the release job all use the same N so filenames match the prerelease tag.
+  # Tag: v1.9.7-beta.1  ·  files: Amphetamine-1.9.7-arm64-beta-1.dmg
+  prepare:
     needs: [lint, test]
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      beta_n: ${{ steps.version.outputs.beta_n }}
+      tag: ${{ steps.version.outputs.tag }}
+      short_sha: ${{ steps.version.outputs.short_sha }}
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          fetch-depth: 0
+
+      - name: Fetch tags
+        run: git fetch --tags --force origin
+
+      - name: Resolve package version and beta sequence
+        id: version
+        run: |
+          set -euo pipefail
+          VERSION=$(jq -r .version package.json)
+          SHORT_SHA=$(echo "${GITHUB_SHA}" | cut -c1-7)
+          # Per-version beta sequence: v1.9.7-beta.1, v1.9.7-beta.2, ...
+          # Do NOT use github.run_number — it is global and does not reset on version bumps.
+          PREFIX="v${VERSION}-beta."
+          LAST=$(
+            git tag -l "${PREFIX}*" \
+              | sed -n "s/^${PREFIX}\\([0-9][0-9]*\\)$/\\1/p" \
+              | sort -n \
+              | tail -n 1 || true
+          )
+          if [ -n "${LAST}" ]; then
+            BETA_N=$((LAST + 1))
+          else
+            BETA_N=1
+          fi
+          TAG="${PREFIX}${BETA_N}"
+          while git rev-parse "${TAG}" >/dev/null 2>&1; do
+            BETA_N=$((BETA_N + 1))
+            TAG="${PREFIX}${BETA_N}"
+          done
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "beta_n=${BETA_N}" >> "$GITHUB_OUTPUT"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "short_sha=${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+          echo "Using beta tag: ${TAG} (files will use -beta-${BETA_N})"
+
+  package:
+    needs: [lint, test, prepare]
     strategy:
       matrix:
         include:
@@ -116,48 +166,52 @@ jobs:
           CSC_IDENTITY_AUTO_DISCOVERY: false
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Append -beta suffix to DMG and ZIP filenames
+      - name: Append -beta-N suffix to DMG and ZIP filenames
+        env:
+          BETA_N: ${{ needs.prepare.outputs.beta_n }}
         run: |
           set -euo pipefail
           shopt -s nullglob
           renamed=0
+          SUFFIX="beta-${BETA_N}"
           for f in dist/*.dmg dist/*.zip; do
             dir=$(dirname "$f")
             base=$(basename "$f")
             ext="${base##*.}"
             name="${base%.*}"
-            if [[ "$name" == *-beta ]]; then
+            if [[ "$name" == *"-${SUFFIX}" ]]; then
               echo "Already beta-suffixed: $f"
               continue
             fi
-            dest="${dir}/${name}-beta.${ext}"
+            # Amphetamine-1.9.7-arm64.dmg → Amphetamine-1.9.7-arm64-beta-1.dmg
+            dest="${dir}/${name}-${SUFFIX}.${ext}"
             echo "Renaming $f -> $dest"
             mv "$f" "$dest"
             renamed=$((renamed + 1))
           done
           if [ "$renamed" -eq 0 ]; then
-            beta_count=$(find dist -maxdepth 1 \( -name '*-beta.dmg' -o -name '*-beta.zip' \) | wc -l | tr -d ' ')
+            beta_count=$(find dist -maxdepth 1 \( -name "*-${SUFFIX}.dmg" -o -name "*-${SUFFIX}.zip" \) | wc -l | tr -d ' ')
             if [ "$beta_count" -eq 0 ]; then
-              echo 'ERROR: No DMG/ZIP found to rename with -beta suffix'
+              echo "ERROR: No DMG/ZIP found to rename with -${SUFFIX} suffix"
               ls -la dist/ || true
               exit 1
             fi
           fi
           echo "Beta artifacts:"
-          find dist -maxdepth 1 \( -name '*-beta.dmg' -o -name '*-beta.zip' \) | sort
+          find dist -maxdepth 1 \( -name "*-${SUFFIX}.dmg" -o -name "*-${SUFFIX}.zip" \) | sort
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: dist-mac-beta-${{ matrix.arch }}
           path: |
-            dist/*-beta.dmg
-            dist/*-beta.zip
+            dist/*-beta-${{ needs.prepare.outputs.beta_n }}.dmg
+            dist/*-beta-${{ needs.prepare.outputs.beta_n }}.zip
           if-no-files-found: error
           compression-level: 0
           retention-days: 14
 
   package-windows:
-    needs: [lint, test]
+    needs: [lint, test, prepare]
     strategy:
       fail-fast: false
       matrix:
@@ -221,41 +275,45 @@ jobs:
           CSC_IDENTITY_AUTO_DISCOVERY: false
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Append -beta suffix to Windows EXE filenames
+      - name: Append -beta-N suffix to Windows EXE filenames
         shell: bash
+        env:
+          BETA_N: ${{ needs.prepare.outputs.beta_n }}
         run: |
           set -euo pipefail
           shopt -s nullglob
           renamed=0
+          SUFFIX="beta-${BETA_N}"
           for f in dist/*.exe; do
             dir=$(dirname "$f")
             base=$(basename "$f")
             name="${base%.*}"
-            if [[ "$name" == *-beta ]]; then
+            if [[ "$name" == *"-${SUFFIX}" ]]; then
               echo "Already beta-suffixed: $f"
               continue
             fi
-            dest="${dir}/${name}-beta.exe"
+            # Amphetamine-1.9.7-arm64.exe → Amphetamine-1.9.7-arm64-beta-1.exe
+            dest="${dir}/${name}-${SUFFIX}.exe"
             echo "Renaming $f -> $dest"
             mv "$f" "$dest"
             renamed=$((renamed + 1))
           done
           if [ "$renamed" -eq 0 ]; then
-            beta_count=$(find dist -maxdepth 1 -name '*-beta.exe' | wc -l | tr -d ' ')
+            beta_count=$(find dist -maxdepth 1 -name "*-${SUFFIX}.exe" | wc -l | tr -d ' ')
             if [ "$beta_count" -eq 0 ]; then
-              echo 'ERROR: No EXE found to rename with -beta suffix'
+              echo "ERROR: No EXE found to rename with -${SUFFIX} suffix"
               ls -la dist/ || true
               exit 1
             fi
           fi
           echo "Beta Windows artifacts:"
-          find dist -maxdepth 1 -name '*-beta.exe' | sort
+          find dist -maxdepth 1 -name "*-${SUFFIX}.exe" | sort
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: dist-win-beta-${{ matrix.arch }}
           path: |
-            dist/*-beta.exe
+            dist/*-beta-${{ needs.prepare.outputs.beta_n }}.exe
           if-no-files-found: error
           compression-level: 0
           retention-days: 14
@@ -263,7 +321,7 @@ jobs:
   # Publish packaged beta builds to the GitHub Releases page as a prerelease.
   # Production CD still owns non-prerelease tags vX.Y.Z from main.
   release:
-    needs: [package, package-windows]
+    needs: [prepare, package, package-windows]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -275,44 +333,11 @@ jobs:
       - name: Fetch tags
         run: git fetch --tags --force origin
 
-      - name: Extract version from package.json
-        id: version
-        run: |
-          set -euo pipefail
-          VERSION=$(jq -r .version package.json)
-          SHORT_SHA=$(echo "${GITHUB_SHA}" | cut -c1-7)
-          # Per-version beta sequence: v1.9.7-beta.1, v1.9.7-beta.2, ...
-          # Do NOT use github.run_number — it is global across all workflow runs and does
-          # not reset when package.json version bumps (e.g. 1.9.6-beta.6 → 1.9.7-beta.7).
-          PREFIX="v${VERSION}-beta."
-          LAST=$(
-            git tag -l "${PREFIX}*" \
-              | sed -n "s/^${PREFIX}\\([0-9][0-9]*\\)$/\\1/p" \
-              | sort -n \
-              | tail -n 1 || true
-          )
-          if [ -n "${LAST}" ]; then
-            BETA_N=$((LAST + 1))
-          else
-            BETA_N=1
-          fi
-          TAG="${PREFIX}${BETA_N}"
-          # Guard against rare races if the tag already exists
-          while git rev-parse "${TAG}" >/dev/null 2>&1; do
-            BETA_N=$((BETA_N + 1))
-            TAG="${PREFIX}${BETA_N}"
-          done
-          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-          echo "beta_n=${BETA_N}" >> "$GITHUB_OUTPUT"
-          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
-          echo "short_sha=${SHORT_SHA}" >> "$GITHUB_OUTPUT"
-          echo "Using beta tag: ${TAG} (sequence for v${VERSION})"
-
       - name: Resolve previous beta tag
         id: prev
         run: |
           set -euo pipefail
-          CURRENT="${{ steps.version.outputs.tag }}"
+          CURRENT="${{ needs.prepare.outputs.tag }}"
           # Prefer previous beta prerelease tag for develop changelog range
           PREV=$(git tag -l 'v*-beta.*' --sort=-v:refname             | grep -vxF "$CURRENT"             | head -n 1 || true)
           if [ -z "${PREV}" ]; then
@@ -333,9 +358,12 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          TAG="${{ steps.version.outputs.tag }}"
+          TAG="${{ needs.prepare.outputs.tag }}"
           PREV="${{ steps.prev.outputs.tag }}"
           TARGET="${GITHUB_SHA}"
+          VERSION="${{ needs.prepare.outputs.version }}"
+          BETA_N="${{ needs.prepare.outputs.beta_n }}"
+          SHORT_SHA="${{ needs.prepare.outputs.short_sha }}"
 
           ARGS=(repos/${{ github.repository }}/releases/generate-notes -f "tag_name=${TAG}" -f "target_commitish=${TARGET}")
           if [ -n "${PREV}" ]; then
@@ -344,7 +372,7 @@ jobs:
 
           RESPONSE=$(gh api "${ARGS[@]}")
           BODY=$(echo "$RESPONSE" | jq -r '.body // empty')
-          NAME=$(echo "$RESPONSE" | jq -r --arg n "Amphetamine ${{ steps.version.outputs.version }} beta (${{ steps.version.outputs.short_sha }})" '.name // $n')
+          NAME=$(echo "$RESPONSE" | jq -r --arg n "Amphetamine ${VERSION} beta.${BETA_N} (${SHORT_SHA})" '.name // $n')
 
           {
             echo "name<<EOF"
@@ -354,12 +382,13 @@ jobs:
 
           {
             echo "body<<EOF"
-            echo "## Amphetamine ${{ steps.version.outputs.version }} beta"
+            echo "## Amphetamine ${VERSION} beta.${BETA_N}"
             echo ""
             echo "Pre-release build from \`develop\` (commit \`${GITHUB_SHA}\`)."
             echo ""
             echo "- **Not** a production release — production tags remain \`vX.Y.Z\` from \`main\` / CD"
-            echo "- Artifacts are filename-suffixed with \`-beta\`"
+            echo "- Tag: \`${TAG}\`"
+            echo "- Artifacts are filename-suffixed with \`-beta-${BETA_N}\` (e.g. \`Amphetamine-${VERSION}-arm64-beta-${BETA_N}.dmg\`)"
             echo "- Install may require removing quarantine if unsigned / ad-hoc signed"
             echo ""
             if [ -n "${PREV}" ]; then
@@ -403,21 +432,24 @@ jobs:
           path: artifacts/win-arm64
 
       - name: Verify release artifacts
+        env:
+          BETA_N: ${{ needs.prepare.outputs.beta_n }}
         run: |
-          DMG_COUNT=$(find artifacts -name '*-beta.dmg' 2>/dev/null | wc -l | tr -d ' ')
-          ZIP_COUNT=$(find artifacts -name '*-beta.zip' 2>/dev/null | wc -l | tr -d ' ')
-          EXE_COUNT=$(find artifacts -name '*-beta.exe' 2>/dev/null | wc -l | tr -d ' ')
-          echo "Found ${DMG_COUNT} beta DMG(s), ${ZIP_COUNT} beta ZIP(s), ${EXE_COUNT} beta EXE(s)"
+          SUFFIX="beta-${BETA_N}"
+          DMG_COUNT=$(find artifacts -name "*-${SUFFIX}.dmg" 2>/dev/null | wc -l | tr -d ' ')
+          ZIP_COUNT=$(find artifacts -name "*-${SUFFIX}.zip" 2>/dev/null | wc -l | tr -d ' ')
+          EXE_COUNT=$(find artifacts -name "*-${SUFFIX}.exe" 2>/dev/null | wc -l | tr -d ' ')
+          echo "Found ${DMG_COUNT} beta DMG(s), ${ZIP_COUNT} beta ZIP(s), ${EXE_COUNT} beta EXE(s) matching *- ${SUFFIX}"
           find artifacts -type f | sort
           if [ "$DMG_COUNT" -eq 0 ] && [ "$ZIP_COUNT" -eq 0 ] && [ "$EXE_COUNT" -eq 0 ]; then
-            echo 'ERROR: No beta DMG, ZIP, or EXE artifacts found to release'
+            echo "ERROR: No beta DMG, ZIP, or EXE artifacts found (expected *-${SUFFIX}.*)"
             exit 1
           fi
 
       - name: Create GitHub prerelease
         uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3.0.0
         with:
-          tag_name: ${{ steps.version.outputs.tag }}
+          tag_name: ${{ needs.prepare.outputs.tag }}
           name: ${{ steps.notes.outputs.name }}
           body: ${{ steps.notes.outputs.body }}
           prerelease: true
@@ -425,8 +457,8 @@ jobs:
           # Body already includes API-generated notes
           generate_release_notes: false
           files: |
-            artifacts/**/*-beta.dmg
-            artifacts/**/*-beta.zip
-            artifacts/**/*-beta.exe
+            artifacts/**/*-beta-${{ needs.prepare.outputs.beta_n }}.dmg
+            artifacts/**/*-beta-${{ needs.prepare.outputs.beta_n }}.zip
+            artifacts/**/*-beta-${{ needs.prepare.outputs.beta_n }}.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
