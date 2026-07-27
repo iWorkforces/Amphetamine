@@ -10,6 +10,9 @@ Implements application ports with Electron/Node. May import domain types and app
 | `schedule/node-schedule.ts` | `SchedulePort` | `setTimeout` + `unref` / `clearTimeout` |
 | `logging/electron-logger.ts` | `LoggerPort` | `electron-log` |
 | `notification/broadcast-notifier.ts` | `MainToRendererNotifierPort` | wraps `broadcastToWindows`-style inject |
+| `settings/file-settings-store.ts` | `SettingsStorePort` | atomic JSON + write mutex; dialog via save-failure port |
+| `settings/dialog-save-failure.ts` | `SettingsSaveFailurePort` | `dialog.showErrorBox` |
+| `sleep/power-save-blocker.ts` | `SleepBlockerPort` | sole `powerSaveBlocker` owner |
 
 ## Rules
 
