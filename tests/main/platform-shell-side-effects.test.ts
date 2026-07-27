@@ -12,7 +12,7 @@ vi.mock("electron", () => ({
 }));
 
 vi.mock("../../src/main/platform/os.js", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../../src/main/platform/os.js")>();
+  const actual = (await importOriginal()) as Record<string, unknown>;
   return {
     ...actual,
     isDarwin: (...args: unknown[]) => mockIsDarwin(...args),
@@ -49,7 +49,7 @@ describe("platform/shell side effects", () => {
   it("setDockIcon sets icon on darwin", async () => {
     mockIsDarwin.mockReturnValue(true);
     const { setDockIcon } = await import("../../src/main/platform/shell.js");
-    const icon = {} as Electron.NativeImage;
+    const icon = {} as Parameters<typeof setDockIcon>[0];
     setDockIcon(icon);
     expect(mockSetIcon).toHaveBeenCalledWith(icon);
   });
@@ -57,7 +57,7 @@ describe("platform/shell side effects", () => {
   it("setDockIcon is no-op off darwin", async () => {
     mockIsDarwin.mockReturnValue(false);
     const { setDockIcon } = await import("../../src/main/platform/shell.js");
-    setDockIcon({} as Electron.NativeImage);
+    setDockIcon({} as Parameters<typeof setDockIcon>[0]);
     expect(mockSetIcon).not.toHaveBeenCalled();
   });
 });

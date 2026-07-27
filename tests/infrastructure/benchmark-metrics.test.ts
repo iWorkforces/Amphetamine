@@ -34,10 +34,11 @@ describe("benchmark-metrics", () => {
     const { sumCpuPercent, sumIdleWakeups } = await import(
       "../../src/infrastructure/benchmark/benchmark-metrics.js"
     );
-    const metrics = [
-      { cpu: { percentCPUUsage: 10, idleWakeupsPerSecond: 2 } },
-      { cpu: { percentCPUUsage: 5, idleWakeupsPerSecond: 3 } },
-    ] as Electron.ProcessMetric[];
+    type ProcessMetricLike = Parameters<typeof sumCpuPercent>[0][number];
+    const metrics: ProcessMetricLike[] = [
+      { cpu: { percentCPUUsage: 10, idleWakeupsPerSecond: 2 } } as ProcessMetricLike,
+      { cpu: { percentCPUUsage: 5, idleWakeupsPerSecond: 3 } } as ProcessMetricLike,
+    ];
     expect(sumCpuPercent(metrics)).toBe(15);
     expect(sumIdleWakeups(metrics)).toBe(5);
   });
