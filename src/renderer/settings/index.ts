@@ -28,9 +28,36 @@ window.addEventListener("beforeunload", () => {
   saveIndicatorTimers.clear();
 });
 
-/** Map an Electron-style accelerator string to display symbols (e.g. "CommandOrControl+Shift+A" -> "⌘⇧A"). */
+/** True when the settings window is running on Windows (preload platform snapshot). */
+function isWindowsUi(): boolean {
+  return window.api.platform.os === "win32";
+}
+
+/**
+ * Map an Electron-style accelerator string to display labels.
+ * macOS: symbols (⌘⇧A). Windows: textual Ctrl/Alt/Win (Ctrl+Shift+A).
+ */
 function formatAcceleratorForDisplay(accelerator: string): string {
   if (!accelerator) return "";
+  if (isWindowsUi()) {
+    const LABELS: Record<string, string> = {
+      CommandOrControl: "Ctrl",
+      CmdOrCtrl: "Ctrl",
+      Command: "Ctrl",
+      Cmd: "Ctrl",
+      Control: "Ctrl",
+      Ctrl: "Ctrl",
+      Shift: "Shift",
+      Alt: "Alt",
+      Option: "Alt",
+      Super: "Win",
+      Meta: "Win",
+    };
+    return accelerator
+      .split("+")
+      .map((p) => LABELS[p] ?? p.toUpperCase())
+      .join("+");
+  }
   const SYMBOLS: Record<string, string> = {
     CommandOrControl: "⌘",
     CmdOrCtrl: "⌘",
@@ -84,7 +111,7 @@ function buildSettingsForm(): string {
       <img class="settings-hero-icon" src="${heroIcon}" alt="Amphetamine" />
       <div class="settings-hero-text">
         <div class="settings-hero-name">Amphetamine</div>
-        <div class="settings-hero-desc">Keep your Mac awake</div>
+        <div class="settings-hero-desc">Keep your computer awake</div>
       </div>
     </div>
     <div class="settings-content">
@@ -111,7 +138,7 @@ function buildSettingsForm(): string {
           <label class="setting-label" for="prevent-sleep-toggle">
             🔋 Prevent Sleep
           </label>
-          <span class="setting-description">Keep your Mac awake while Amphetamine is running</span>
+          <span class="setting-description">Keep your computer awake while Amphetamine is running</span>
         </div>
         <div class="setting-control">
           <span class="save-indicator" id="sleep-save-indicator"></span>
