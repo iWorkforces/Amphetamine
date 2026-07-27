@@ -6,9 +6,14 @@ on:
   pull_request:
     branches: [main, develop]
 
+# PRs: cancel outdated runs for the same PR (group by number).
+# Branch pushes (main/develop merges): do NOT cancel — a second queued request for the
+# same ref previously aborted in-flight lint/test with
+# "Canceling since a higher priority waiting request for CI-refs/heads/develop exists"
+# even when no successful replacement run finished. Use commit SHA so each push is unique.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   lint:
