@@ -28,7 +28,7 @@ export function createRegisterAppShortcut(
       const next = !deps.getPreventSleep();
       deps.togglePreventSleep();
       deps.logger.info(
-        `[global-shortcut] Sleep prevention ${next ? "enabled" : "disabled"} via ${accelerator}`,
+        `[shortcut] Sleep prevention ${next ? "enabled" : "disabled"} via ${accelerator}`,
       );
     });
     if (!result.ok) {

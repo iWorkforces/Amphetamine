@@ -20,7 +20,7 @@ export function createPowerSaveBlocker(logger: LoggerPort): SleepBlockerPort & {
         powerSaveBlocker.stop(blockerId);
       }
       blockerId = null;
-      logger.info("[sleep-prevention] Stopped preventing sleep");
+      logger.info("[sleep] Stopped preventing sleep");
     }
   };
 
@@ -39,9 +39,9 @@ export function createPowerSaveBlocker(logger: LoggerPort): SleepBlockerPort & {
     if (id >= 0) {
       blockerId = id;
       activeMode = mode;
-      logger.info(`[sleep-prevention] Started ${mode} (id: ${blockerId})`);
+      logger.info(`[sleep] Started ${mode} (id: ${blockerId})`);
     } else {
-      logger.error(`[sleep-prevention] Failed to start ${mode} (id: ${id})`);
+      logger.error(`[sleep] Failed to start ${mode} (id: ${id})`);
     }
   };
 

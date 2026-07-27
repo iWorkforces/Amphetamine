@@ -173,7 +173,7 @@ export function createAppComposition(): AppComposition {
       },
       notifier,
       logger,
-      logTag: "[composition]",
+      logTag: "[settings-reactions]",
     });
 
     unsubscribeSettings = onSettingsChanged((next: AppSettings) => {

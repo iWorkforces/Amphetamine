@@ -124,7 +124,7 @@ export function createSessionEngine(deps: SessionEngineDeps): SessionEngine {
       onSessionActiveChange?.(false);
       broadcastSessionUpdate();
     } catch (err) {
-      logger.error("[session-timer] Error in session expiry callback:", err);
+      logger.error("[session] Error in session expiry callback:", err);
     }
   };
 

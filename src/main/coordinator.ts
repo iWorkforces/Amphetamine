@@ -23,7 +23,7 @@ export function cleanupCoordinator(): void {
 export function getTrayDeps(): TrayDeps {
   if (composition === null || !composition.ready) {
     throw new Error(
-      "[coordinator] getTrayDeps() called before initCoordinator() / composition.init()",
+      "[composition] getTrayDeps() called before initCoordinator() / composition.init()",
     );
   }
   return composition.getTrayDeps();

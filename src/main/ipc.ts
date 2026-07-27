@@ -114,18 +114,18 @@ function registerSessionIpc(deps: IpcDeps): void {
         request.durationMinutes <= 0 ||
         !Number.isInteger(request.durationMinutes)
       ) {
-        log.warn("[ipc] SESSION_START rejected invalid durationMinutes:", request.durationMinutes);
+        log.warn("[session] SESSION_START rejected invalid durationMinutes:", request.durationMinutes);
         return { ok: false, reason: "invalid-duration" };
       }
     }
     if (request.durationMinutes !== null && request.durationMinutes > 1440) {
-      log.warn("[ipc] SESSION_START rejected: duration exceeds 24h:", request.durationMinutes);
+      log.warn("[session] SESSION_START rejected: duration exceeds 24h:", request.durationMinutes);
       return { ok: false, reason: "Duration cannot exceed 24 hours" };
     }
     const result = deps.sessionTimer.startSession(request.durationMinutes);
     // startSession() guarantees non-null startedAt; SessionState type is widened for getStatus() reuse.
     if (result.startedAt === null) {
-      log.error("[ipc] SESSION_START: startSession returned null startedAt (invariant violation)");
+      log.error("[session] SESSION_START: startSession returned null startedAt (invariant violation)");
       return { ok: false, reason: "rejected" };
     }
     return {

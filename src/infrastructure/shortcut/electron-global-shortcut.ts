@@ -16,7 +16,7 @@ export function createElectronGlobalShortcut(): GlobalShortcutPort {
           globalShortcut.unregister(prevAccelerator);
         } catch (err) {
           log.error(
-            `[global-shortcut] Error unregistering previous shortcut ${prevAccelerator}:`,
+            `[shortcut] Error unregistering previous shortcut ${prevAccelerator}:`,
             err,
           );
         }
@@ -26,21 +26,21 @@ export function createElectronGlobalShortcut(): GlobalShortcutPort {
       try {
         const registered = globalShortcut.register(accelerator, onToggle);
         if (!registered) {
-          log.error(`[global-shortcut] Failed to register shortcut: ${accelerator}`);
+          log.error(`[shortcut] Failed to register shortcut: ${accelerator}`);
           return { ok: false, accelerator };
         }
         prevAccelerator = accelerator;
-        log.info(`[global-shortcut] Registered global shortcut: ${accelerator}`);
+        log.info(`[shortcut] Registered global shortcut: ${accelerator}`);
         return { ok: true };
       } catch (err) {
-        log.error("[global-shortcut] Error registering global shortcut:", err);
+        log.error("[shortcut] Error registering global shortcut:", err);
         return { ok: false, accelerator };
       }
     },
     unregisterAll(): void {
       globalShortcut.unregisterAll();
       prevAccelerator = null;
-      log.info("[global-shortcut] Unregistered all global shortcuts");
+      log.info("[shortcut] Unregistered all global shortcuts");
     },
   };
 }
