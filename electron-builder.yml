@@ -67,11 +67,13 @@ win:
     - target: nsis
       arch:
         - x64
+        - arm64
     - target: portable
       arch:
         - x64
+        - arm64
   icon: build/icon.ico
-  # artifactName keeps arch in the filename for multi-arch releases later
+  # artifactName keeps arch in the filename (x64 vs arm64)
   artifactName: ${productName}-${version}-${arch}.${ext}
 
 nsis:

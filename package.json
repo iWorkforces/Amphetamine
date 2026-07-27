@@ -55,6 +55,8 @@
     "package:dir": "bun run build && electron-builder --mac --arm64 --dir",
     "package:win": "bun run build && electron-builder --win --x64 && node build/flip-fuses.cjs win x64",
     "package:win:dir": "bun run build && electron-builder --win --x64 --dir",
+    "package:win:arm64": "bun run build && electron-builder --win --arm64 && node build/flip-fuses.cjs win arm64",
+    "package:win:dir:arm64": "bun run build && electron-builder --win --arm64 --dir",
     "flip-fuses": "node build/flip-fuses.cjs",
     "typecheck": "tsc -b",
     "typecheck:tests": "tsc --project tsconfig.tests.json --noEmit",
