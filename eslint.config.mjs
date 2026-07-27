@@ -9,7 +9,16 @@ export default [
   },
   js.configs.recommended,
   {
-    files: ["src/main/**/*.ts", "tests/main/**/*.ts", "tests/setup.main.ts"],
+    files: [
+      "src/main/**/*.ts",
+      "src/infrastructure/**/*.ts",
+      "src/application/**/*.ts",
+      "src/domain/**/*.ts",
+      "tests/main/**/*.ts",
+      "tests/application/**/*.ts",
+      "tests/domain/**/*.ts",
+      "tests/setup.main.ts",
+    ],
     languageOptions: {
       parser: tsparser,
       parserOptions: {
@@ -172,6 +181,74 @@ export default [
         { assertionStyle: "as", objectLiteralTypeAssertions: "allow" },
       ],
       "@typescript-eslint/no-non-null-assertion": "error",
+    },
+  },
+  {
+    // Domain and application must stay free of Electron and process-root imports.
+    files: ["src/domain/**/*.ts", "src/application/**/*.ts"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            {
+              name: "electron",
+              message: "domain/application must not import electron",
+            },
+            {
+              name: "electron-log",
+              message: "domain/application must not import electron-log",
+            },
+            {
+              name: "electron-updater",
+              message: "domain/application must not import electron-updater",
+            },
+          ],
+          patterns: [
+            {
+              group: ["**/main/**", "**/infrastructure/**", "**/preload/**", "**/renderer/**"],
+              message: "domain/application must not import process-root or infrastructure modules",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    // Domain must not depend on application (stricter than application rules).
+    files: ["src/domain/**/*.ts"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            {
+              name: "electron",
+              message: "domain must not import electron",
+            },
+            {
+              name: "electron-log",
+              message: "domain must not import electron-log",
+            },
+            {
+              name: "electron-updater",
+              message: "domain must not import electron-updater",
+            },
+          ],
+          patterns: [
+            {
+              group: [
+                "**/main/**",
+                "**/application/**",
+                "**/infrastructure/**",
+                "**/preload/**",
+                "**/renderer/**",
+              ],
+              message: "domain must not import outer layers",
+            },
+          ],
+        },
+      ],
     },
   },
   {

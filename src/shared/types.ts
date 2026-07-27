@@ -1,22 +1,13 @@
 /**
- * Phantom branded type for `performance.now()` monotonic millisecond timestamps.
- *
- * Prevents accidental mixing with `Date.now()` wall-clock milliseconds. The brand
- * is compile-time only — at runtime, a `PerfTimestamp` is just a `number` (so it
- * survives JSON serialization across IPC unchanged; the brand must be re-attached
- * via `asPerf(n)` at the receiving boundary).
+ * Cross-process transport contracts (IPC channels, wire DTOs) plus re-exports
+ * of pure domain settings/time types for preload and existing import paths.
  */
-export type PerfTimestamp = number & { readonly __brand: unique symbol };
 
-/**
- * Type-safe branded cast helper for `PerfTimestamp`.
- *
- * No-op at runtime; preferable to raw `as PerfTimestamp` because it constrains
- * the input to `number`. Avoids mutating `Number.prototype` (SES-incompatible).
- *
- * @example asPerf(performance.now() + remainingMs)
- */
-export const asPerf = (n: number): PerfTimestamp => n as PerfTimestamp;
+export type { PerfTimestamp } from "../domain/time/perf-timestamp.js";
+export { asPerf } from "../domain/time/perf-timestamp.js";
+export type { SleepBlockMode } from "../domain/settings/sleep-block-mode.js";
+export type { AppSettings } from "../domain/settings/app-settings.js";
+export { DEFAULT_SETTINGS } from "../domain/settings/app-settings.js";
 
 /** IPC channel names — single source of truth */
 export const IPC_CHANNELS = {
@@ -36,6 +27,9 @@ export const IPC_CHANNELS = {
   AUTO_UPDATER_STATUS: "auto-updater:status",
   SHORTCUT_REGISTRATION_FAILED: "shortcut:registration-failed",
 } as const;
+
+import type { PerfTimestamp } from "../domain/time/perf-timestamp.js";
+import type { AppSettings } from "../domain/settings/app-settings.js";
 
 /**
  * Canonical session status payload — discriminated union with three arms.
@@ -190,41 +184,3 @@ export const PUSH_CHANNELS = [
 ] as const;
 
 export type PushChannel = (typeof PUSH_CHANNELS)[number];
-
-/** Sleep prevention powerSaveBlocker mode */
-export type SleepBlockMode = "prevent-display-sleep" | "prevent-app-suspension";
-
-/** Application settings */
-export interface AppSettings {
-  /** Whether to launch the app at login (auto-start on system restart) */
-  launchAtLogin: boolean;
-  /** Whether to prevent the system from sleeping (user intent) */
-  preventSleep: boolean;
-  /**
-   * Default session duration preference in minutes (`null` = indefinite).
-   * Preference only — runtime session state lives in the session timer, not settings.
-   */
-  defaultSessionDuration: number | null;
-  /** Battery threshold (0-100) — auto-stop sleep prevention when on battery below threshold. 0 = disabled */
-  batteryThreshold: number;
-  /**
-   * Global keyboard shortcut to toggle sleep prevention
-   * (e.g. CommandOrControl+Shift+A). Empty string = use default.
-   */
-  shortcut: string;
-  /**
-   * powerSaveBlocker type. `prevent-display-sleep` keeps the display on (default);
-   * `prevent-app-suspension` allows the display to sleep while keeping the system awake.
-   */
-  sleepBlockMode: SleepBlockMode;
-}
-
-/** Default settings values */
-export const DEFAULT_SETTINGS: Readonly<AppSettings> = {
-  launchAtLogin: false,
-  preventSleep: false,
-  defaultSessionDuration: null,
-  batteryThreshold: 0,
-  shortcut: "",
-  sleepBlockMode: "prevent-display-sleep",
-};

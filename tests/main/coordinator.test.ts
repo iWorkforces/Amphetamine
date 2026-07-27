@@ -60,7 +60,6 @@ const mockCreateSessionTimer = vi.hoisted(() =>
     broadcastSessionUpdate: mockSessionBroadcast,
   })),
 );
-const mockSetActiveSessionTimer = vi.hoisted(() => vi.fn());
 
 const mockCreateSettingsWindow = vi.hoisted(() => vi.fn());
 
@@ -83,10 +82,19 @@ vi.mock("../../src/main/settings.js", () => ({
   getSettings: mockGetSettings,
   onSettingsChanged: mockOnSettingsChanged,
   updateSettings: mockUpdateSettings,
+  getSettingsStore: () => ({
+    init: vi.fn(),
+    get: mockGetSettings,
+    update: mockUpdateSettings,
+    onChange: mockOnSettingsChanged,
+    flush: vi.fn(),
+    save: vi.fn(),
+  }),
 }));
 
 vi.mock("../../src/main/auto-launch.js", () => ({
   syncAutoLaunch: mockSyncAutoLaunch,
+  getAutoLaunchPort: () => ({ sync: mockSyncAutoLaunch }),
 }));
 
 vi.mock("../../src/main/global-shortcut.js", () => ({
@@ -98,7 +106,14 @@ vi.mock("../../src/main/sleep-prevention.js", () => ({
   syncPreventSleep: mockSyncPreventSleep,
   stopPreventingSleep: mockStopPreventingSleep,
   isPreventingSleep: mockIsPreventingSleep,
+  getSleepBlockerPort: () => ({
+    sync: mockSyncPreventSleep,
+    isActive: mockIsPreventingSleep,
+    stop: mockStopPreventingSleep,
+  }),
 }));
+
+// Use cases / logger pull through real modules; electron-log already mocked.
 
 vi.mock("../../src/main/battery-monitor.js", () => ({
   createBatteryMonitor: mockCreateBatteryMonitor,
@@ -106,12 +121,13 @@ vi.mock("../../src/main/battery-monitor.js", () => ({
 
 vi.mock("../../src/main/session-timer.js", () => ({
   createSessionTimer: mockCreateSessionTimer,
-  setActiveSessionTimer: mockSetActiveSessionTimer,
 }));
 
 vi.mock("../../src/main/auto-updater.js", () => ({
   setBroadcastFn: vi.fn(),
   stopAutoUpdater: vi.fn(),
+  initAutoUpdater: vi.fn(),
+  checkForUpdatesNow: vi.fn(),
 }));
 
 vi.mock("../../src/main/settings-window.js", () => ({
@@ -134,7 +150,8 @@ describe("coordinator", () => {
     defaultSessionDuration: null as number | null,
     batteryThreshold: 0,
     shortcut: "",
-    sleepBlockMode: "prevent-display-sleep" as const,
+    // Union (not `as const` singleton) so mode-switch tests can emit either value.
+    sleepBlockMode: "prevent-display-sleep" as "prevent-display-sleep" | "prevent-app-suspension",
   };
 
   beforeEach(async () => {
@@ -195,13 +212,13 @@ describe("coordinator", () => {
       expect(typeof deps.broadcast).toBe("function");
     });
 
-    it("registers the session-timer handle as the module-level active handle", async () => {
+    it("constructs a session timer handle for injection (no module-level delegators)", async () => {
       await initCoordinator();
 
-      expect(mockSetActiveSessionTimer).toHaveBeenCalledWith(
+      expect(mockCreateSessionTimer).toHaveBeenCalledTimes(1);
+      expect(mockCreateSessionTimer).toHaveBeenCalledWith(
         expect.objectContaining({
-          startSession: mockSessionStart,
-          cancelSession: mockSessionCancel,
+          broadcast: expect.any(Function),
         }),
       );
     });
@@ -381,7 +398,7 @@ describe("coordinator", () => {
     it("logs initialization", async () => {
       await initCoordinator();
 
-      expect(mockLogInfo).toHaveBeenCalledWith("[coordinator] Initialized");
+      expect(mockLogInfo).toHaveBeenCalledWith("[composition] Initialized");
     });
   });
 
@@ -477,19 +494,19 @@ describe("coordinator", () => {
       expect(mockBatteryCleanup).toHaveBeenCalledTimes(1);
     });
 
-    it("clears the active session-timer handle", async () => {
+    it("cleans up the session timer on cleanup", async () => {
       await initCoordinator();
-      mockSetActiveSessionTimer.mockClear();
+      mockSessionCleanup.mockClear();
       cleanupCoordinator();
 
-      expect(mockSetActiveSessionTimer).toHaveBeenCalledWith(null);
+      expect(mockSessionCleanup).toHaveBeenCalledTimes(1);
     });
 
     it("logs cleanup", async () => {
       await initCoordinator();
       cleanupCoordinator();
 
-      expect(mockLogInfo).toHaveBeenCalledWith("[coordinator] Cleaned up");
+      expect(mockLogInfo).toHaveBeenCalledWith("[composition] Cleaned up");
     });
 
     it("handles cleanup when not initialized", async () => {
@@ -576,6 +593,190 @@ describe("coordinator", () => {
       timerDeps.onSessionActiveChange(true);
 
       expect(listener).not.toHaveBeenCalled();
+    });
+
+    // Effective-active OR matrix (userIntent || sessionActive).
+    it.each([
+      { preventSleep: false, sessionActive: false, expected: false },
+      { preventSleep: true, sessionActive: false, expected: true },
+      { preventSleep: false, sessionActive: true, expected: true },
+      { preventSleep: true, sessionActive: true, expected: true },
+    ] as const)(
+      "OR matrix: preventSleep=$preventSleep sessionActive=$sessionActive → effective=$expected",
+      async ({ preventSleep, sessionActive, expected }) => {
+        mockGetSettings.mockReturnValue({ ...defaultSettings, preventSleep });
+        await initCoordinator();
+        const { getTrayDeps } = await import("../../src/main/coordinator.js");
+        const deps = getTrayDeps();
+
+        if (sessionActive) {
+          const timerDeps = firstCallArg<{ onSessionActiveChange: (active: boolean) => void }>(
+            mockCreateSessionTimer,
+          );
+          timerDeps.onSessionActiveChange(true);
+        }
+
+        expect(deps.getEffectiveActive()).toBe(expected);
+        // Last syncPreventSleep call must match effective OR policy + current mode.
+        expect(mockSyncPreventSleep).toHaveBeenLastCalledWith(expected, "prevent-display-sleep");
+      },
+    );
+  });
+
+  describe("settings reactions: rendererVisibleKeys + sleepBlockMode", () => {
+    function setupBroadcastCapture(): ReturnType<typeof vi.fn> {
+      const mockSend = vi.fn();
+      mockGetAllWindows.mockReturnValue([
+        { isDestroyed: () => false, webContents: { send: mockSend } },
+      ]);
+      return mockSend;
+    }
+
+    it("launchAtLogin-only change does NOT broadcast SETTINGS_CHANGED", async () => {
+      const mockSend = setupBroadcastCapture();
+      await initCoordinator();
+      mockSend.mockClear();
+      mockSyncAutoLaunch.mockClear();
+
+      settingsCallback({ ...defaultSettings, launchAtLogin: true });
+
+      expect(mockSyncAutoLaunch).toHaveBeenCalledWith(true);
+      expect(mockSend).not.toHaveBeenCalled();
+    });
+
+    it("sleepBlockMode-only change does NOT broadcast SETTINGS_CHANGED", async () => {
+      const mockSend = setupBroadcastCapture();
+      mockIsPreventingSleep.mockReturnValue(false);
+      await initCoordinator();
+      mockSend.mockClear();
+
+      settingsCallback({
+        ...defaultSettings,
+        sleepBlockMode: "prevent-app-suspension",
+      });
+
+      expect(mockSend).not.toHaveBeenCalled();
+    });
+
+    it("defaultSessionDuration-only change does NOT broadcast SETTINGS_CHANGED", async () => {
+      const mockSend = setupBroadcastCapture();
+      await initCoordinator();
+      mockSend.mockClear();
+
+      settingsCallback({ ...defaultSettings, defaultSessionDuration: 60 });
+
+      expect(mockSend).not.toHaveBeenCalled();
+    });
+
+    it("batteryThreshold change broadcasts SETTINGS_CHANGED and reconfigures battery", async () => {
+      const mockSend = setupBroadcastCapture();
+      await initCoordinator();
+      mockSend.mockClear();
+      mockBatteryReconfigure.mockClear();
+
+      const next = { ...defaultSettings, batteryThreshold: 20 };
+      settingsCallback(next);
+
+      expect(mockBatteryReconfigure).toHaveBeenCalledTimes(1);
+      expect(mockSend).toHaveBeenCalledWith("settings:changed", next);
+    });
+
+    it("shortcut change broadcasts SETTINGS_CHANGED and re-registers shortcut", async () => {
+      const mockSend = setupBroadcastCapture();
+      await initCoordinator();
+      mockSend.mockClear();
+      const registerCountAfterInit = mockRegisterGlobalShortcut.mock.calls.length;
+
+      const next = { ...defaultSettings, shortcut: "CommandOrControl+Shift+Z" };
+      settingsCallback(next);
+
+      expect(mockRegisterGlobalShortcut.mock.calls.length).toBe(registerCountAfterInit + 1);
+      expect(mockSend).toHaveBeenCalledWith("settings:changed", next);
+    });
+
+    /**
+     * Production order: settings cache updates, then onSettingsChanged fires.
+     * recomputeSleepPrevention reads sleepBlockMode via getSettings() (not the
+     * event payload alone), so tests must advance the mock cache first.
+     */
+    function emitSettingsChange(next: typeof defaultSettings): void {
+      mockGetSettings.mockReturnValue({ ...next });
+      settingsCallback({ ...next });
+    }
+
+    it("sleepBlockMode change recomputes when preventSleep is true", async () => {
+      mockGetSettings.mockReturnValue({ ...defaultSettings, preventSleep: true });
+      mockIsPreventingSleep.mockReturnValue(true);
+      await initCoordinator();
+      mockSyncPreventSleep.mockClear();
+
+      emitSettingsChange({
+        ...defaultSettings,
+        preventSleep: true,
+        sleepBlockMode: "prevent-app-suspension",
+      });
+
+      expect(mockSyncPreventSleep).toHaveBeenCalledWith(true, "prevent-app-suspension");
+    });
+
+    it("sleepBlockMode change recomputes when blocker is already active (intent false)", async () => {
+      mockGetSettings.mockReturnValue({ ...defaultSettings, preventSleep: false });
+      mockIsPreventingSleep.mockReturnValue(true);
+      await initCoordinator();
+      mockSyncPreventSleep.mockClear();
+
+      emitSettingsChange({
+        ...defaultSettings,
+        preventSleep: false,
+        sleepBlockMode: "prevent-app-suspension",
+      });
+
+      // userIntent false + session inactive → effective false, but recompute still runs
+      // so the active blocker restarts under the new mode.
+      expect(mockSyncPreventSleep).toHaveBeenCalledWith(false, "prevent-app-suspension");
+    });
+
+    it("sleepBlockMode change recomputes when a session is active", async () => {
+      mockGetSettings.mockReturnValue({ ...defaultSettings, preventSleep: false });
+      mockIsPreventingSleep.mockReturnValue(false);
+      await initCoordinator();
+
+      const timerDeps = firstCallArg<{ onSessionActiveChange: (active: boolean) => void }>(
+        mockCreateSessionTimer,
+      );
+      timerDeps.onSessionActiveChange(true);
+      mockSyncPreventSleep.mockClear();
+      mockIsPreventingSleep.mockReturnValue(true);
+
+      emitSettingsChange({
+        ...defaultSettings,
+        preventSleep: false,
+        sleepBlockMode: "prevent-app-suspension",
+      });
+
+      expect(mockSyncPreventSleep).toHaveBeenCalledWith(true, "prevent-app-suspension");
+    });
+
+    it("sleepBlockMode change does NOT recompute when idle (no intent, no session, blocker off)", async () => {
+      mockGetSettings.mockReturnValue({ ...defaultSettings, preventSleep: false });
+      mockIsPreventingSleep.mockReturnValue(false);
+      await initCoordinator();
+      mockSyncPreventSleep.mockClear();
+
+      emitSettingsChange({
+        ...defaultSettings,
+        preventSleep: false,
+        sleepBlockMode: "prevent-app-suspension",
+      });
+
+      expect(mockSyncPreventSleep).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("getTrayDeps before init", () => {
+    it("throws when composition not ready", async () => {
+      const { getTrayDeps } = await import("../../src/main/coordinator.js");
+      expect(() => getTrayDeps()).toThrow(/before init/i);
     });
   });
 });

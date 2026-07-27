@@ -1,5 +1,5 @@
 import { app } from "electron";
-import { isBenchmarkMode } from "./benchmark-env.js";
+import { isBenchmarkMode } from "../infrastructure/benchmark/benchmark-env.js";
 
 // === Window Dimensions ===
 export const MAIN_WINDOW_WIDTH = 360;

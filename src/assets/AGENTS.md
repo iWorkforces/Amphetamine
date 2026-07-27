@@ -15,7 +15,7 @@ Checked-in PNG assets consumed by Electron main/renderer. Most files are generat
 
 ## Couplings
 
-- `src/main/tray.ts` computes `tray-icon-${statePrefix}${suffix}.png` and `@2x` variants from `nativeTheme.shouldUseDarkColors` + **effective active** (`getEffectiveActive()` = preventSleep intent OR session active).
+- `src/main/tray.ts` computes `tray-icon-${statePrefix}${suffix}.png` and `@2x` variants from `nativeTheme.shouldUseDarkColors` + **effective active** from composition tray deps (`getEffectiveActive` = domain OR of intent and session).
 - Menu checkbox still uses user intent only; do not drive the icon from intent alone.
 - `tray.ts` uses `nativeImage.createFromPath()` so paths work inside `app.asar`; never replace with `fs.readFileSync()`.
 - `electron-builder.yml` includes `src/assets/!(*Template).png`; template PNGs are excluded from packaged output.

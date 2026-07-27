@@ -99,4 +99,13 @@ describe("auto-launch", () => {
       expect(mockSetLoginItemSettings).not.toHaveBeenCalled();
     });
   });
+
+  describe("getAutoLaunchPort", () => {
+    it("syncs via port API", async () => {
+      mockGetLoginItemSettings.mockReturnValue({ openAtLogin: false });
+      const mod = await import("../../src/main/auto-launch.js");
+      mod.getAutoLaunchPort().sync(true);
+      expect(mockSetLoginItemSettings).toHaveBeenCalledWith(expectedLoginSettings(true));
+    });
+  });
 });

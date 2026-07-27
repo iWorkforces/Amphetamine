@@ -4,9 +4,31 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const mockGetSettings = vi.hoisted(() =>
   vi.fn().mockReturnValue({ launchAtLogin: false, preventSleep: false }),
 );
-const mockInitCoordinator = vi.hoisted(() => vi.fn());
-const mockCleanupCoordinator = vi.hoisted(() => vi.fn());
+const mockCompositionInit = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+const mockCompositionCleanup = vi.hoisted(() => vi.fn());
+const mockGetIpcDeps = vi.hoisted(() =>
+  vi.fn().mockReturnValue({
+    getSettings: vi.fn(),
+    updateSettings: vi.fn(),
+    createSettingsWindow: vi.fn(),
+    registerAutoUpdaterIpc: vi.fn(),
+    sessionTimer: {
+      startSession: vi.fn(),
+      cancelSession: vi.fn(),
+      getStatus: vi.fn(),
+    },
+  }),
+);
 const mockGetTrayDeps = vi.hoisted(() => vi.fn().mockReturnValue({}));
+const mockCreateAppComposition = vi.hoisted(() =>
+  vi.fn(() => ({
+    init: mockCompositionInit,
+    cleanup: mockCompositionCleanup,
+    getIpcDeps: mockGetIpcDeps,
+    getTrayDeps: mockGetTrayDeps,
+    ready: true,
+  })),
+);
 const mockSetupTray = vi.hoisted(() => vi.fn().mockReturnValue(() => {}));
 const mockRegisterIpcHandlers = vi.hoisted(() => vi.fn());
 const mockCloseSettingsWindow = vi.hoisted(() => vi.fn());
@@ -86,13 +108,11 @@ vi.mock("../../src/main/ipc.js", () => ({
 vi.mock("../../src/main/settings.js", () => ({
   getSettings: mockGetSettings,
   updateSettings: vi.fn(),
+  flushSettingsWriteChain: vi.fn().mockResolvedValue(undefined),
 }));
 
-
-vi.mock("../../src/main/coordinator.js", () => ({
-  initCoordinator: mockInitCoordinator,
-  cleanupCoordinator: mockCleanupCoordinator,
-  getTrayDeps: mockGetTrayDeps,
+vi.mock("../../src/main/composition-root.js", () => ({
+  createAppComposition: mockCreateAppComposition,
 }));
 
 vi.mock("../../src/main/settings-window.js", () => ({
@@ -100,16 +120,16 @@ vi.mock("../../src/main/settings-window.js", () => ({
   createSettingsWindow: vi.fn(),
 }));
 
-  vi.mock("../../src/main/auto-updater.js", () => ({
+vi.mock("../../src/main/auto-updater.js", () => ({
   initAutoUpdater: vi.fn(),
   stopAutoUpdater: vi.fn(),
   registerAutoUpdaterIpc: vi.fn(),
+  setBroadcastFn: vi.fn(),
+  checkForUpdatesNow: vi.fn(),
 }));
 
-  vi.mock("../../src/main/session-timer.js", () => ({
-  startSession: vi.fn(),
-  cancelSession: vi.fn(),
-  getStatus: vi.fn(),
+vi.mock("../../src/main/session-timer.js", () => ({
+  createSessionTimer: vi.fn(),
 }));
 
 vi.mock("../../src/main/shortcut.js", () => ({

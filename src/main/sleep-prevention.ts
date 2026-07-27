@@ -1,59 +1,40 @@
-import { powerSaveBlocker } from "electron";
-import log from "electron-log";
 import type { SleepBlockMode } from "../shared/types.js";
+import { createPowerSaveBlocker } from "../infrastructure/sleep/power-save-blocker.js";
+import { createElectronLogger } from "../infrastructure/logging/electron-logger.js";
+import type { SleepBlockerPort } from "../application/ports/sleep-blocker.port.js";
 
-let blockerId: number | null = null;
-let activeMode: SleepBlockMode = "prevent-display-sleep";
+/**
+ * Sole powerSaveBlocker owner (module façade over infrastructure adapter).
+ * Prefer getSleepBlockerPort() for new application wiring.
+ */
+const blocker = createPowerSaveBlocker(createElectronLogger());
 
 export function startPreventingSleep(
   mode: SleepBlockMode = "prevent-display-sleep",
 ): void {
-  if (
-    blockerId !== null &&
-    powerSaveBlocker.isStarted(blockerId) &&
-    activeMode === mode
-  ) {
-    return;
-  }
-  // Mode change while active: stop then restart with the new type.
-  if (blockerId !== null) {
-    stopPreventingSleep();
-  }
-  const id = powerSaveBlocker.start(mode);
-  if (id >= 0) {
-    blockerId = id;
-    activeMode = mode;
-    log.info(`[sleep-prevention] Started ${mode} (id: ${blockerId})`);
-  } else {
-    log.error(`[sleep-prevention] Failed to start ${mode} (id: ${id})`);
-  }
+  blocker.start(mode);
 }
 
 export function stopPreventingSleep(): void {
-  if (blockerId !== null) {
-    if (powerSaveBlocker.isStarted(blockerId)) {
-      powerSaveBlocker.stop(blockerId);
-    }
-    blockerId = null;
-    log.info("[sleep-prevention] Stopped preventing sleep");
-  }
+  blocker.stop();
 }
 
 export function isPreventingSleep(): boolean {
-  return blockerId !== null && powerSaveBlocker.isStarted(blockerId);
+  return blocker.isActive();
 }
 
 export function getActiveSleepBlockMode(): SleepBlockMode {
-  return activeMode;
+  return blocker.getActiveMode();
 }
 
 export function syncPreventSleep(
   enabled: boolean,
   mode: SleepBlockMode = "prevent-display-sleep",
 ): void {
-  if (enabled) {
-    startPreventingSleep(mode);
-  } else {
-    stopPreventingSleep();
-  }
+  blocker.sync(enabled, mode);
+}
+
+/** SleepBlockerPort view of the process-wide blocker. */
+export function getSleepBlockerPort(): SleepBlockerPort {
+  return blocker;
 }
