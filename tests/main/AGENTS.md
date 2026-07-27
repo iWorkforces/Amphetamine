@@ -10,6 +10,7 @@ Main-process Vitest suites run in Node with Electron mocked. They cover lifecycl
 | IPC/security | `ipc.test.ts`, `ipc-handlers.test.ts`, `preload.test.ts` |
 | State systems | `coordinator.test.ts`, `session-timer.test.ts`, `settings.test.ts`, `settings.predicates.test.ts` |
 | OS integrations | `sleep-prevention.test.ts`, `battery-monitor.test.ts`, `auto-launch.test.ts`, `global-shortcut.test.ts`, `tray.test.ts` |
+| Platform adapters | `platform.test.ts` (pure `isDarwin` / `isWin32` / `resolvePlatformId`) |
 | Updater/utilities | `auto-updater.test.ts`, `broadcast.test.ts`, `packageInfo.test.ts`, `constants.test.ts` |
 
 ## Mocking Rules
