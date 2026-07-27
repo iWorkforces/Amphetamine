@@ -1,14 +1,14 @@
 /**
- * Platform adapters for main-process OS differences (macOS + Windows).
+ * Public platform API for main-process OS differences (macOS + Windows).
+ *
+ * Prefer importing from this module at call sites. Implementation lives in
+ * sibling files.
  *
  * Modules:
- *   os.ts             — pure identity helpers
- *   shell.ts          — activation policy, Dock icon, login items
- *   window-chrome.ts  — BrowserWindow option builders
- *
- * Later waves:
+ *   os.ts               — pure identity helpers
+ *   shell.ts            — activation policy, Dock icon, login items
+ *   window-chrome.ts    — BrowserWindow option builders
  *   battery-percent.ts  — multi-OS charge percent providers
- *   accelerators.ts     — default/reserved shortcut helpers (if needed in main)
  *
  * Rules:
  * - Prefer these helpers over raw `process.platform` in main code.
@@ -16,7 +16,7 @@
  * - Keep platform modules free of coordinator/settings policy.
  */
 
-export {
+import {
   type PlatformId,
   type ProcessPlatform,
   resolvePlatformId,
@@ -25,7 +25,7 @@ export {
   isSupportedPlatform,
 } from "./os.js";
 
-export {
+import {
   type LoginItemWriteSettings,
   shouldUseActivationPolicy,
   enterTrayOnlyMode,
@@ -34,10 +34,37 @@ export {
   buildLoginItemSettings,
 } from "./shell.js";
 
-export {
+import {
   type WindowChromeOptions,
   popoverWindowChrome,
   settingsWindowChrome,
   aboutWindowChrome,
   appIconFileName,
 } from "./window-chrome.js";
+
+import {
+  getBatteryPercent,
+  parsePmsetOutput,
+  parsePowerShellBatteryOutput,
+} from "./battery-percent.js";
+
+export type { PlatformId, ProcessPlatform, LoginItemWriteSettings, WindowChromeOptions };
+
+export {
+  resolvePlatformId,
+  isDarwin,
+  isWin32,
+  isSupportedPlatform,
+  shouldUseActivationPolicy,
+  enterTrayOnlyMode,
+  enterForegroundMode,
+  setDockIcon,
+  buildLoginItemSettings,
+  popoverWindowChrome,
+  settingsWindowChrome,
+  aboutWindowChrome,
+  appIconFileName,
+  getBatteryPercent,
+  parsePmsetOutput,
+  parsePowerShellBatteryOutput,
+};
