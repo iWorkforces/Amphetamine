@@ -20,7 +20,7 @@ Product platforms: **darwin** and **win32**. OS differences go through thin main
 src/main/                 Electron main process, tray, IPC, settings, timers, updater
   index.ts                bootstrap, single quit orchestrator, benchmark entry
   coordinator.ts          settings -> system sync hub
-  platform/               OS identity + (later) shell/chrome/battery adapters
+  platform/               OS adapters; public entry platform/index.ts
   benchmark*.ts           production benchmark mode and metrics
   utils/                  broadcastToWindows, packageInfo guard
 src/renderer/             popover UI (controls + status), CSS, benchmark countdown

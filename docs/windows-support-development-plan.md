@@ -1,6 +1,6 @@
 # Windows Support — Multi-Wave Development Plan (Single PR)
 
-**Status:** Wave 0 done; Wave 1 in progress / ready for review  
+**Status:** Waves 0–1 done; Wave 2 in progress / ready for review  
 **Branch:** `support-windows`  
 **Delivery model:** One PR, ordered waves with human review between waves. Each wave is merge-ready locally (typecheck/lint/tests green) before the next starts.
 
@@ -50,13 +50,14 @@ Introduce `src/main/platform/` (or `src/shared/platform.ts` for pure flags + mai
 
 ```text
 src/main/platform/
-  index.ts              # re-exports + isDarwin / isWin32 helpers
+  index.ts              # public API surface
+  os.ts                 # isDarwin / isWin32 helpers
   shell.ts              # activation policy, taskbar/Dock visibility
-  login-items.ts        # setLoginItemSettings wrappers (or fold into auto-launch)
   window-chrome.ts      # BrowserWindow option builders (vibrancy vs material)
   battery-percent.ts    # getBatteryPercent() multi-backend
-  accelerators.ts       # default shortcut, quit accelerator, reserved set
+  accelerators.ts       # default shortcut, quit accelerator, reserved set (planned)
 ```
+
 
 Keep existing modules (`sleep-prevention.ts`, `session-timer.ts`, `coordinator.ts`) mostly untouched. Only call sites that currently hardcode macOS APIs change.
 

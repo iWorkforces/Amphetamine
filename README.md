@@ -6,7 +6,7 @@ A macOS menu bar app that keeps your Mac awake. Lives in the system tray, preven
 
 - **Sleep Prevention**: blocks system and/or display sleep via Electron's `powerSaveBlocker` (configurable display vs system-only mode).
 - **Session Timer**: start timed sessions (configurable duration) or run indefinitely from the tray popover or Settings. Runtime state is separate from the saved default duration preference.
-- **Battery-Aware Auto-Disable**: polls `pmset` and automatically stops sleep prevention when battery drops below a configurable threshold.
+- **Battery-Aware Auto-Disable**: polls system battery charge (macOS `pmset`, Windows PowerShell) and automatically stops sleep prevention when battery drops below a configurable threshold.
 - **Global Shortcut**: toggle sleep prevention with `Cmd+Shift+A` (configurable).
 - **Launch at Login**: optional macOS login item, managed through native APIs.
 - **Tray-Only UX**: no Dock icon by default (`LSUIElement`). The popover provides prevent-sleep toggle and quick session start; the settings window appears in the Dock only while open.
