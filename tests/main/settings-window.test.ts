@@ -85,11 +85,15 @@ describe("settings-window", () => {
       expect(win1).toBe(win2);
     });
 
-    it("sets activation policy to regular when shown", async () => {
+    it("sets activation policy to regular when shown on macOS only", async () => {
       createSettingsWindow();
       // Wait for ready-to-show handler
       await vi.advanceTimersByTimeAsync(10);
-      expect(mockSetActivationPolicy).toHaveBeenCalledWith("regular");
+      if (process.platform === "darwin") {
+        expect(mockSetActivationPolicy).toHaveBeenCalledWith("regular");
+      } else {
+        expect(mockSetActivationPolicy).not.toHaveBeenCalled();
+      }
     });
   });
 

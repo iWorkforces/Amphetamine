@@ -85,14 +85,18 @@ describe("settings-window — edge cases", () => {
     expect(mockShow).toHaveBeenCalled();
   });
 
-  it("sets dock icon on ready-to-show", async () => {
+  it("sets dock icon on ready-to-show on macOS only", async () => {
     createSettingsWindow();
     await new Promise((r) => setTimeout(r, 10));
 
-    expect(mockSetDockIcon).toHaveBeenCalled();
+    if (process.platform === "darwin") {
+      expect(mockSetDockIcon).toHaveBeenCalled();
+    } else {
+      expect(mockSetDockIcon).not.toHaveBeenCalled();
+    }
   });
 
-  it("returns to accessory mode when settings window closes", async () => {
+  it("returns to accessory mode when settings window closes on macOS only", async () => {
     createSettingsWindow();
     await new Promise((r) => setTimeout(r, 10));
 
@@ -108,10 +112,14 @@ describe("settings-window — edge cases", () => {
     ) as [string, () => void] | undefined;
     closedCall![1]();
 
-    expect(mockSetActivationPolicy).toHaveBeenLastCalledWith("accessory");
+    if (process.platform === "darwin") {
+      expect(mockSetActivationPolicy).toHaveBeenLastCalledWith("accessory");
+    } else {
+      expect(mockSetActivationPolicy).not.toHaveBeenCalled();
+    }
   });
 
-  it("creates BrowserWindow with correct constraints", async () => {
+  it("creates BrowserWindow with correct constraints and platform chrome", async () => {
     createSettingsWindow();
 
     const callArgs = (vi.mocked((await import("electron")).BrowserWindow).mock
@@ -124,6 +132,10 @@ describe("settings-window — edge cases", () => {
       minimizable?: boolean;
       maximizable?: boolean;
       fullscreenable?: boolean;
+      skipTaskbar?: boolean;
+      vibrancy?: string;
+      titleBarStyle?: string;
+      backgroundMaterial?: string;
       webPreferences?: { sandbox?: boolean; contextIsolation?: boolean; nodeIntegration?: boolean };
     };
 
@@ -135,8 +147,16 @@ describe("settings-window — edge cases", () => {
     expect(callArgs.minimizable).toBe(false);
     expect(callArgs.maximizable).toBe(false);
     expect(callArgs.fullscreenable).toBe(false);
+    expect(callArgs.skipTaskbar).toBe(false);
     expect(callArgs.webPreferences!.sandbox).toBe(true);
     expect(callArgs.webPreferences!.contextIsolation).toBe(true);
     expect(callArgs.webPreferences!.nodeIntegration).toBe(false);
+    if (process.platform === "darwin") {
+      expect(callArgs.titleBarStyle).toBe("hiddenInset");
+      expect(callArgs.vibrancy).toBe("under-window");
+    } else if (process.platform === "win32") {
+      expect(callArgs.titleBarStyle).toBe("hidden");
+      expect(callArgs.backgroundMaterial).toBe("mica");
+    }
   });
 });

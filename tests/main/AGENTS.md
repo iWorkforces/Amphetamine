@@ -24,7 +24,7 @@ Main-process Vitest suites run in Node with Electron mocked. They cover lifecycl
 - `createBatteryMonitor` handle: include `reconfigure` when coordinator wires threshold changes.
 - `TrayDeps` must provide `checkForUpdates`.
 - `syncPreventSleep` is called with `(enabled, sleepBlockMode)`.
-- Auto-launch expects `openAsHidden: true`.
+- Auto-launch: on darwin expects `openAsHidden: true`; on win32/other only `openAtLogin`. Pure builders live in `platform/shell.ts`.
 
 ## Behavioral Focus
 
