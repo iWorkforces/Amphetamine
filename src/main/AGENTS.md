@@ -1,6 +1,6 @@
 # Main Process - Electron Backend
 
-Electron main process for lifecycle, tray, IPC, settings persistence, sleep prevention, sessions, battery policy, global shortcut, auto-updater, and benchmark mode. `coordinator.ts` owns settings-to-system synchronization. `index.ts` owns the single quit orchestrator. OS differences (macOS vs Windows) live under `platform/`.
+Electron main process for lifecycle, tray, IPC, presentation façades, and composition. `composition-root.ts` wires ports/use cases and settings reactions. `index.ts` owns the single quit orchestrator. OS differences (macOS vs Windows) live under `platform/`. Benchmark mode lives under `src/infrastructure/benchmark/`.
 
 ## Files
 

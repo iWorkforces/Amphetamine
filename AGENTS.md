@@ -58,13 +58,42 @@ lib/, dist/, artifacts/   generated outputs; do not add AGENTS.md here
 | Packaging/signing | `build/AGENTS.md`, `electron-builder.yml`, `build-macOS-dmg.sh` | Fuses and signing decisions are non-default; local `--environment` suffix |
 | CI/CD / beta | `.github/workflows/AGENTS.md` | Main CI packages + CD releases; develop beta packages `-beta` DMG/ZIP |
 
+## Log tags (production)
+
+| Tag | Owner |
+| --- | --- |
+| `[main]` | Bootstrap / quit (`index.ts`) |
+| `[composition]` | Composition root wiring and lifecycle |
+| `[settings-reactions]` | `SettingsReactionService` field reactions |
+| `[session]` | Session engine; session-start validation in IPC |
+| `[settings]` | File settings store |
+| `[sleep]` | Power-save blocker adapter |
+| `[battery]` | Battery monitor (detector) |
+| `[shortcut]` | Global shortcut adapter / register use case |
+| `[ipc]` | Sender validation and non-session IPC |
+| `[auto-launch]` | Login items |
+| `[auto-updater]` | Hybrid updater |
+| `[benchmark]` | Production benchmark harness |
+
+### Log tag migration (Clean Architecture refactor)
+
+| Old tag | New tag |
+| --- | --- |
+| `[coordinator]` | `[composition]` / `[settings-reactions]` (by call site) |
+| `[session-timer]` | `[session]` |
+| `[ipc]` (SESSION_START validation only) | `[session]` |
+| `[battery-monitor]` | `[battery]` |
+| `[sleep-prevention]` | `[sleep]` |
+| `[global-shortcut]` | `[shortcut]` |
+| `[settings]`, `[main]`, `[auto-updater]`, `[auto-launch]`, `[benchmark]` | unchanged |
+
 ## Conventions
 
 - Source is ESM TypeScript; main/preload output is CJS. Use `.js` extensions in TS imports.
 - Type-safe IPC: `typedHandle()` in main, typed `invoke<K>()` in preload, exhaustive `WiredChannels` check.
 - DI interfaces isolate side effects: `SessionTimerDeps`, `ShortcutDeps`, `TrayDeps`, `IpcDeps`, `BatteryDeps`.
 - Settings validation uses `VALIDATORS` for both disk load (`validateRawSettings` after migrate) and partial merge.
-- Session **preference** is `defaultSessionDuration`; live session state lives only in `session-timer` + `SESSION_STATUS*` pushes.
+- Session **preference** is `defaultSessionDuration`; live session state lives in the session engine/handle + `SESSION_STATUS*` pushes.
 - `PerfTimestamp` values come from `asPerf(n)`. Do not raw-cast timestamps.
 - `SessionStatusResponse`, `SessionStartResponse`, updater status, and benchmark guards are discriminated/runtime-checked contracts.
 - Settings init is async; writes use UUID temp file + rename and a `writeChain` mutex; quit flushes via `flushSettingsWriteChain()`.
@@ -79,7 +108,7 @@ lib/, dist/, artifacts/   generated outputs; do not add AGENTS.md here
 - Never call `powerSaveBlocker.start/stop` outside `infrastructure/sleep` (main façade: `sleep-prevention.ts`).
 - Never bypass `validateSender()` for IPC. `ipcMain.on()` is allowed only with explicit sender validation.
 - Never expose mutable settings state; return cloned settings snapshots.
-- Never use `Date.now()` for elapsed session timing. Exception: `session-timer.ts` wall-clock anchor for sleep-resilient expiry (all supported OSes).
+- Never use `Date.now()` for elapsed session timing. Exception: wall-clock expiry anchor via `ClockPort.wallNow()` (system clock adapter) for sleep-resilient session expiry.
 - Never call macOS-only Electron APIs (`app.setActivationPolicy`, `app.dock`, `vibrancy`, `openAsHidden`) without an `isDarwin()` guard.
 - Never shell out to `pmset` or PowerShell battery queries outside `src/main/platform/battery-percent.ts`.
 - Never use `JSON.parse(...) as T`; parse to `unknown` and guard.

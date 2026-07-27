@@ -7,8 +7,9 @@ Main-process Vitest suites run in Node with Electron mocked. They cover lifecycl
 | Area | Typical Files |
 |------|---------------|
 | Bootstrap / quit | `index.test.ts`, `settings-window*.test.ts` |
+| Composition | `composition-root.test.ts` (fail-closed session IPC before init) |
 | IPC/security | `ipc.test.ts`, `ipc-handlers.test.ts`, `preload.test.ts` |
-| State systems | `coordinator.test.ts`, `session-timer.test.ts`, `settings.test.ts`, `settings.predicates.test.ts` |
+| State systems | `coordinator.test.ts` (façade), `session-timer.test.ts`, `settings.test.ts`, `settings.predicates.test.ts` |
 | OS integrations | `sleep-prevention.test.ts`, `battery-monitor.test.ts`, `auto-launch.test.ts`, `global-shortcut.test.ts`, `tray.test.ts` |
 | Platform adapters | `platform.test.ts`, `battery-percent.test.ts` (parsers + multi-OS charge reads) |
 | Updater/utilities | `auto-updater.test.ts`, `broadcast.test.ts`, `packageInfo.test.ts`, `constants.test.ts` |

@@ -19,8 +19,10 @@ tests/
 |---------|-------------|----------|------------------|
 | `domain` | `node` | `tests/domain/**/*.test.ts` | `src/domain/**/*.ts` |
 | `application` | `node` | `tests/application/**/*.test.ts` | `src/application/**/*.ts` |
-| `main` | `node` | `tests/main/**/*.test.ts` | `src/main/**/*.ts`, `src/infrastructure/**/*.ts` |
+| `main` | `node` | `tests/main/**/*.test.ts` | `src/main/**/*.ts`, `src/infrastructure/**/*.ts` (incl. benchmark) |
 | `renderer` | `jsdom` | `tests/renderer/**/*.test.ts` | `src/renderer/**/*.ts` |
+
+Root coverage `include` is `src/**/*.ts`. Domain and application have dedicated Vitest projects for pure-unit reporting.
 
 - Coverage provider is v8.
 - Root thresholds: lines 80, functions 80, branches 70.
