@@ -98,6 +98,7 @@ bun run build                  # main + preload + renderer builds
 bun run benchmark:performance  # requires bun run build first
 bun run package                # arm64 DMG/ZIP + flip-fuses; also :x64, :universal, :dir
 bun run package:win            # Windows x64 NSIS + portable + flip-fuses; also :win:dir
+bun run package:win:arm64      # Windows arm64 NSIS + portable + flip-fuses; also :win:dir:arm64
 bun run typecheck              # tsc -b; use typecheck:tests for tests
 bun run typecheck:sticky       # assert sticky strict compiler flags
 bun run lint                   # ESLint src/ tests/
