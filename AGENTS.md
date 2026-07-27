@@ -9,54 +9,57 @@ Tray-only Electron app for **macOS and Windows**. Prevents system sleep through 
 | Runtime | Bun 1.3.14+ / Node `>=26 <27` |
 | Electron | `^43.0.0` |
 | Build | Rslib main/preload to CJS + Rsbuild renderer |
-| Test | Vitest 4 workspace: main Node + renderer jsdom |
+| Test | Vitest 4 workspace: domain + application + main (Node) + renderer (jsdom) |
 | Lint | ESLint 10 flat; sticky type-safety rules as errors for `src/` |
+| Layers | Clean Architecture Lite: `domain` → `application` → `infrastructure` / presentation (`main`, `preload`, `renderer`) |
 
 Product platforms: **darwin** and **win32**. OS differences go through thin main-process platform adapters (`src/main/platform/`). Do not scatter unguarded macOS-only Electron APIs. Renderer is vanilla TypeScript; no UI framework. Linux is out of scope.
 
 ## Source Map
 
 ```text
-src/domain/               Pure types/rules (settings, session, battery, validators) — no Electron
-src/application/          Use cases + ports (interfaces only until adapters land)
-src/main/                 Electron main process, tray, IPC, settings, timers, updater
-  index.ts                bootstrap, single quit orchestrator, benchmark entry
-  composition-root.ts     createAppComposition — ports, use cases, IPC/tray deps
-  coordinator.ts          thin façade over composition (test/compat)
+src/domain/               Pure types and rules (no Electron, no Node I/O)
+src/application/          Use cases + port interfaces (no Electron)
+src/infrastructure/       Electron/Node adapters implementing ports + benchmark harness
+src/main/                 Composition root, IPC, tray, windows, process façades
+  index.ts                bootstrap, quit orchestrator, benchmark entry
+  composition-root.ts     createAppComposition — wire ports, use cases, reactions
+  coordinator.ts          thin compatibility façade over composition
   platform/               OS adapters; public entry platform/index.ts
   utils/                  broadcastToWindows, packageInfo guard
-src/infrastructure/       Electron/Node adapters (settings, sleep, schedule, benchmark, …)
-  benchmark/              production benchmark mode and metrics
-src/renderer/             popover UI (controls + status), CSS, benchmark countdown
-  settings/               separate settings-window entry; see local AGENTS.md
 src/preload/              sandboxed contextBridge API
+src/renderer/             popover UI + settings window entry
 src/shared/               IPC transport contracts; re-exports domain settings types
 src/assets/               checked-in generated PNGs consumed at runtime
-scripts/                  Bun tooling, icon generation, dev orchestration, benchmarks, sticky/layer guards
+scripts/                  Bun tooling, icons, dev, benchmarks, sticky/layer guards
 build/                    electron-builder resources, entitlements, fuses
-.github/workflows/        CI/CD + develop beta packaging; see local AGENTS.md
+.github/workflows/        CI/CD + develop beta packaging
 lib/, dist/, artifacts/   generated outputs; do not add AGENTS.md here
 ```
+
+Dependency rule: **domain** and **application** must not import `electron` / `electron-log` / process roots. Enforced by `bun run typecheck:layers` and ESLint restricted imports.
 
 ## Where to Look
 
 | Task | Location | Notes |
 |------|----------|-------|
 | Add IPC channel | `src/shared/types.ts`, `src/preload/index.ts`, `src/main/ipc.ts` | Keep `IPC_CHANNELS`, `IpcChannelMap`, preload wiring, and handlers in sync |
-| Add settings field | `src/domain/settings/app-settings.ts`, `src/domain/settings-validation/validators.ts` | Extend `AppSettings`, `DEFAULT_SETTINGS`, and `VALIDATORS`; shared re-exports stay in sync; migrate legacy keys in `migrateRawSettingsRecord` if needed |
-| Domain pure rules | `src/domain/` | No Electron/Node I/O; application ports under `src/application/ports/` |
-| Settings -> system sync | `src/main/coordinator.ts` | Only coordinator maps settings into system side effects |
-| Session logic | `src/main/session-timer.ts` | Discriminated state union, `performance.now()`, `asPerf()`; runtime only (not settings) |
-| Sleep prevention | `src/main/sleep-prevention.ts` | Sole `powerSaveBlocker` owner; mode from `sleepBlockMode` |
-| Tray/menu changes | `src/main/tray.ts`, `src/assets/AGENTS.md` | Tray filenames are generated contracts; menu includes Check for Updates |
-| Renderer popover | `src/renderer/index.ts` | Toggle prevent-sleep, session chips, cancel; countdown anchors; RAF DOM writes |
-| Settings UI | `src/renderer/settings/AGENTS.md` | Debounced saves, shortcut recorder, sleep block mode, shortcut-failure push |
-| Benchmark mode | `src/infrastructure/benchmark/`, `src/renderer/benchmark-countdown.ts`, `scripts/benchmark-performance.ts` | Requires built `lib/` output |
-| Test mocking | `tests/AGENTS.md`, `tests/main/AGENTS.md`, `tests/renderer/AGENTS.md` | Main uses mocked Electron; renderer uses jsdom |
-| Dev/build scripts | `scripts/AGENTS.md` | Dev waits for CJS outputs and TCP port 5173; sticky typecheck script |
-| Platform OS gates | `src/main/platform/` | Prefer `isDarwin` / `isWin32`; no unguarded macOS-only Electron APIs |
-| Packaging/signing | `build/AGENTS.md`, `electron-builder.yml`, `build-macOS-dmg.sh` | Fuses and signing decisions are non-default; local `--environment` suffix |
-| CI/CD / beta | `.github/workflows/AGENTS.md` | Main CI packages + CD releases; develop beta packages `-beta` DMG/ZIP |
+| Add settings field | `src/domain/settings/app-settings.ts`, `src/domain/settings-validation/validators.ts` | Extend `AppSettings`, `DEFAULT_SETTINGS`, `VALIDATORS`; migrate legacy keys in `migrateRawSettingsRecord`; shared re-exports stay available |
+| Domain pure rules | `src/domain/` | `isEffectivelyActive`, duration validation, threshold, `PerfTimestamp` |
+| Application use cases | `src/application/` | Session engine, recompute/toggle sleep, settings reactions, low-battery, shortcut |
+| Port interfaces | `src/application/ports/` | Closed budget (~11): store, sleep, schedule, clock, notifier, etc. |
+| Wire app / quit | `src/main/composition-root.ts`, `src/main/index.ts` | Composition before IPC; quit: flush → tray → `composition.cleanup()` → destroy window |
+| Settings persistence | `src/infrastructure/settings/`, façade `src/main/settings.ts` | Atomic write, mutex, save-failure dialog port |
+| Sleep blocker | `src/infrastructure/sleep/`, façade `src/main/sleep-prevention.ts` | Sole `powerSaveBlocker` owner |
+| Session runtime | `src/application/session/`, façade `src/main/session-timer.ts` | Handle injection only; no module-level session globals |
+| Settings → system side effects | `SettingsReactionService` (application), wired in composition | Single `onChange` subscriber; UpdateSettings is persist-only |
+| Tray/menu | `src/main/tray.ts`, `src/assets/AGENTS.md` | Icon = effective active; checkbox = user intent |
+| Renderer popover | `src/renderer/index.ts` | Domain `isEffectivelyActive`; chips start session only |
+| Settings UI | `src/renderer/settings/AGENTS.md` | Debounced saves, shortcut recorder, sleep mode |
+| Benchmark mode | `src/infrastructure/benchmark/`, `src/renderer/benchmark-countdown.ts`, `scripts/benchmark-performance.ts` | Requires built `lib/` |
+| Platform OS gates | `src/main/platform/` | Prefer `isDarwin` / `isWin32` |
+| Test mocking | `tests/AGENTS.md` (+ main/renderer) | Domain/application pure; main mocks Electron |
+| Dev/build/CI | `scripts/`, `build/`, `.github/workflows/` | Local AGENTS.md in each |
 
 ## Log tags (production)
 
@@ -65,62 +68,53 @@ lib/, dist/, artifacts/   generated outputs; do not add AGENTS.md here
 | `[main]` | Bootstrap / quit (`index.ts`) |
 | `[composition]` | Composition root wiring and lifecycle |
 | `[settings-reactions]` | `SettingsReactionService` field reactions |
-| `[session]` | Session engine; session-start validation in IPC |
+| `[session]` | Session engine; SESSION_START validation in IPC |
 | `[settings]` | File settings store |
 | `[sleep]` | Power-save blocker adapter |
-| `[battery]` | Battery monitor (detector) |
+| `[battery]` | Battery monitor (detector only) |
 | `[shortcut]` | Global shortcut adapter / register use case |
 | `[ipc]` | Sender validation and non-session IPC |
 | `[auto-launch]` | Login items |
 | `[auto-updater]` | Hybrid updater |
 | `[benchmark]` | Production benchmark harness |
 
-### Log tag migration (Clean Architecture refactor)
-
-| Old tag | New tag |
-| --- | --- |
-| `[coordinator]` | `[composition]` / `[settings-reactions]` (by call site) |
-| `[session-timer]` | `[session]` |
-| `[ipc]` (SESSION_START validation only) | `[session]` |
-| `[battery-monitor]` | `[battery]` |
-| `[sleep-prevention]` | `[sleep]` |
-| `[global-shortcut]` | `[shortcut]` |
-| `[settings]`, `[main]`, `[auto-updater]`, `[auto-launch]`, `[benchmark]` | unchanged |
-
 ## Conventions
 
 - Source is ESM TypeScript; main/preload output is CJS. Use `.js` extensions in TS imports.
 - Type-safe IPC: `typedHandle()` in main, typed `invoke<K>()` in preload, exhaustive `WiredChannels` check.
-- DI interfaces isolate side effects: `SessionTimerDeps`, `ShortcutDeps`, `TrayDeps`, `IpcDeps`, `BatteryDeps`.
-- Settings validation uses `VALIDATORS` for both disk load (`validateRawSettings` after migrate) and partial merge.
-- Session **preference** is `defaultSessionDuration`; live session state lives in the session engine/handle + `SESSION_STATUS*` pushes.
+- Side effects isolated via ports and factory deps (`SessionTimerDeps`, `BatteryDeps`, `TrayDeps`, `IpcDeps`, port interfaces).
+- Settings validation uses domain `VALIDATORS` for disk load and partial merge.
+- Session **preference** is `defaultSessionDuration`; live session state is engine handle + `SESSION_STATUS*` pushes only.
 - `PerfTimestamp` values come from `asPerf(n)`. Do not raw-cast timestamps.
 - `SessionStatusResponse`, `SessionStartResponse`, updater status, and benchmark guards are discriminated/runtime-checked contracts.
-- Settings init is async; writes use UUID temp file + rename and a `writeChain` mutex; quit flushes via `flushSettingsWriteChain()`.
+- Settings init is async; writes use UUID temp file + rename and a write-chain mutex; quit flushes via `flushSettingsWriteChain()`.
 - Push broadcasts use `broadcastToWindows<K>()`; renderer subscribes with `window.api.on*()` and cleanup functions.
 - UI strings live in constants files. Styling lives in CSS. No inline renderer styles.
 - Format: double quotes, semicolons, 2-space indent, Prettier print width 100.
-- Sticky TS (non-negotiable for `src/`): explicit `strict` family + `exactOptionalPropertyTypes`, `verbatimModuleSyntax`, `noUncheckedIndexedAccess`, `noImplicitOverride`, `noImplicitReturns`. Asserted by `bun run typecheck:sticky`.
-- Sticky ESLint for `src/`: `no-explicit-any`, `no-unsafe-*`, `no-floating-promises`, `strict-boolean-expressions`, `ban-ts-comment`, `no-non-null-assertion`, `no-unnecessary-condition` (all error). Never downgrade for production source. Tests may relax `no-unsafe-*` / non-null assertions.
+- Sticky TS (non-negotiable for `src/`): strict family + `exactOptionalPropertyTypes`, `verbatimModuleSyntax`, `noUncheckedIndexedAccess`, `noImplicitOverride`, `noImplicitReturns`. Asserted by `bun run typecheck:sticky`.
+- Sticky ESLint for `src/`: `no-explicit-any`, `no-unsafe-*`, `no-floating-promises`, `strict-boolean-expressions`, `ban-ts-comment`, `no-non-null-assertion`, `no-unnecessary-condition` (all error).
 
 ## Anti-Patterns
 
-- Never call `powerSaveBlocker.start/stop` outside `infrastructure/sleep` (main façade: `sleep-prevention.ts`).
-- Never bypass `validateSender()` for IPC. `ipcMain.on()` is allowed only with explicit sender validation.
+- Never call `powerSaveBlocker.start/stop` outside `src/infrastructure/sleep` (main façade: `sleep-prevention.ts`).
+- Never bypass `validateSender()` for IPC. `ipcMain.on()` only with explicit sender validation.
 - Never expose mutable settings state; return cloned settings snapshots.
-- Never use `Date.now()` for elapsed session timing. Exception: wall-clock expiry anchor via `ClockPort.wallNow()` (system clock adapter) for sleep-resilient session expiry.
-- Never call macOS-only Electron APIs (`app.setActivationPolicy`, `app.dock`, `vibrancy`, `openAsHidden`) without an `isDarwin()` guard.
+- Never use `Date.now()` for elapsed session timing. Exception: wall-clock expiry via `ClockPort.wallNow()` for sleep-resilient timed sessions.
+- Never call macOS-only Electron APIs without an `isDarwin()` guard.
 - Never shell out to `pmset` or PowerShell battery queries outside `src/main/platform/battery-percent.ts`.
 - Never use `JSON.parse(...) as T`; parse to `unknown` and guard.
 - Never mutate `DEFAULT_SETTINGS`.
 - Never use `as any`, `@ts-ignore`, or `@ts-expect-error` in `src/`.
 - Never hardcode renderer/tray UI strings in logic.
-- Never import Electron in renderer code; all Electron access goes through preload.
+- Never import Electron in renderer; all Electron access goes through preload.
 - Never make runtime code import from `scripts/`.
+- Never import Electron into `domain` or `application` (layer guard).
+- Never dual-subscribe settings reactions (only `SettingsReactionService` via store `onChange`).
+- Never reintroduce module-level session delegators (`setActiveSessionTimer` and friends).
+- Never mirror runtime session state into settings.
 - Never add or edit source docs under generated `lib/`, `dist/`, `artifacts/`, coverage, or tool-state directories.
 - Never distribute packaged output before the intended fuse/signing path has run.
-- Never mirror runtime session state into settings (preference field only).
-- Never remove sticky `strict` / sticky ESLint pins without updating CI `typecheck:sticky` deliberately.
+- Never remove sticky `strict` / sticky ESLint pins without updating CI deliberately.
 
 ## Commands
 
@@ -133,7 +127,8 @@ bun run benchmark:performance  # requires bun run build first
 bun run package                # arm64 DMG/ZIP + flip-fuses; also :x64, :universal, :dir
 bun run package:win            # Windows x64 NSIS + portable + flip-fuses; also :win:dir
 bun run package:win:arm64      # Windows arm64 NSIS + portable + flip-fuses; also :win:dir:arm64
-bun run typecheck              # tsc -b; use typecheck:tests for tests
+bun run typecheck              # tsc -b
+bun run typecheck:tests        # tsc tests project
 bun run typecheck:sticky       # assert sticky strict compiler flags
 bun run typecheck:layers       # assert domain/application import boundaries
 bun run lint                   # ESLint src/ tests/
@@ -143,16 +138,16 @@ bun run clean                  # remove lib/dist outputs
 
 ## Notes
 
-- Effective sleep prevention is user `preventSleep` intent OR active session state. Low-battery auto-stop disables both.
+- Effective sleep prevention is user `preventSleep` intent **OR** active session. Low-battery auto-stop disables both.
 - Tray icon reflects effective active state; tray menu checkbox reflects user intent only.
 - Popover is the primary control surface: prevent-sleep toggle, duration chips (start only; do not write preference), cancel session, Settings/Quit.
 - Settings duration select still starts a session **and** updates `defaultSessionDuration`.
 - Sleep block mode defaults to `prevent-display-sleep`; `prevent-app-suspension` allows display sleep.
-- Login items: macOS uses `openAsHidden: true`; Windows uses `openAtLogin` without that flag (Wave 1).
-- Settings window: macOS temporarily shows the Dock icon; Windows shows a taskbar button while open (Wave 1). Tray-only mode returns on close.
+- Login items: macOS uses `openAsHidden: true`; Windows uses `openAtLogin` without that flag.
+- Settings window: macOS temporarily shows the Dock icon; Windows shows a taskbar button while open. Tray-only mode returns on close.
 - Popover hide on blur uses typed `window:hide`, not DOM `CustomEvent`.
-- Auto-updater is hybrid: **Check for Updates** tries in-app download/install when possible; falls back to the GitHub release page on failure. Background checks do not auto-download or open the browser.
+- Auto-updater is hybrid: **Check for Updates** tries in-app download/install when possible; falls back to the GitHub release page. Background checks do not auto-download or open the browser.
 - Electron pin is `^43.0.0`; do not downgrade below the patched line referenced by security comments.
-- Runtime deps are only `electron-log` and `electron-updater`; they are externalized in Rslib. Renderer must not import `electron-log`.
+- Runtime deps are only `electron-log` and `electron-updater`; externalized in Rslib. Renderer must not import `electron-log`.
 - Production Rslib/Rsbuild builds drop console output.
-- Develop pushes/merges: CI lint/test; **Beta** workflow packages artifacts as `*-beta-{N}.*` and publishes a GitHub **prerelease** tag `vX.Y.Z-beta.N` (N per version starting at 1), not a production release.
+- Develop pushes/merges: CI lint/test; **Beta** workflow packages `*-beta-{N}.*` and publishes prerelease tag `vX.Y.Z-beta.N`.

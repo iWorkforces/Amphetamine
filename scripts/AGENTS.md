@@ -69,6 +69,7 @@ Developer-only Bun/Node scripts. Runtime app code must not import from here. Scr
 bun run dev
 bun run build && bun run benchmark:performance
 bun run typecheck:sticky
+bun run typecheck:layers
 bun scripts/generate-app-icon.mjs
 bun scripts/generate-coffee-tray-icons.mjs
 ```

@@ -1,110 +1,111 @@
-# Main Process - Electron Backend
+# Main Process - Electron Presentation + Composition
 
-Electron main process for lifecycle, tray, IPC, presentation façades, and composition. `composition-root.ts` wires ports/use cases and settings reactions. `index.ts` owns the single quit orchestrator. OS differences (macOS vs Windows) live under `platform/`. Benchmark mode lives under `src/infrastructure/benchmark/`.
+Main process owns app lifecycle, BrowserWindows, tray, typed IPC registration, and the composition root. Business rules live under `application/` and `domain/`; OS/Electron I/O adapters under `infrastructure/` (with thin façades here for stable import paths).
 
 ## Files
 
 | File | Role |
 |------|------|
-| `index.ts` | App bootstrap, window creation, security hooks, quit orchestrator, benchmark entry |
-| `coordinator.ts` | Central hub: settings diffing, sleep/session/tray/shortcut/battery/updater sync |
-| `platform/` | OS adapters; public entry `platform/index.ts` (see `platform/AGENTS.md`) |
-| `composition-root.ts` | `createAppComposition()` — ports, session, reactions, IPC/tray deps, ordered cleanup |
-| `coordinator.ts` | Thin compatibility façade over composition (`initCoordinator` / `cleanupCoordinator`) |
-| `session-timer.ts` | Thin façade over `application/session` engine + clock/schedule adapters; handle injection only |
-| `sleep-prevention.ts` | Façade over `infrastructure/sleep` (`SleepBlockerPort`); sole blocker owner |
-| `battery-monitor.ts` | Threshold detector + `reconfigure()`; charge percent via `platform/battery-percent` |
-| `tray.ts` | Tray icon/menu cache, theme debounce, Check for Updates, destroy on cleanup |
-| `ipc.ts` | Typed IPC handler registration via `typedHandle()` |
-| `ipc-utils.ts` | Sender allowlist and typed handler utilities |
+| `index.ts` | Bootstrap, popover window, quit orchestrator, benchmark entry |
+| `composition-root.ts` | `createAppComposition()` — ports, session handle, reactions, `getIpcDeps` / `getTrayDeps`, ordered `cleanup()` |
+| `coordinator.ts` | Thin compatibility façade (`initCoordinator` / `cleanupCoordinator` / `getTrayDeps`) over composition |
+| `ipc.ts` | Typed handler registration; session handlers use injected `IpcDeps.sessionTimer` |
+| `ipc-utils.ts` | `validateSender`, `typedHandle` |
+| `tray.ts` | Tray icon/menu; Check for Updates; destroy on cleanup |
 | `settings.ts` | Façade over `infrastructure/settings` (`SettingsStorePort`); `flushSettingsWriteChain()` |
-| `settings-window.ts` | BrowserWindow singleton; Dock (macOS) / taskbar (Windows) visibility while open |
-| `auto-updater.ts` | Hybrid updates: check/download/install when possible; browser fallback; `checkForUpdatesNow()` |
+| `sleep-prevention.ts` | Façade over `infrastructure/sleep` (`SleepBlockerPort`) |
+| `session-timer.ts` | Façade over `application/session` engine; **handle injection only** |
+| `global-shortcut.ts` | Façade over RegisterAppShortcut + GlobalShortcutPort |
+| `auto-launch.ts` | Login items + `AutoLaunchPort` view |
+| `battery-monitor.ts` | Threshold **detector** only; percent via `platform/battery-percent` |
+| `auto-updater.ts` | Hybrid download/install policy; `UpdaterPort` wraps broadcast inject |
 | `auto-updater-utils.ts` | Pure updater helpers |
+| `settings-window.ts` | Settings BrowserWindow; Dock/taskbar while open |
+| `about-window.ts` | Custom About window |
+| `security.ts` | WebContents hardening / navigation allowlist |
+| `constants.ts` | Window sizes, timeouts, UI timing constants |
+| `platform/` | OS adapters; see `platform/AGENTS.md` |
+| `utils/broadcast.ts` | Typed main→renderer push helper |
+| `utils/packageInfo.ts` | Cached package metadata guard |
 
-| `global-shortcut.ts` | Accelerator registration; broadcasts `SHORTCUT_REGISTRATION_FAILED` on failure |
-| `auto-launch.ts` | Login item integration (macOS `openAsHidden`; Windows without that flag — Wave 1) |
-| `security.ts` | WebContents hardening and navigation allowlist |
-| `about-window.ts` | Custom About BrowserWindow (escaped HTML, CSP, light/dark) |
-| `utils/broadcast.ts` | Generic typed push helper |
-| `utils/packageInfo.ts` | Cached package metadata with runtime guard |
+## Bootstrap and quit
 
-## Coordinator Rules
+**Ready order (required):**
 
-- Initialize settings before reading them; `getSettings()` throws before `initSettings()`.
-- Effective sleep prevention is `settings.preventSleep || sessionActiveCache`.
-- `recomputeSleepPrevention` passes `settings.sleepBlockMode` into `syncPreventSleep`.
-- Low-battery auto-stop persists `preventSleep: false` and cancels any active session.
-- Battery monitor detects only; coordinator owns policy and side effects.
-- On `batteryThreshold` change, call `batteryMonitor.reconfigure()` so polling re-arms without a sleep toggle.
-- On `sleepBlockMode` change while prevention is active, recompute so the blocker restarts with the new type.
-- Session active changes recompute sleep prevention and tray state without clobbering user intent.
-- Session timer **does not** write settings; preference field `defaultSessionDuration` is UI/settings-only.
-- Settings changes diff previous values before touching launch item, shortcut, battery, sleep mode, tray, or renderer broadcasts.
-- `getTrayDeps()` supplies `checkForUpdates` → `checkForUpdatesNow()`.
-- `cleanupCoordinator()` must call `sessionTimer?.cleanup()` before nulling the handle.
+1. `createAppComposition()`
+2. `await composition.init()` (settings, session, battery, shortcut, reactions)
+3. `registerIpcHandlers(window, composition.getIpcDeps())`
+4. `setupTray(composition.getTrayDeps())`
+5. `initAutoUpdater()` unless benchmark mode
 
-## Quit Orchestrator (`index.ts`)
+**Quit (`index.ts` sole `before-quit` owner):**
 
-- Single `before-quit` owner (not `settings.ts`).
-- Flow: `preventDefault` → await `flushSettingsWriteChain()` (2s timeout) → tray cleanup (`destroy`) → `composition.cleanup()` → destroy main window → `app.exit(0)`.
-- Bootstrap: `createAppComposition()` → `await init()` → `registerIpcHandlers(..., getIpcDeps())` → `setupTray(getTrayDeps())`.
-- Guard with `didRunQuitCleanup` so re-entry is idempotent.
-- `settings.ts` exports `flushSettingsWriteChain()` only; it must not register its own quit handler.
+1. Idempotent `didRunQuitCleanup`
+2. `flushSettingsWriteChain()` (2s race timeout)
+3. Tray `destroy`
+4. `composition.cleanup()`
+5. Destroy main window → `app.exit(0)`
 
-## IPC and Security
+Do not register a second `before-quit` handler on settings or other modules.
 
-- Use `typedHandle()` for invoke channels. It validates senders before calling handlers.
-- Raw `ipcMain.on()` is acceptable only for fire-and-forget channels with explicit `validateSender()`.
-- Packaged sender URLs exact-match normalized renderer HTML paths; dev senders must match `DEV_ORIGINS`.
-- Renderer-facing updates use `broadcastToWindows<K>()`; skip destroyed windows.
-- Never expose Node APIs outside preload.
+## Composition rules
 
-## Timing and State
+- Settings field reactions run only through `SettingsReactionService` (single store `onChange` subscriber).
+- Effective sleep: `preventSleep` **OR** session active — via `createRecomputeSleepPrevention` + domain `isEffectivelyActive`.
+- Low-battery: detector calls `HandleLowBatteryAutoStop` (clear intent + cancel session).
+- Session IPC before `init` **fails closed** (throws); no module-level session globals.
+- `getTrayDeps().checkForUpdates` → `UpdaterPort.checkNow()`.
+- `cleanup()` order: settings/about windows → unsubscribe reactions → battery → session → sleep stop → shortcut unregister → updater stop.
 
-- Session machine lives in `application/session/session-engine.ts` (`ClockPort` + `SchedulePort`).
-- Elapsed timing uses `ClockPort.perfNow()` / `asPerf`; wall-clock resume uses `ClockPort.wallNow()`.
-- `setTimeout` + `.unref()` live only in the `SchedulePort` Node adapter (and other polling adapters).
-- `createSessionTimer({ broadcast, onSessionActiveChange?, powerMonitor? })` — thin façade; no `onStateChange` / settings deps.
-- No module-level session delegators; composition injects the handle into `IpcDeps` (fail closed before `init`).
+## IPC and security
+
+- Use `typedHandle()` for invoke channels (validates sender).
+- Raw `ipcMain.on()` only with explicit `validateSender()`.
+- Packaged senders: exact-match normalized renderer HTML; dev: `DEV_ORIGINS`.
+- Renderer pushes: `broadcastToWindows<K>()`; skip destroyed windows.
+
+## Timing and state
+
+- Session machine: `application/session/session-engine.ts` (`ClockPort` + `SchedulePort`).
+- Elapsed: `ClockPort.perfNow()` / `asPerf`; resume: `ClockPort.wallNow()`.
+- `setTimeout` + `.unref()` only in schedule (and polling) adapters — not in application.
+- `createSessionTimer({ broadcast, onSessionActiveChange?, powerMonitor? })` — no settings writers.
 - `reconcileSessionState()` is a no-op: preference null must not kill a live session.
-- Auto-updater waits 3s after startup, repeats every 4h, and backs off failures to 24h max.
-- Hybrid update policy: `autoDownload` stays false for background checks. Tray/IPC **Check for Updates** sets user-initiated mode → `downloadUpdate()` → dialog → `quitAndInstall()` when the platform allows (macOS ZIP/`latest-mac.yml`; Windows x64/arm64 EXE/`latest.yml`, preferably signed). On download/install failure, open the GitHub release page. Background `update-available` only broadcasts status (no browser popup).
+- Preference field `defaultSessionDuration` is settings/UI only.
 
-## Tray Rules
+## Tray
 
-- Icon reflects **effective** active state (`getEffectiveActive`).
-- Menu checkbox reflects **user intent** (`getPreventSleep`) only.
+- Icon = **effective** active (`getEffectiveActive`).
+- Menu checkbox = **user intent** (`getPreventSleep`) only.
 - Menu: Prevent Sleep, Settings, About, Check for Updates…, Quit.
-- Cleanup must call `tray.destroy()` before nulling the reference.
-- Icon load: `nativeImage.createFromPath()` only (asar-safe).
+- Icons: `nativeImage.createFromPath()` only (asar-safe). Cleanup calls `tray.destroy()`.
 
-## Benchmark Mode
+## Platform
 
-- `index.ts` calls `configureBenchmarkEnvironment()` and `installBenchmarkTimerCounters()` at module startup.
-- Benchmark mode skips auto-updater, samples popover/tray/settings responsiveness, then prints `AMPHETAMINE_BENCHMARK_RESULT:` JSON and quits.
-- Benchmark mode lives under `src/infrastructure/benchmark/`; it may dynamically import tray/settings from main for measurement.
+- Prefer `isDarwin()` / `isWin32()` from `platform/`.
+- Tray-only boot: `enterTrayOnlyMode()`.
+- Window chrome: `popoverWindowChrome` / `settingsWindowChrome` / `aboutWindowChrome`.
+- Login items: `buildLoginItemSettings()` — no `openAsHidden` on non-darwin.
+- Battery shell-outs only in `platform/battery-percent.ts`.
 
-## Platform Rules
+## Benchmark
 
-- Prefer `isDarwin()` / `isWin32()` from `platform/` over raw `process.platform` compares.
-- Tray-only boot: `enterTrayOnlyMode()` (darwin activation policy; no-op on Windows).
-- Window chrome: `popoverWindowChrome` / `settingsWindowChrome` / `aboutWindowChrome` — never set `vibrancy` unguarded.
-- Login items: `buildLoginItemSettings()` — never pass `openAsHidden` on non-darwin.
-- Settings open: `enterForegroundMode()` + `setDockIcon()`; close: `enterTrayOnlyMode()`.
-- Battery percent: only `platform/battery-percent.ts` shells out (`pmset` / PowerShell); the monitor stays a pure detector.
+- Early: `configureBenchmarkEnvironment()` + `installBenchmarkTimerCounters()` from `infrastructure/benchmark`.
+- Skips auto-updater; measures then prints `AMPHETAMINE_BENCHMARK_RESULT:` and quits.
+- Harness may dynamically import tray/settings from main for measurement.
 
 ## Anti-Patterns
 
-- Never call `powerSaveBlocker.start/stop` outside `infrastructure/sleep` (main façade: `sleep-prevention.ts`).
+- Never call `powerSaveBlocker.start/stop` outside `infrastructure/sleep`.
 - Never bypass sender validation for IPC.
-- Never expose mutable `settingsCache`; return `{ ...settingsCache }`.
-- Never add settings validation branches in main; extend shared `VALIDATORS`.
-- Never load tray icons with `fs.readFileSync()`; use `nativeImage.createFromPath()` for asar compatibility.
-- Never hardcode tray/menu UI strings outside `constants.ts`.
+- Never expose mutable settings cache; always clone snapshots.
+- Never put settings field validators in main; extend domain `VALIDATORS`.
+- Never load tray icons with `fs.readFileSync`.
+- Never hardcode tray/menu strings outside `constants.ts`.
 - Never write session runtime duration into settings from the timer.
-- Never register a second `before-quit` handler that races the quit orchestrator.
-- Never call `app.setActivationPolicy`, `app.dock`, or set `vibrancy` / `openAsHidden` without a darwin guard (Wave 1+).
+- Never register a competing `before-quit` handler.
+- Never call macOS-only Electron APIs without `isDarwin()`.
+- Never reintroduce `setActiveSessionTimer` / module-level session exports.
 
 ## Commands
 
@@ -112,5 +113,6 @@ Electron main process for lifecycle, tray, IPC, presentation façades, and compo
 bun run test -- tests/main
 bun run typecheck
 bun run typecheck:sticky
+bun run typecheck:layers
 bun run benchmark:performance  # after bun run build
 ```

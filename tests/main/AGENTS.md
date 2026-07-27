@@ -1,62 +1,64 @@
-# Main Tests - Node and Electron Mocks
+# Main Tests — Node and Electron Mocks
 
-Main-process Vitest suites run in Node with Electron mocked. They cover lifecycle, IPC/security, coordinator sync, settings persistence, timers, tray, updater, and utilities.
+Main-process Vitest suites run in Node with Electron mocked. They cover lifecycle, composition, IPC/security, façades, timers, tray, updater, platform, and utilities.
 
-## Test Surface
+## Test surface
 
-| Area | Typical Files |
-|------|---------------|
+| Area | Typical files |
+|------|----------------|
 | Bootstrap / quit | `index.test.ts`, `settings-window*.test.ts` |
-| Composition | `composition-root.test.ts` (fail-closed session IPC before init) |
-| IPC/security | `ipc.test.ts`, `ipc-handlers.test.ts`, `preload.test.ts` |
-| State systems | `coordinator.test.ts` (façade), `session-timer.test.ts`, `settings.test.ts`, `settings.predicates.test.ts` |
+| Composition | `composition-root.test.ts` (session IPC fail-closed before init) |
+| Coordinator façade | `coordinator.test.ts` (thin wrapper over composition; mock ports/deps) |
+| IPC / security | `ipc.test.ts`, `ipc-handlers.test.ts`, `preload.test.ts` |
+| Session façade | `session-timer.test.ts` (handle from `createSessionTimer` only) |
+| Settings store | `settings.test.ts`, `settings.predicates.test.ts` |
 | OS integrations | `sleep-prevention.test.ts`, `battery-monitor.test.ts`, `auto-launch.test.ts`, `global-shortcut.test.ts`, `tray.test.ts` |
-| Platform adapters | `platform.test.ts`, `battery-percent.test.ts` (parsers + multi-OS charge reads) |
-| Updater/utilities | `auto-updater.test.ts`, `broadcast.test.ts`, `packageInfo.test.ts`, `constants.test.ts` |
+| Platform | `platform.test.ts`, `battery-percent.test.ts` |
+| Updater / utils | `auto-updater.test.ts`, `broadcast.test.ts`, `packageInfo.test.ts`, `constants.test.ts` |
 
-## Mocking Rules
+Pure use-case / domain tests live under `tests/application` and `tests/domain` (not here).
 
-- `tests/setup.main.ts` provides the baseline `electron` mock: app, BrowserWindow, ipcMain, Tray, Menu, shell, dialog, nativeImage, nativeTheme, powerSaveBlocker, powerMonitor.
+## Mocking rules
+
+- `tests/setup.main.ts`: baseline Electron mock (app, BrowserWindow, ipcMain, Tray, Menu, shell, dialog, nativeImage, nativeTheme, powerSaveBlocker, powerMonitor).
 - Use `vi.hoisted()` for values referenced by `vi.mock()` factories.
-- Use local `vi.mock("electron")` only when a test needs a narrower or different API shape.
-- Restore module singleton state with `vi.resetModules()` and dynamic import.
-- Mock `node:fs/promises`, `node:child_process`, updater modules, and logs instead of touching real OS state.
-- `createSessionTimer` deps: `broadcast` required; optional `onSessionActiveChange` / `powerMonitor`. Do not pass settings writers.
-- `createBatteryMonitor` handle: include `reconfigure` when coordinator wires threshold changes.
-- `TrayDeps` must provide `checkForUpdates`.
-- `syncPreventSleep` is called with `(enabled, sleepBlockMode)`.
-- Auto-launch: on darwin expects `openAsHidden: true`; on win32/other only `openAtLogin`. Pure builders live in `platform/shell.ts`.
+- Local `vi.mock("electron")` only for narrower shapes.
+- Restore singletons with `vi.resetModules()` + dynamic import.
+- Mock `node:fs/promises`, `node:child_process`, updater modules, and logs — not real OS state.
+- `createSessionTimer` deps: `broadcast` required; optional `onSessionActiveChange` / `powerMonitor`.
+- Battery handle mocks include `reconfigure`.
+- Tray deps include `checkForUpdates`.
+- Composition / coordinator tests often need: `getSettingsStore`, `getSleepBlockerPort`, `getAutoLaunchPort`, and `createSessionTimer` mocks.
+- Auto-launch: darwin expects `openAsHidden: true`; win32 only `openAtLogin`.
 
-## Behavioral Focus
+## Behavioral focus
 
-- Session preference vs runtime: `reconcileSessionState` must not kill sessions when `defaultSessionDuration` is null.
-- Battery: threshold change while already preventing sleep on battery re-arms polling via `reconfigure`.
-- Quit: flush settings chain before tray/coordinator cleanup (orchestrator ownership).
-- Tray cleanup: `destroy()` called.
+- `reconcileSessionState` must not kill sessions when `defaultSessionDuration` is null.
+- Battery threshold change while preventing sleep re-arms polling via `reconfigure`.
+- Quit: flush settings before tray → `composition.cleanup()` (orchestrator ownership).
+- Tray cleanup calls `destroy()`.
 - Sleep mode: `powerSaveBlocker.start` receives configured mode string.
-- Effective sleep OR matrix: `preventSleep || sessionActive` (4 rows) via `getTrayDeps` / `syncPreventSleep`.
-- Composition: session IPC deps throw before `init()`; no `setActiveSessionTimer` module globals.
-- `SESSION_START` duration goldens: `invalid-duration`, `Duration cannot exceed 24 hours` (>1440), bound 1440 inclusive, `null` indefinite.
-- `SETTINGS_CHANGED` only for `preventSleep` | `batteryThreshold` | `shortcut` — not `launchAtLogin` / `sleepBlockMode` / `defaultSessionDuration`.
-- `sleepBlockMode` change recomputes only when `isPreventingSleep() || preventSleep || sessionActive`; `recompute` reads mode from `getSettings()` (advance mock cache before subscriber callback).
+- Effective sleep OR matrix (4 rows) via tray effective active / recompute.
+- Composition: session IPC throws before `init()`; no `setActiveSessionTimer`.
+- SESSION_START goldens: `invalid-duration`, `Duration cannot exceed 24 hours` (>1440), 1440 inclusive, `null` indefinite.
+- SETTINGS_CHANGED only for `preventSleep` \| `batteryThreshold` \| `shortcut`.
+- `sleepBlockMode` recompute only when blocker active OR intent OR session; mode read from `getSettings()` (advance mock cache before subscriber).
 
-## Timer and Async Rules
+## Timer and async
 
-- Prefer fake timers plus `vi.advanceTimersByTimeAsync()`.
-- Test `.unref()` behavior by asserting mocked handle calls when relevant.
-- Do not use real sleeps for timeout, updater, session, or battery-polling behavior.
-- Flush pending promises after dynamic imports before assertions on registered handlers.
+- Prefer fake timers + `vi.advanceTimersByTimeAsync()`.
+- Assert `.unref()` on mocked handles when relevant.
+- No real sleeps for timeout/updater/session/battery polling.
 
-## IPC/Security Rules
+## IPC / security
 
-- Sender validation and path normalization are first-class behavior; cover valid packaged, valid dev, and rejected origins.
-- Handler tests should assert both registration and dependency routing.
-- Do not bypass typed channel names from `IPC_CHANNELS` in tests unless testing invalid input.
+- Cover valid packaged, valid dev, and rejected origins.
+- Assert registration + dependency routing for handlers.
+- Prefer `IPC_CHANNELS` names in tests.
 
 ## Anti-Patterns
 
-- Never let tests launch real Electron windows, `pmset`, or PowerShell battery queries.
-- Battery monitor integration tests mock `platform/index` (`getBatteryPercent` only); parser/exec coverage lives in `battery-percent.test.ts` against `battery-percent.js`.
-- Never mutate hoisted mocks across tests without resetting/restoring.
-- Never weaken discriminated-union coverage when source adds an exhaustive branch.
+- Never launch real Electron windows, `pmset`, or PowerShell battery queries.
+- Battery monitor tests mock `platform/index` (`getBatteryPercent`); parser/exec coverage in `battery-percent.test.ts`.
 - Never reintroduce expectations that the session timer writes `defaultSessionDuration` into settings.
+- Never assume module-level `startSession` exports still exist.

@@ -1,6 +1,6 @@
 # Infrastructure Benchmark Mode
 
-Production benchmark harness used when `AMPHETAMINE_BENCHMARK=1`. Not a product feature path; skip auto-updater in this mode from `index.ts`.
+Production benchmark harness when `AMPHETAMINE_BENCHMARK=1`. Not a normal product path; `index.ts` skips auto-updater in this mode.
 
 ## Files
 
@@ -14,5 +14,6 @@ Production benchmark harness used when `AMPHETAMINE_BENCHMARK=1`. Not a product 
 ## Rules
 
 - Protocol and JSON artifact shape stay stable for `scripts/benchmark-performance.ts`.
-- Dynamic imports of main tray/settings for measurement only; do not invert product bootstrap into the harness.
-- Prefer importing from `../infrastructure/benchmark/index.js` (or this package) — no `main/benchmark*` shims.
+- Dynamic imports of `main/tray` and `main/settings-window` for measurement only; do not invert product bootstrap into the harness.
+- Import from `src/infrastructure/benchmark/` (or the barrel). There are no `main/benchmark*` shims.
+- Log tag: `[benchmark]` if logging is added; result line is stdout protocol for the harness script.
