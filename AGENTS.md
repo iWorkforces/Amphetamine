@@ -74,7 +74,7 @@ lib/, dist/, artifacts/   generated outputs; do not add AGENTS.md here
 
 ## Anti-Patterns
 
-- Never call `powerSaveBlocker.start/stop` outside `sleep-prevention.ts`.
+- Never call `powerSaveBlocker.start/stop` outside `infrastructure/sleep` (main façade: `sleep-prevention.ts`).
 - Never bypass `validateSender()` for IPC. `ipcMain.on()` is allowed only with explicit sender validation.
 - Never expose mutable settings state; return cloned settings snapshots.
 - Never use `Date.now()` for elapsed session timing. Exception: `session-timer.ts` wall-clock anchor for sleep-resilient expiry (all supported OSes).

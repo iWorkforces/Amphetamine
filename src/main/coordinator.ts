@@ -16,10 +16,16 @@ import { powerMonitor } from "electron";
 import { IPC_CHANNELS } from "../shared/types.js";
 import { broadcastToWindows } from "./utils/broadcast.js";
 import type { AppSettings } from "../shared/types.js";
-import { initSettings, getSettings, onSettingsChanged, updateSettings } from "./settings.js";
+import {
+  initSettings,
+  getSettings,
+  getSettingsStore,
+  onSettingsChanged,
+  updateSettings,
+} from "./settings.js";
 import { syncAutoLaunch } from "./auto-launch.js";
 import { registerGlobalShortcut, unregisterGlobalShortcut, type ShortcutDeps } from "./global-shortcut.js";
-import { isPreventingSleep, syncPreventSleep, stopPreventingSleep } from "./sleep-prevention.js";
+import { isPreventingSleep, stopPreventingSleep, getSleepBlockerPort } from "./sleep-prevention.js";
 import {
   createBatteryMonitor,
   type BatteryMonitorHandle,
@@ -37,6 +43,9 @@ import {
 import type { TrayDeps } from "./tray.js";
 import { createSettingsWindow, closeSettingsWindow } from "./settings-window.js";
 import { closeAboutWindow } from "./about-window.js";
+import { createRecomputeSleepPrevention } from "../application/sleep/recompute-sleep-prevention.js";
+import { createTogglePreventSleep } from "../application/sleep/toggle-prevent-sleep.js";
+import { createElectronLogger } from "../infrastructure/logging/electron-logger.js";
 
 let prevSettings: AppSettings | null = null;
 let shortcutDeps: ShortcutDeps | null = null;
@@ -60,28 +69,27 @@ function notifyEffectiveActiveChange(next: boolean): void {
 }
 
 /**
- * Compute the effective sleep-prevention state and apply it.
- *
- * shouldBlockSleep = userIntent (settings.preventSleep) OR sessionActive (runtime).
- * Either source independently keeps sleep blocked.
+ * shouldBlockSleep = userIntent OR sessionActive — applied via SleepBlockerPort.
  */
-function recomputeSleepPrevention(userIntentOverride?: boolean): void {
-  const settings = getSettings();
-  const userIntent = userIntentOverride ?? settings.preventSleep;
-  const next = userIntent || sessionActiveCache;
-  const prev = isPreventingSleep();
-  syncPreventSleep(next, settings.sleepBlockMode);
-  if (prev !== next) {
-    batteryMonitor?.onPreventSleepChange(next);
-  }
-  notifyEffectiveActiveChange(next);
-}
+const recomputeSleepPrevention = createRecomputeSleepPrevention({
+  getUserIntent: () => getSettings().preventSleep,
+  getSessionActive: () => sessionActiveCache,
+  getSleepBlockMode: () => getSettings().sleepBlockMode,
+  sleepBlocker: getSleepBlockerPort(),
+  onPreventSleepChange: (active) => {
+    batteryMonitor?.onPreventSleepChange(active);
+  },
+  onEffectiveActiveChange: (active) => {
+    notifyEffectiveActiveChange(active);
+  },
+});
 
-function togglePreventSleep(): void {
-  updateSettings({ preventSleep: !getSettings().preventSleep }).catch((err) =>
-    log.error("[coordinator] togglePreventSleep failed:", err),
-  );
-}
+/** Persist-only preventSleep flip; reactions run on the single onChange subscriber. */
+const togglePreventSleep = createTogglePreventSleep({
+  store: getSettingsStore(),
+  logger: createElectronLogger(),
+  logTag: "[coordinator]",
+});
 
 /**
  * Low-battery auto-stop policy handler.

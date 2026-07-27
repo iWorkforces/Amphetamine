@@ -83,6 +83,14 @@ vi.mock("../../src/main/settings.js", () => ({
   getSettings: mockGetSettings,
   onSettingsChanged: mockOnSettingsChanged,
   updateSettings: mockUpdateSettings,
+  getSettingsStore: () => ({
+    init: vi.fn(),
+    get: mockGetSettings,
+    update: mockUpdateSettings,
+    onChange: mockOnSettingsChanged,
+    flush: vi.fn(),
+    save: vi.fn(),
+  }),
 }));
 
 vi.mock("../../src/main/auto-launch.js", () => ({
@@ -98,7 +106,14 @@ vi.mock("../../src/main/sleep-prevention.js", () => ({
   syncPreventSleep: mockSyncPreventSleep,
   stopPreventingSleep: mockStopPreventingSleep,
   isPreventingSleep: mockIsPreventingSleep,
+  getSleepBlockerPort: () => ({
+    sync: mockSyncPreventSleep,
+    isActive: mockIsPreventingSleep,
+    stop: mockStopPreventingSleep,
+  }),
 }));
+
+// Use cases / logger pull through real modules; electron-log already mocked.
 
 vi.mock("../../src/main/battery-monitor.js", () => ({
   createBatteryMonitor: mockCreateBatteryMonitor,

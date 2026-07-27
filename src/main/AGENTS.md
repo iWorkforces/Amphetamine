@@ -10,12 +10,12 @@ Electron main process for lifecycle, tray, IPC, settings persistence, sleep prev
 | `coordinator.ts` | Central hub: settings diffing, sleep/session/tray/shortcut/battery/updater sync |
 | `platform/` | OS adapters; public entry `platform/index.ts` (see `platform/AGENTS.md`) |
 | `session-timer.ts` | Thin façade over `application/session` engine + clock/schedule adapters; no settings writes |
-| `sleep-prevention.ts` | Only `powerSaveBlocker` wrapper; accepts `SleepBlockMode` |
+| `sleep-prevention.ts` | Façade over `infrastructure/sleep` (`SleepBlockerPort`); sole blocker owner |
 | `battery-monitor.ts` | Threshold detector + `reconfigure()`; charge percent via `platform/battery-percent` |
 | `tray.ts` | Tray icon/menu cache, theme debounce, Check for Updates, destroy on cleanup |
 | `ipc.ts` | Typed IPC handler registration via `typedHandle()` |
 | `ipc-utils.ts` | Sender allowlist and typed handler utilities |
-| `settings.ts` | Async JSON settings, EventEmitter, write mutex, corrupt backup, `flushSettingsWriteChain()` |
+| `settings.ts` | Façade over `infrastructure/settings` (`SettingsStorePort`); `flushSettingsWriteChain()` |
 | `settings-window.ts` | BrowserWindow singleton; Dock (macOS) / taskbar (Windows) visibility while open |
 | `auto-updater.ts` | Hybrid updates: check/download/install when possible; browser fallback; `checkForUpdatesNow()` |
 | `auto-updater-utils.ts` | Pure updater helpers |
@@ -95,7 +95,7 @@ Electron main process for lifecycle, tray, IPC, settings persistence, sleep prev
 
 ## Anti-Patterns
 
-- Never call `powerSaveBlocker.start/stop` outside `sleep-prevention.ts`.
+- Never call `powerSaveBlocker.start/stop` outside `infrastructure/sleep` (main façade: `sleep-prevention.ts`).
 - Never bypass sender validation for IPC.
 - Never expose mutable `settingsCache`; return `{ ...settingsCache }`.
 - Never add settings validation branches in main; extend shared `VALIDATORS`.
