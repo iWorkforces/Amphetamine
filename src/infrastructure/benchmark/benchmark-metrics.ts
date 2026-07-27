@@ -1,6 +1,6 @@
 import { app } from "electron";
 import { cpus, freemem, totalmem } from "node:os";
-import type { RendererCountdownTimerCounters } from "../shared/benchmark-types.js";
+import type { RendererCountdownTimerCounters } from "../../shared/benchmark-types.js";
 
 export type MainTimerCounters = {
   readonly timerResourcesCreated: number;

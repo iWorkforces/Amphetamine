@@ -15,6 +15,7 @@ Implements application ports with Electron/Node. May import domain types and app
 | `sleep/power-save-blocker.ts` | `SleepBlockerPort` | sole `powerSaveBlocker` owner |
 | `shortcut/electron-global-shortcut.ts` | `GlobalShortcutPort` | register / unregisterAll |
 | `updater/electron-updater-port.ts` | `UpdaterPort` | injects notifier; hybrid policy stays in main/auto-updater |
+| `benchmark/` | (tooling) | production benchmark mode; stdout artifact; may import main tray/settings for measurement |
 
 ## Rules
 

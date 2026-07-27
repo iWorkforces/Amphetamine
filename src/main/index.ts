@@ -15,8 +15,8 @@ import {
   configureBenchmarkEnvironment,
   installBenchmarkTimerCounters,
   runBenchmarkIfRequested,
-} from "./benchmark.js";
-import { isBenchmarkMode } from "./benchmark-env.js";
+  isBenchmarkMode,
+} from "../infrastructure/benchmark/index.js";
 import { IPC_CHANNELS } from "../shared/types.js";
 import {
   MAIN_WINDOW_WIDTH,

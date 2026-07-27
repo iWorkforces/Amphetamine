@@ -21,9 +21,7 @@ Electron main process for lifecycle, tray, IPC, settings persistence, sleep prev
 | `settings-window.ts` | BrowserWindow singleton; Dock (macOS) / taskbar (Windows) visibility while open |
 | `auto-updater.ts` | Hybrid updates: check/download/install when possible; browser fallback; `checkForUpdatesNow()` |
 | `auto-updater-utils.ts` | Pure updater helpers |
-| `benchmark.ts` | Benchmark-mode measurement flow and stdout result artifact |
-| `benchmark-env.ts` | Benchmark env names and mode guard |
-| `benchmark-metrics.ts` | Pure benchmark artifact summaries |
+
 | `global-shortcut.ts` | Accelerator registration; broadcasts `SHORTCUT_REGISTRATION_FAILED` on failure |
 | `auto-launch.ts` | Login item integration (macOS `openAsHidden`; Windows without that flag — Wave 1) |
 | `security.ts` | WebContents hardening and navigation allowlist |
@@ -85,7 +83,7 @@ Electron main process for lifecycle, tray, IPC, settings persistence, sleep prev
 
 - `index.ts` calls `configureBenchmarkEnvironment()` and `installBenchmarkTimerCounters()` at module startup.
 - Benchmark mode skips auto-updater, samples popover/tray/settings responsiveness, then prints `AMPHETAMINE_BENCHMARK_RESULT:` JSON and quits.
-- `benchmark.ts` may dynamically import tray/settings modules for measurement; do not move those helpers into renderer code.
+- Benchmark mode lives under `src/infrastructure/benchmark/`; it may dynamically import tray/settings from main for measurement.
 
 ## Platform Rules
 

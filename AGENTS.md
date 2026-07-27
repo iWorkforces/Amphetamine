@@ -24,8 +24,9 @@ src/main/                 Electron main process, tray, IPC, settings, timers, up
   composition-root.ts     createAppComposition — ports, use cases, IPC/tray deps
   coordinator.ts          thin façade over composition (test/compat)
   platform/               OS adapters; public entry platform/index.ts
-  benchmark*.ts           production benchmark mode and metrics
   utils/                  broadcastToWindows, packageInfo guard
+src/infrastructure/       Electron/Node adapters (settings, sleep, schedule, benchmark, …)
+  benchmark/              production benchmark mode and metrics
 src/renderer/             popover UI (controls + status), CSS, benchmark countdown
   settings/               separate settings-window entry; see local AGENTS.md
 src/preload/              sandboxed contextBridge API
@@ -50,7 +51,7 @@ lib/, dist/, artifacts/   generated outputs; do not add AGENTS.md here
 | Tray/menu changes | `src/main/tray.ts`, `src/assets/AGENTS.md` | Tray filenames are generated contracts; menu includes Check for Updates |
 | Renderer popover | `src/renderer/index.ts` | Toggle prevent-sleep, session chips, cancel; countdown anchors; RAF DOM writes |
 | Settings UI | `src/renderer/settings/AGENTS.md` | Debounced saves, shortcut recorder, sleep block mode, shortcut-failure push |
-| Benchmark mode | `src/main/benchmark.ts`, `src/renderer/benchmark-countdown.ts`, `scripts/benchmark-performance.ts` | Requires built `lib/` output |
+| Benchmark mode | `src/infrastructure/benchmark/`, `src/renderer/benchmark-countdown.ts`, `scripts/benchmark-performance.ts` | Requires built `lib/` output |
 | Test mocking | `tests/AGENTS.md`, `tests/main/AGENTS.md`, `tests/renderer/AGENTS.md` | Main uses mocked Electron; renderer uses jsdom |
 | Dev/build scripts | `scripts/AGENTS.md` | Dev waits for CJS outputs and TCP port 5173; sticky typecheck script |
 | Platform OS gates | `src/main/platform/` | Prefer `isDarwin` / `isWin32`; no unguarded macOS-only Electron APIs |
