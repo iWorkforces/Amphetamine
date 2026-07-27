@@ -22,6 +22,7 @@ Electron renderer web context. Vanilla TypeScript only: main popover entry plus 
 - Calls `refreshSessionStatus()` before first render to avoid stale state flash.
 - Subscribes to `onSessionStatusUpdate`, `onSettingsChanged`, and `onWindowHide`.
 - Resizes the BrowserWindow through `window.api.window.setHeight()` after layout changes.
+- Effective status (dot/text) uses domain `isEffectivelyActive(preventSleep, sessionRunning)` — not a local formula.
 - Primary controls (do not require Settings):
   - Prevent Sleep toggle → `settings.set({ preventSleep })` (partial).
   - Duration chips (15m / 30m / 1h / 2h / Indefinite) → `session.start(duration)` only; **do not** write `defaultSessionDuration`.
