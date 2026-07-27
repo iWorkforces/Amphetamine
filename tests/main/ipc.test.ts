@@ -321,6 +321,64 @@ describe("ipc additional coverage", () => {
         expiresAt: null,
       });
     });
+
+    it(">1440 minutes: returns exact 24h failure reason and does not start session", async () => {
+      const mockWindow = { setSize: vi.fn() };
+      registerIpcHandlers(mockWindow, makeIpcDeps());
+      const handler = registeredHandlers.get(IPC_CHANNELS.SESSION_START);
+      const result = await handler!(validEvent, { durationMinutes: 1441 });
+      expect(result).toEqual({ ok: false, reason: "Duration cannot exceed 24 hours" });
+      expect(mockStartSession).not.toHaveBeenCalled();
+    });
+
+    it("exactly 1440 minutes: starts session (upper bound inclusive)", async () => {
+      mockStartSession.mockReturnValueOnce({
+        isRunning: true,
+        startedAt: 1_700_000_000_000,
+        expiresAt: 1_700_000_000_000 + 1440 * 60_000,
+        durationMinutes: 1440,
+      });
+      const mockWindow = { setSize: vi.fn() };
+      registerIpcHandlers(mockWindow, makeIpcDeps());
+      const handler = registeredHandlers.get(IPC_CHANNELS.SESSION_START);
+      const result = await handler!(validEvent, { durationMinutes: 1440 });
+      expect(mockStartSession).toHaveBeenCalledWith(1440);
+      expect(result).toEqual({
+        ok: true,
+        startedAt: 1_700_000_000_000,
+        durationMinutes: 1440,
+        expiresAt: 1_700_000_000_000 + 1440 * 60_000,
+      });
+    });
+
+    it("null duration (indefinite): starts session and returns ok payload", async () => {
+      mockStartSession.mockReturnValueOnce({
+        isRunning: true,
+        startedAt: 1_700_000_000_000,
+        expiresAt: null,
+        durationMinutes: null,
+      });
+      const mockWindow = { setSize: vi.fn() };
+      registerIpcHandlers(mockWindow, makeIpcDeps());
+      const handler = registeredHandlers.get(IPC_CHANNELS.SESSION_START);
+      const result = await handler!(validEvent, { durationMinutes: null });
+      expect(mockStartSession).toHaveBeenCalledWith(null);
+      expect(result).toEqual({
+        ok: true,
+        startedAt: 1_700_000_000_000,
+        durationMinutes: null,
+        expiresAt: null,
+      });
+    });
+
+    it("Infinity: returns invalid-duration failure and does not start session", async () => {
+      const mockWindow = { setSize: vi.fn() };
+      registerIpcHandlers(mockWindow, makeIpcDeps());
+      const handler = registeredHandlers.get(IPC_CHANNELS.SESSION_START);
+      const result = await handler!(validEvent, { durationMinutes: Number.POSITIVE_INFINITY });
+      expect(result).toEqual(invalidDurationResponse);
+      expect(mockStartSession).not.toHaveBeenCalled();
+    });
   });
 
   describe("SESSION_STATUS while a session is running", () => {
