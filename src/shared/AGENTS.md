@@ -24,7 +24,7 @@ Zero-runtime-dependency contracts shared by main, preload, renderer, scripts, an
 
 | Field | Meaning |
 |-------|---------|
-| `launchAtLogin` | macOS login item toggle |
+| `launchAtLogin` | OS login-item / start-at-login toggle (macOS + Windows) |
 | `preventSleep` | user sleep-prevention intent (not live session state) |
 | `defaultSessionDuration` | preference only: minutes or `null` for indefinite |
 | `sleepBlockMode` | `prevent-display-sleep` or `prevent-app-suspension` |

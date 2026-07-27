@@ -1,27 +1,30 @@
 # Build Resources - Packaging and Signing
 
-Source-controlled macOS packaging resources for electron-builder. This directory is not disposable output; `dist/` is output.
+Source-controlled packaging resources for electron-builder. Product targets: **macOS** (current) and **Windows** (Wave 4 packaging). This directory is not disposable output; `dist/` is output.
 
 ## Files
 
 | File | Role |
 |------|------|
 | `icon.icns` | macOS app icon consumed by electron-builder |
+| `icon.ico` | Windows app icon (planned Wave 4) |
 | `entitlements.mac.plist` | App entitlements: JIT + unsigned executable memory |
 | `entitlements.mac.inherit.plist` | Child-process entitlements matching app needs |
 | `after-pack.cjs` | ARM64 strip/locales optimization hook |
-| `flip-fuses.cjs` | Post-package Electron fuse hardening |
+| `flip-fuses.cjs` | Post-package Electron fuse hardening (mac paths today; multi-OS in Wave 4) |
 | `notarize.cjs` | Optional notarization hook; currently disabled by config |
 
 ## Packaging Flow
 
-Package scripts use:
+macOS package scripts use:
 
 1. `bun run build`
 2. `electron-builder --mac --<arch>`
 3. `node build/flip-fuses.cjs <arch>` for distributable package scripts
 
 `package:dir` builds an unpacked app only and does not automatically flip fuses.
+
+Windows packaging (`package:win`, NSIS, `icon.ico`, multi-OS fuse paths) lands in Wave 4.
 
 `build-macOS-dmg.sh` is the local wrapper: install deps, clean `dist/`, build, package, sign Developer ID if available, otherwise deep ad-hoc re-sign the `.app` without hardened runtime, ad-hoc sign the DMG, and append the environment suffix (e.g. `--environment beta` → `*-beta.dmg`).
 

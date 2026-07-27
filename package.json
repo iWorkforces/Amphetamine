@@ -3,7 +3,7 @@
   "version": "1.9.6",
   "author": "OCWorkforces Engineers",
   "authorEmail": "kennydizi@ocworkforces.com",
-  "description": "A macOS menu bar app that keeps your Mac awake. Lives in the system tray, prevents the system from going to sleep, and stays out of the Dock.",
+  "description": "A tray app that keeps your computer awake on macOS and Windows. Lives in the system tray, prevents the system from going to sleep, and stays out of the Dock/taskbar when idle.",
   "repository": "https://github.com/OCWorkforces/Amphetamine",
   "main": "lib/main/index.cjs",
   "devDependencies": {
