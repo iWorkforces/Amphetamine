@@ -47,7 +47,8 @@ Workflow definitions for lint/test/build, production release publishing, and dev
 - After `electron-builder`, basenames get a `-beta` suffix (e.g. `Amphetamine-1.9.5-arm64-beta.dmg`, `*-beta.exe`).
 - Artifacts: `dist-mac-beta-{arch}` and `dist-win-beta-{arch}` (`x64` / `arm64`) for 14 days.
 - **`release` job** publishes a GitHub **prerelease** (not latest production):
-  - Tag: `v{package.json.version}-beta.{run_number}` (unique per develop build)
+  - Tag: `v{package.json.version}-beta.{N}` where **N restarts at 1** for each package
+    version (max existing `vX.Y.Z-beta.*` + 1; not `github.run_number`)
   - Auto release notes via GitHub generate-notes API (range: previous `v*-beta.*`, else latest production `vX.Y.Z`)
   - Body: beta preamble + generated "What's Changed"
   - `prerelease: true`, `make_latest: false` so it does not replace production `vX.Y.Z` releases

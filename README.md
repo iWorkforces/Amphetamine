@@ -134,7 +134,7 @@ Installs deps, builds, packages, Developer ID-signs when available (else ad-hoc)
 |----------|---------|----------------|
 | **CI** | PR / push to `main` & `develop` | Lint, sticky typecheck, tests. **Push to `main` only:** package macOS arm64/x64 + Windows **x64 and arm64** artifacts |
 | **CD** | Successful CI `workflow_run` on `main` | Tag `v<version>` if missing; publish GitHub release (DMG/ZIP/EXE for all arches + updater metadata when present) |
-| **Beta** | Push to `develop` | Package macOS + Windows (x64 + arm64) with `-beta` filename suffix; GitHub **prerelease** `v{version}-beta.{run}` (not latest) |
+| **Beta** | Push to `develop` | Package macOS + Windows (x64 + arm64) with `-beta` filename suffix; GitHub **prerelease** `v{version}-beta.{N}` (N per package version starting at 1; not latest) |
 
 CI concurrency: PR runs cancel outdated checks for the same PR; branch-push runs do not cancel mid-flight (keyed by commit SHA).
 

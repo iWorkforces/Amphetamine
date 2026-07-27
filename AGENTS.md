@@ -120,4 +120,4 @@ bun run clean                  # remove lib/dist outputs
 - Electron pin is `^43.0.0`; do not downgrade below the patched line referenced by security comments.
 - Runtime deps are only `electron-log` and `electron-updater`; they are externalized in Rslib. Renderer must not import `electron-log`.
 - Production Rslib/Rsbuild builds drop console output.
-- Develop pushes/merges: CI lint/test; **Beta** workflow packages `*-beta` DMG/ZIP and publishes a GitHub **prerelease** (`vX.Y.Z-beta.{run}`), not a production release.
+- Develop pushes/merges: CI lint/test; **Beta** workflow packages `*-beta` DMG/ZIP and publishes a GitHub **prerelease** (`vX.Y.Z-beta.N`, N per version starting at 1), not a production release.

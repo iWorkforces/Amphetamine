@@ -278,14 +278,35 @@ jobs:
       - name: Extract version from package.json
         id: version
         run: |
+          set -euo pipefail
           VERSION=$(jq -r .version package.json)
           SHORT_SHA=$(echo "${GITHUB_SHA}" | cut -c1-7)
-          # Unique prerelease tag per develop build (same package version can ship many betas)
-          TAG="v${VERSION}-beta.${{ github.run_number }}"
+          # Per-version beta sequence: v1.9.7-beta.1, v1.9.7-beta.2, ...
+          # Do NOT use github.run_number — it is global across all workflow runs and does
+          # not reset when package.json version bumps (e.g. 1.9.6-beta.6 → 1.9.7-beta.7).
+          PREFIX="v${VERSION}-beta."
+          LAST=$(
+            git tag -l "${PREFIX}*" \
+              | sed -n "s/^${PREFIX}\\([0-9][0-9]*\\)$/\\1/p" \
+              | sort -n \
+              | tail -n 1 || true
+          )
+          if [ -n "${LAST}" ]; then
+            BETA_N=$((LAST + 1))
+          else
+            BETA_N=1
+          fi
+          TAG="${PREFIX}${BETA_N}"
+          # Guard against rare races if the tag already exists
+          while git rev-parse "${TAG}" >/dev/null 2>&1; do
+            BETA_N=$((BETA_N + 1))
+            TAG="${PREFIX}${BETA_N}"
+          done
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "beta_n=${BETA_N}" >> "$GITHUB_OUTPUT"
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
           echo "short_sha=${SHORT_SHA}" >> "$GITHUB_OUTPUT"
-          echo "Using beta tag: ${TAG}"
+          echo "Using beta tag: ${TAG} (sequence for v${VERSION})"
 
       - name: Resolve previous beta tag
         id: prev
