@@ -207,7 +207,10 @@ export interface AppSettings {
   defaultSessionDuration: number | null;
   /** Battery threshold (0-100) — auto-stop sleep prevention when on battery below threshold. 0 = disabled */
   batteryThreshold: number;
-  /** Global keyboard shortcut to toggle sleep prevention (e.g. Cmd+Shift+A). Empty string = use default */
+  /**
+   * Global keyboard shortcut to toggle sleep prevention
+   * (e.g. CommandOrControl+Shift+A). Empty string = use default.
+   */
   shortcut: string;
   /**
    * powerSaveBlocker type. `prevent-display-sleep` keeps the display on (default);

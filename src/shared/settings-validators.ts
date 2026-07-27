@@ -14,44 +14,105 @@ export const isNonEmptyString = (v: unknown): v is string => typeof v === "strin
 export const isSleepBlockMode = (v: unknown): v is SleepBlockMode =>
   v === "prevent-display-sleep" || v === "prevent-app-suspension";
 
+const ACCELERATOR_MODIFIERS = [
+  "Cmd",
+  "Command",
+  "CommandOrControl",
+  "CmdOrCtrl",
+  "Ctrl",
+  "Control",
+  "Option",
+  "Alt",
+  "Shift",
+  "Super",
+] as const;
+
+const MODIFIER_PATTERN =
+  /(CommandOrControl|CmdOrCtrl|Command|Cmd|Control|Ctrl|Option|Alt|Shift|Super)/;
+
+/** Host platform string for reserved-key / normalize rules (defaults to Node `process.platform`). */
+export type AcceleratorPlatform = string;
+
+function defaultPlatform(): AcceleratorPlatform {
+  // Avoid bare `process` (shared eslint has no Node globals); main/tests run under Node.
+  const proc = (globalThis as { process?: { platform?: string } }).process;
+  return typeof proc?.platform === "string" ? proc.platform : "darwin";
+}
+
 /**
- * Validates a macOS Electron accelerator string (e.g. "Cmd+Shift+A").
+ * On Windows, pure `Cmd`/`Command` modifiers have no effect in Electron.
+ * Rewrite them to `CommandOrControl` so stored macOS-centric prefs still work.
+ * Leaves Ctrl/Control/CommandOrControl unchanged.
+ */
+export function normalizeAcceleratorForPlatform(
+  accelerator: string,
+  platform: AcceleratorPlatform = defaultPlatform(),
+): string {
+  if (platform !== "win32") {
+    return accelerator;
+  }
+  return accelerator
+    .split("+")
+    .map((part) => {
+      const token = part.trim();
+      if (token === "Cmd" || token === "Command") {
+        return "CommandOrControl";
+      }
+      return token;
+    })
+    .join("+");
+}
+
+function isReservedAccelerator(s: string, platform: AcceleratorPlatform): boolean {
+  // macOS / cross-platform: Cmd-family + Q/W/Tab/Space (and CommandOrControl aliases).
+  const CMD_RESERVED_KEYS = ["Q", "W", "Tab", "Space"];
+  const CMD_ALIASES = ["Cmd", "Command", "CommandOrControl", "CmdOrCtrl"];
+  const cmdForbidden = CMD_ALIASES.flatMap((mod) =>
+    CMD_RESERVED_KEYS.map((key) => new RegExp(`^${mod}\\+${key}$`, "i")),
+  );
+  if (cmdForbidden.some((r) => r.test(s))) {
+    return true;
+  }
+
+  // Windows (and general Ctrl) reserved combos.
+  if (platform === "win32") {
+    if (/^(Ctrl|Control)\+W$/i.test(s)) {
+      return true;
+    }
+    if (/^Alt\+F4$/i.test(s)) {
+      return true;
+    }
+  }
+
+  // Alt+F4 is never a sensible global app shortcut on any OS we target.
+  if (/^Alt\+F4$/i.test(s)) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Validates an Electron accelerator string (e.g. "CommandOrControl+Shift+A").
  * Requires:
  *  - non-empty string
  *  - at least one modifier (Cmd/Command/Ctrl/Control/Option/Alt/Shift/Super)
  *  - at least one non-modifier key
- *  - not a reserved system shortcut (Cmd+Q, Cmd+W, Cmd+Tab, Cmd+Space)
+ *  - not a reserved system shortcut (platform-aware)
  */
-export const isValidAccelerator = (s: unknown): s is string => {
+export const isValidAccelerator = (
+  s: unknown,
+  platform: AcceleratorPlatform = defaultPlatform(),
+): s is string => {
   if (!isNonEmptyString(s)) return false;
 
-  const MODIFIERS = [
-    "Cmd",
-    "Command",
-    "CommandOrControl",
-    "CmdOrCtrl",
-    "Ctrl",
-    "Control",
-    "Option",
-    "Alt",
-    "Shift",
-    "Super",
-  ];
-  const modifierPattern =
-    /(CommandOrControl|CmdOrCtrl|Command|Cmd|Control|Ctrl|Option|Alt|Shift|Super)/;
-  if (!modifierPattern.test(s)) return false;
+  if (!MODIFIER_PATTERN.test(s)) return false;
 
   const parts = s.split("+").map((p) => p.trim());
-  const nonModifiers = parts.filter((p) => !MODIFIERS.includes(p));
+  const nonModifiers = parts.filter((p) => !(ACCELERATOR_MODIFIERS as readonly string[]).includes(p));
   if (nonModifiers.length === 0) return false;
 
-  // Reserved/system shortcuts across all Cmd-alias spellings.
-  const RESERVED_KEYS = ["Q", "W", "Tab", "Space"];
-  const CMD_ALIASES = ["Cmd", "Command", "CommandOrControl", "CmdOrCtrl"];
-  const forbiddenCombos = CMD_ALIASES.flatMap((mod) =>
-    RESERVED_KEYS.map((key) => new RegExp(`^${mod}\\+${key}$`, "i")),
-  );
-  if (forbiddenCombos.some((r) => r.test(s))) return false;
+  if (isReservedAccelerator(s, platform)) return false;
 
   return true;
 };
@@ -61,8 +122,10 @@ export const isValidAccelerator = (s: unknown): s is string => {
  *  - an empty string (sentinel for "use default shortcut", see AppSettings.shortcut)
  *  - a valid Electron accelerator (see {@link isValidAccelerator})
  */
-export const isValidShortcutSetting = (v: unknown): v is string =>
-  v === "" || isValidAccelerator(v);
+export const isValidShortcutSetting = (
+  v: unknown,
+  platform: AcceleratorPlatform = defaultPlatform(),
+): v is string => v === "" || isValidAccelerator(v, platform);
 
 export const validateBoolean = (value: unknown, defaultValue: boolean): boolean =>
   isBoolean(value) ? value : defaultValue;
@@ -92,7 +155,11 @@ export const VALIDATORS: { [K in keyof AppSettings]: SettingsValidator<K> } = {
     return isPositiveNumber(v) ? v : f;
   },
   batteryThreshold: (v, f) => (isClamped0to100(v) ? v : f),
-  shortcut: (v, f) => (isValidShortcutSetting(v) ? v : f),
+  shortcut: (v, f) => {
+    if (!isValidShortcutSetting(v)) return f;
+    if (v === "") return v;
+    return normalizeAcceleratorForPlatform(v);
+  },
   sleepBlockMode: (v, f) => (isSleepBlockMode(v) ? v : f),
 };
 
@@ -107,6 +174,8 @@ function applyValidator<K extends keyof AppSettings>(
 /**
  * Map legacy disk keys into current AppSettings shape before validation.
  * `sessionDuration` (pre-split) → `defaultSessionDuration`.
+ * On win32, pure Cmd/Command accelerators are normalized toward CommandOrControl
+ * via {@link normalizeAcceleratorForPlatform} during shortcut validation.
  */
 export function migrateRawSettingsRecord(raw: Record<string, unknown>): Record<string, unknown> {
   const next: Record<string, unknown> = { ...raw };
@@ -156,7 +225,12 @@ export function mergeValidatedPartial(
     const incoming = partial[key];
     if (incoming === undefined) continue;
     const validated = applyValidator(key, incoming, base[key]);
-    if (validated !== incoming) {
+    // Shortcut may be rewritten (Cmd → CommandOrControl on win32) while still accepted.
+    if (key === "shortcut") {
+      if (!isValidShortcutSetting(incoming)) {
+        rejectedKeys.push(key);
+      }
+    } else if (validated !== incoming) {
       rejectedKeys.push(key);
     }
     assignValidated(merged, key, incoming);

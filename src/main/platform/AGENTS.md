@@ -19,7 +19,7 @@ Implementation files remain importable for focused unit tests (e.g. `battery-per
 | `shell.ts` | Activation policy, Dock icon, login-item settings builders | 1 |
 | `window-chrome.ts` | BrowserWindow chrome fragments (popover / settings / about) | 1 |
 | `battery-percent.ts` | Charge percent: pmset (darwin) / PowerShell CIM (win32) | 2 |
-| `accelerators.ts` | Main-side accelerator defaults if needed (planned) | 3 |
+| (shortcuts) | Defaults + reserved keys live in `global-shortcut.ts` / `shared/settings-validators.ts`; UI labels use preload `platform.os` | 3 |
 
 ## Rules
 

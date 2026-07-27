@@ -35,7 +35,7 @@ Zero-runtime-dependency contracts shared by main, preload, renderer, scripts, an
 - Runtime session state is **not** an `AppSettings` field; it lives in `session-timer` and `SessionStatusResponse`.
 - `mergeValidatedPartial()` uses `VALIDATORS`; extend the table for new fields.
 - `validateRawSettings()`: `migrateRawSettingsRecord` (legacy `sessionDuration` → `defaultSessionDuration`) then merge through `VALIDATORS` + defaults.
-- Shortcut validation rejects reserved Cmd aliases for Q, W, Tab, and Space.
+- Shortcut validation rejects reserved Cmd aliases (Q/W/Tab/Space) and Windows Ctrl+W / Alt+F4; pure Cmd is normalized to CommandOrControl on win32.
 - `isSleepBlockMode` guards the two Electron `powerSaveBlocker` type strings.
 
 ## Data Model Rules
