@@ -74,9 +74,9 @@ lib/, dist/, artifacts/   generated outputs; do not add AGENTS.md here
 - Never call `powerSaveBlocker.start/stop` outside `sleep-prevention.ts`.
 - Never bypass `validateSender()` for IPC. `ipcMain.on()` is allowed only with explicit sender validation.
 - Never expose mutable settings state; return cloned settings snapshots.
-- Never use `Date.now()` for elapsed session timing. Exception: `session-timer.ts` wall-clock anchor for sleep-resilient expiry (macOS/Windows).
+- Never use `Date.now()` for elapsed session timing. Exception: `session-timer.ts` wall-clock anchor for sleep-resilient expiry (all supported OSes).
 - Never call macOS-only Electron APIs (`app.setActivationPolicy`, `app.dock`, `vibrancy`, `openAsHidden`) without an `isDarwin()` guard.
-- Never shell out to `pmset` outside the darwin battery-percent provider (see `src/main/platform/`).
+- Never shell out to `pmset` or PowerShell battery queries outside `src/main/platform/battery-percent.ts`.
 - Never use `JSON.parse(...) as T`; parse to `unknown` and guard.
 - Never mutate `DEFAULT_SETTINGS`.
 - Never use `as any`, `@ts-ignore`, or `@ts-expect-error` in `src/`.
