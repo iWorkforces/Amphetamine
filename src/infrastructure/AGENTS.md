@@ -13,6 +13,8 @@ Implements application ports with Electron/Node. May import domain types and app
 | `settings/file-settings-store.ts` | `SettingsStorePort` | atomic JSON + write mutex; dialog via save-failure port |
 | `settings/dialog-save-failure.ts` | `SettingsSaveFailurePort` | `dialog.showErrorBox` |
 | `sleep/power-save-blocker.ts` | `SleepBlockerPort` | sole `powerSaveBlocker` owner |
+| `shortcut/electron-global-shortcut.ts` | `GlobalShortcutPort` | register / unregisterAll |
+| `updater/electron-updater-port.ts` | `UpdaterPort` | injects notifier; hybrid policy stays in main/auto-updater |
 
 ## Rules
 
