@@ -10,7 +10,7 @@ Main-process Vitest suites run in Node with Electron mocked. They cover lifecycl
 | IPC/security | `ipc.test.ts`, `ipc-handlers.test.ts`, `preload.test.ts` |
 | State systems | `coordinator.test.ts`, `session-timer.test.ts`, `settings.test.ts`, `settings.predicates.test.ts` |
 | OS integrations | `sleep-prevention.test.ts`, `battery-monitor.test.ts`, `auto-launch.test.ts`, `global-shortcut.test.ts`, `tray.test.ts` |
-| Platform adapters | `platform.test.ts` (pure `isDarwin` / `isWin32` / `resolvePlatformId`) |
+| Platform adapters | `platform.test.ts`, `battery-percent.test.ts` (parsers + multi-OS charge reads) |
 | Updater/utilities | `auto-updater.test.ts`, `broadcast.test.ts`, `packageInfo.test.ts`, `constants.test.ts` |
 
 ## Mocking Rules
@@ -49,7 +49,8 @@ Main-process Vitest suites run in Node with Electron mocked. They cover lifecycl
 
 ## Anti-Patterns
 
-- Never let tests launch real Electron windows or `pmset`.
+- Never let tests launch real Electron windows, `pmset`, or PowerShell battery queries.
+- Battery monitor integration tests mock `platform/index` (`getBatteryPercent` only); parser/exec coverage lives in `battery-percent.test.ts` against `battery-percent.js`.
 - Never mutate hoisted mocks across tests without resetting/restoring.
 - Never weaken discriminated-union coverage when source adds an exhaustive branch.
 - Never reintroduce expectations that the session timer writes `defaultSessionDuration` into settings.
