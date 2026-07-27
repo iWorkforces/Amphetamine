@@ -3,7 +3,11 @@ import log from "electron-log";
 import { IPC_CHANNELS } from "../shared/types.js";
 import { broadcastToWindows } from "./utils/broadcast.js";
 
-const DEFAULT_SHORTCUT = "Cmd+Shift+A";
+/**
+ * Default toggle accelerator when settings.shortcut is empty.
+ * CommandOrControl → ⌘ on macOS, Ctrl on Windows.
+ */
+export const DEFAULT_SHORTCUT = "CommandOrControl+Shift+A";
 
 /**
  * Tracks the currently-registered accelerator so subsequent calls to

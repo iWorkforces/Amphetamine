@@ -142,13 +142,22 @@ jobs:
           name: dist-mac-x64
           path: artifacts/x64
 
+      - name: Download Windows x64 artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          name: dist-win-x64
+          path: artifacts/win-x64
+
       - name: Verify release artifacts
         run: |
           DMG_COUNT=$(find artifacts -name '*.dmg' 2>/dev/null | wc -l | tr -d ' ')
           ZIP_COUNT=$(find artifacts -name '*.zip' 2>/dev/null | wc -l | tr -d ' ')
-          echo "Found ${DMG_COUNT} DMG(s), ${ZIP_COUNT} ZIP(s)"
-          if [ "$DMG_COUNT" -eq 0 ] && [ "$ZIP_COUNT" -eq 0 ]; then
-            echo 'ERROR: No DMG or ZIP artifacts found to release'
+          EXE_COUNT=$(find artifacts -name '*.exe' 2>/dev/null | wc -l | tr -d ' ')
+          echo "Found ${DMG_COUNT} DMG(s), ${ZIP_COUNT} ZIP(s), ${EXE_COUNT} EXE(s)"
+          if [ "$DMG_COUNT" -eq 0 ] && [ "$ZIP_COUNT" -eq 0 ] && [ "$EXE_COUNT" -eq 0 ]; then
+            echo 'ERROR: No DMG, ZIP, or EXE artifacts found to release'
             exit 1
           fi
 
@@ -164,5 +173,8 @@ jobs:
           files: |
             artifacts/**/*.dmg
             artifacts/**/*.zip
+            artifacts/**/*.exe
+            artifacts/**/*.yml
+            artifacts/**/*.blockmap
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

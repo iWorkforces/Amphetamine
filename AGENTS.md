@@ -1,6 +1,6 @@
 # Amphetamine
 
-macOS tray-only Electron app. Prevents system sleep through user intent or timed sessions. Battery-aware auto-disable, global shortcut, settings window, auto-updater, and benchmark harness.
+Tray-only Electron app for **macOS and Windows**. Prevents system sleep through user intent or timed sessions. Battery-aware auto-disable, global shortcut, settings window, auto-updater, and benchmark harness.
 
 ## Overview
 
@@ -12,7 +12,7 @@ macOS tray-only Electron app. Prevents system sleep through user intent or timed
 | Test | Vitest 4 workspace: main Node + renderer jsdom |
 | Lint | ESLint 10 flat; sticky type-safety rules as errors for `src/` |
 
-macOS only. No cross-platform code. Renderer is vanilla TypeScript; no UI framework.
+Product platforms: **darwin** and **win32**. OS differences go through thin main-process platform adapters (`src/main/platform/`). Do not scatter unguarded macOS-only Electron APIs. Renderer is vanilla TypeScript; no UI framework. Linux is out of scope.
 
 ## Source Map
 
@@ -20,6 +20,7 @@ macOS only. No cross-platform code. Renderer is vanilla TypeScript; no UI framew
 src/main/                 Electron main process, tray, IPC, settings, timers, updater
   index.ts                bootstrap, single quit orchestrator, benchmark entry
   coordinator.ts          settings -> system sync hub
+  platform/               OS adapters; public entry platform/index.ts
   benchmark*.ts           production benchmark mode and metrics
   utils/                  broadcastToWindows, packageInfo guard
 src/renderer/             popover UI (controls + status), CSS, benchmark countdown
@@ -48,6 +49,7 @@ lib/, dist/, artifacts/   generated outputs; do not add AGENTS.md here
 | Benchmark mode | `src/main/benchmark.ts`, `src/renderer/benchmark-countdown.ts`, `scripts/benchmark-performance.ts` | Requires built `lib/` output |
 | Test mocking | `tests/AGENTS.md`, `tests/main/AGENTS.md`, `tests/renderer/AGENTS.md` | Main uses mocked Electron; renderer uses jsdom |
 | Dev/build scripts | `scripts/AGENTS.md` | Dev waits for CJS outputs and TCP port 5173; sticky typecheck script |
+| Platform OS gates | `src/main/platform/` | Prefer `isDarwin` / `isWin32`; no unguarded macOS-only Electron APIs |
 | Packaging/signing | `build/AGENTS.md`, `electron-builder.yml`, `build-macOS-dmg.sh` | Fuses and signing decisions are non-default; local `--environment` suffix |
 | CI/CD / beta | `.github/workflows/AGENTS.md` | Main CI packages + CD releases; develop beta packages `-beta` DMG/ZIP |
 
@@ -72,7 +74,9 @@ lib/, dist/, artifacts/   generated outputs; do not add AGENTS.md here
 - Never call `powerSaveBlocker.start/stop` outside `sleep-prevention.ts`.
 - Never bypass `validateSender()` for IPC. `ipcMain.on()` is allowed only with explicit sender validation.
 - Never expose mutable settings state; return cloned settings snapshots.
-- Never use `Date.now()` for elapsed session timing. Exception: `session-timer.ts` wall-clock anchor for macOS sleep-resilient expiry.
+- Never use `Date.now()` for elapsed session timing. Exception: `session-timer.ts` wall-clock anchor for sleep-resilient expiry (all supported OSes).
+- Never call macOS-only Electron APIs (`app.setActivationPolicy`, `app.dock`, `vibrancy`, `openAsHidden`) without an `isDarwin()` guard.
+- Never shell out to `pmset` or PowerShell battery queries outside `src/main/platform/battery-percent.ts`.
 - Never use `JSON.parse(...) as T`; parse to `unknown` and guard.
 - Never mutate `DEFAULT_SETTINGS`.
 - Never use `as any`, `@ts-ignore`, or `@ts-expect-error` in `src/`.
@@ -93,6 +97,7 @@ bun run test:coverage          # v8 coverage
 bun run build                  # main + preload + renderer builds
 bun run benchmark:performance  # requires bun run build first
 bun run package                # arm64 DMG/ZIP + flip-fuses; also :x64, :universal, :dir
+bun run package:win            # Windows x64 NSIS + portable + flip-fuses; also :win:dir
 bun run typecheck              # tsc -b; use typecheck:tests for tests
 bun run typecheck:sticky       # assert sticky strict compiler flags
 bun run lint                   # ESLint src/ tests/
@@ -107,8 +112,8 @@ bun run clean                  # remove lib/dist outputs
 - Popover is the primary control surface: prevent-sleep toggle, duration chips (start only; do not write preference), cancel session, Settings/Quit.
 - Settings duration select still starts a session **and** updates `defaultSessionDuration`.
 - Sleep block mode defaults to `prevent-display-sleep`; `prevent-app-suspension` allows display sleep.
-- Login items use `openAsHidden: true`.
-- Settings window temporarily shows the Dock icon; tray-only mode returns on close.
+- Login items: macOS uses `openAsHidden: true`; Windows uses `openAtLogin` without that flag (Wave 1).
+- Settings window: macOS temporarily shows the Dock icon; Windows shows a taskbar button while open (Wave 1). Tray-only mode returns on close.
 - Popover hide on blur uses typed `window:hide`, not DOM `CustomEvent`.
 - Auto-updater is hybrid: **Check for Updates** tries in-app download/install when possible; falls back to the GitHub release page on failure. Background checks do not auto-download or open the browser.
 - Electron pin is `^43.0.0`; do not downgrade below the patched line referenced by security comments.

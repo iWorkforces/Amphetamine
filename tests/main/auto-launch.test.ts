@@ -14,6 +14,17 @@ vi.mock("electron", () => ({
   },
 }));
 
+/** Expected setLoginItemSettings payload for the host OS under test. */
+function expectedLoginSettings(openAtLogin: boolean): {
+  openAtLogin: boolean;
+  openAsHidden?: boolean;
+} {
+  if (process.platform === "darwin") {
+    return { openAtLogin, openAsHidden: true };
+  }
+  return { openAtLogin };
+}
+
 describe("auto-launch", () => {
   let getAutoLaunchStatus: () => boolean;
   let setAutoLaunch: (_enabled: boolean) => void;
@@ -51,20 +62,14 @@ describe("auto-launch", () => {
   });
 
   describe("setAutoLaunch", () => {
-    it("calls app.setLoginItemSettings with enabled=true", () => {
+    it("calls app.setLoginItemSettings with enabled=true and platform-correct options", () => {
       setAutoLaunch(true);
-      expect(mockSetLoginItemSettings).toHaveBeenCalledWith({
-        openAtLogin: true,
-        openAsHidden: true,
-      });
+      expect(mockSetLoginItemSettings).toHaveBeenCalledWith(expectedLoginSettings(true));
     });
 
-    it("calls app.setLoginItemSettings with enabled=false", () => {
+    it("calls app.setLoginItemSettings with enabled=false and platform-correct options", () => {
       setAutoLaunch(false);
-      expect(mockSetLoginItemSettings).toHaveBeenCalledWith({
-        openAtLogin: false,
-        openAsHidden: true,
-      });
+      expect(mockSetLoginItemSettings).toHaveBeenCalledWith(expectedLoginSettings(false));
     });
 
     it("is safe to call even if setLoginItemSettings throws", () => {
@@ -79,19 +84,13 @@ describe("auto-launch", () => {
     it("calls setAutoLaunch(true) when current status is false and desired is true", () => {
       mockGetLoginItemSettings.mockReturnValue({ openAtLogin: false });
       syncAutoLaunch(true);
-      expect(mockSetLoginItemSettings).toHaveBeenCalledWith({
-        openAtLogin: true,
-        openAsHidden: true,
-      });
+      expect(mockSetLoginItemSettings).toHaveBeenCalledWith(expectedLoginSettings(true));
     });
 
     it("calls setAutoLaunch(false) when current status is true and desired is false", () => {
       mockGetLoginItemSettings.mockReturnValue({ openAtLogin: true });
       syncAutoLaunch(false);
-      expect(mockSetLoginItemSettings).toHaveBeenCalledWith({
-        openAtLogin: false,
-        openAsHidden: true,
-      });
+      expect(mockSetLoginItemSettings).toHaveBeenCalledWith(expectedLoginSettings(false));
     });
 
     it("does not call setAutoLaunch when current status matches desired", () => {

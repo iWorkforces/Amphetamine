@@ -158,19 +158,19 @@ describe("main index - createWindow", () => {
     expect(callArgs.alwaysOnTop).toBe(true);
   });
 
-  it("creates BrowserWindow with frame false and transparent true", async () => {
+  it("creates BrowserWindow with frame false and platform popover chrome", async () => {
     await import("../../src/main/index.js");
 
     const callArgs = BrowserWindow.mock.calls[0]![0] as Record<string, unknown>;
     expect(callArgs.frame).toBe(false);
-    expect(callArgs.transparent).toBe(true);
-  });
-
-  it("creates BrowserWindow with vibrancy popover", async () => {
-    await import("../../src/main/index.js");
-
-    const callArgs = BrowserWindow.mock.calls[0]![0] as Record<string, unknown>;
-    expect(callArgs.vibrancy).toBe("popover");
+    expect(callArgs.skipTaskbar).toBe(true);
+    if (process.platform === "darwin") {
+      expect(callArgs.transparent).toBe(true);
+      expect(callArgs.vibrancy).toBe("popover");
+    } else {
+      expect(callArgs.transparent).toBe(false);
+      expect(callArgs.vibrancy).toBeUndefined();
+    }
   });
 
   it("creates BrowserWindow with sandboxed webPreferences", async () => {

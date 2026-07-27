@@ -36,10 +36,11 @@ export interface SessionTimerDeps {
   onSessionActiveChange?: (active: boolean) => void;
   /**
    * Optional Electron `powerMonitor`. When provided, the timer registers a
-   * `resume` listener so timed sessions can recover from system sleep — macOS
-   * pauses both `setTimeout` (libuv `uv_timer` / `mach_absolute_time`) and
-   * `performance.now()` while asleep, so a 60-min session started before sleep
-   * would otherwise fire late by exactly the sleep duration.
+   * `resume` listener so timed sessions can recover from system sleep.
+   * On macOS (and often on Windows S3 / Modern Standby), both `setTimeout` and
+   * `performance.now()` can pause while the machine is asleep, so a 60-min
+   * session started before sleep would otherwise fire late by the sleep duration.
+   * Wall-clock expiry (`Date.now`) is the source of truth after resume.
    */
   powerMonitor?: typeof powerMonitor;
 }
@@ -70,7 +71,7 @@ type InternalSessionState =
       startedAt: PerfTimestamp;
       expiresAt: PerfTimestamp;
       // Intentional Date.now(): wall-clock anchor for sleep-resilient expiry.
-      // performance.now() is monotonic and pauses during macOS sleep.
+      // performance.now() is monotonic and may pause during system sleep.
       wallClockExpiresAt: number;
       durationMinutes: number;
       expiryTimer: ReturnType<typeof setTimeout>;
@@ -183,7 +184,7 @@ export function createSessionTimer(deps: SessionTimerDeps): SessionTimerHandle {
     const durationMs = durationMinutes * MS_PER_MINUTE;
     const expiresAt = asPerf(startedAt + durationMs);
     // Intentional Date.now(): wall-clock anchor for sleep-resilient expiry.
-    // performance.now() is monotonic and pauses during macOS sleep.
+    // performance.now() is monotonic and may pause during system sleep.
     const wallClockExpiresAt = Date.now() + durationMs;
 
     const expiryTimer = setTimeout(() => {
@@ -227,10 +228,10 @@ export function createSessionTimer(deps: SessionTimerDeps): SessionTimerHandle {
   };
 
   /**
-   * Handle macOS system resume from sleep. Both `setTimeout` and
-   * `performance.now()` pause during sleep on macOS, so a timed session's
-   * expiry timer would otherwise fire late by the sleep duration. We re-arm
-   * the timer using the wall-clock anchor captured at start.
+   * Handle system resume from sleep (`powerMonitor` "resume").
+   * Both `setTimeout` and `performance.now()` can pause during sleep (macOS;
+   * Windows S3 / Modern Standby best-effort). Re-arm the expiry timer using the
+   * wall-clock anchor captured at session start so timed sessions do not run long.
    */
   const handleResume = (): void => {
     if (state.kind !== "timed") return;

@@ -24,6 +24,7 @@ const mockApi = {
     checkForUpdates: vi.fn(),
     onStatus: vi.fn(() => vi.fn()),
   },
+  platform: { os: "darwin" as string },
 };
 
 vi.mock("electron-log", () => ({

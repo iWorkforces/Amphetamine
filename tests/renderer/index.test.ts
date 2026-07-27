@@ -31,6 +31,7 @@ const mockApi = {
   benchmark: {
     isEnabled: vi.fn(() => false),
   },
+  platform: { os: "darwin" as string },
 };
 
 function setupDom(): void {

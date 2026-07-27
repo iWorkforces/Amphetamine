@@ -1,8 +1,6 @@
 import { powerMonitor } from "electron";
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
 import log from "electron-log";
-import { BATTERY_CHECK_TIMEOUT_MS } from "./constants.js";
+import { getBatteryPercent } from "./platform/index.js";
 
 /** Interval (ms) between periodic battery polls while on battery and preventing sleep. */
 const PERIODIC_BATTERY_CHECK_MS = 60_000;
@@ -12,8 +10,6 @@ function isThresholdEnabled(threshold: number): boolean {
   return Number.isFinite(threshold) && threshold > 0;
 }
 
-const execFileAsync = promisify(execFile);
-
 /**
  * Dependencies for the battery monitor.
  *
@@ -22,6 +18,8 @@ const execFileAsync = promisify(execFile);
  * the policy response (cancelling sessions, disabling standing preferences,
  * and stopping sleep prevention). The monitor never touches sleep-prevention
  * state directly.
+ *
+ * Charge percent is read via `platform/battery-percent` (pmset / PowerShell).
  *
  * All fields are required — there is no silent fallback. Wiring is enforced
  * at construction time by `createBatteryMonitor`.
@@ -207,41 +205,4 @@ export function createBatteryMonitor(deps: BatteryDeps): BatteryMonitorHandle {
     onPreventSleepChange,
     reconfigure,
   };
-}
-
-/**
- * Parse battery percentage from `pmset -g batt` stdout.
- * Returns the integer percentage (0-100), or null if:
- * - No "InternalBattery" found in output (desktop Mac)
- * - No percentage pattern matched
- * - Output is empty or malformed
- */
-const PCT_REGEX = /(\d+)%/;
-
-export function parsePmsetOutput(stdout: string): number | null {
-  if (!stdout.includes("InternalBattery")) {
-    return null;
-  }
-  const internalLine = stdout.split("\n").find((line) => line.includes("InternalBattery"));
-  if (internalLine === undefined) {
-    return null;
-  }
-  const match = internalLine.match(PCT_REGEX);
-  if (match && match[1] !== undefined) {
-    const parsed = parseInt(match[1], 10);
-    return Number.isNaN(parsed) ? null : parsed;
-  }
-  return null;
-}
-
-export async function getBatteryPercent(): Promise<number | null> {
-  try {
-    const { stdout } = await execFileAsync("/usr/bin/pmset", ["-g", "batt"], {
-      timeout: BATTERY_CHECK_TIMEOUT_MS,
-    });
-    return parsePmsetOutput(stdout);
-  } catch (err) {
-    log.warn("[battery-monitor] Failed to get battery percentage:", err);
-    return null;
-  }
 }

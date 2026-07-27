@@ -28,6 +28,7 @@ import {
   isDev,
 } from "./constants.js";
 import { hardenWebContents } from "./security.js";
+import { enterTrayOnlyMode, popoverWindowChrome } from "./platform/index.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const mainProcessStartMs = performance.now();
@@ -109,13 +110,8 @@ function createWindow(): BrowserWindow {
     resizable: false,
     movable: false,
     alwaysOnTop: true,
-    skipTaskbar: true,
-    vibrancy: "popover",
-    visualEffectState: "active",
-    titleBarStyle: "hidden",
-    transparent: true,
-    hasShadow: true,
     paintWhenInitiallyHidden: false,
+    ...popoverWindowChrome(),
     webPreferences: {
       preload: path.join(__dirname, "..", "preload", "index.cjs"),
       sandbox: true,
@@ -171,8 +167,8 @@ if (!app.requestSingleInstanceLock()) {
 }
 void app.whenReady().then(async () => {
   const appReadyMs = performance.now() - mainProcessStartMs;
-  // Register as accessory app — no Dock icon, no menu bar
-  app.setActivationPolicy("accessory");
+  // Tray-only shell: macOS accessory policy; Windows uses skipTaskbar per window
+  enterTrayOnlyMode();
   mainWindow = createWindow();
   const ipcDeps: IpcDeps = {
     getSettings,

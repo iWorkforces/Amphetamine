@@ -21,7 +21,8 @@
   --radius: 10px;
   --shadow: 0 4px 24px rgba(0, 0, 0, 0.18);
   font-family:
-    -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+    -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable", "Segoe UI",
+    system-ui, sans-serif;
   font-size: 13px;
   -webkit-font-smoothing: antialiased;
 }

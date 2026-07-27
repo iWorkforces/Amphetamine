@@ -40,6 +40,10 @@ describe("preload", () => {
     expect(mockExposeInMainWorld).toHaveBeenCalledWith("api", expect.any(Object));
   });
 
+  it("exposes platform.os from process.platform", () => {
+    expect(api.platform.os).toBe(process.platform);
+  });
+
   it("window.setHeight calls ipcRenderer.send with channel and height", () => {
     api.window.setHeight(300);
 

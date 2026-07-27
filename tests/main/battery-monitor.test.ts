@@ -9,7 +9,8 @@ const mockPowerMonitor = vi.hoisted(() => ({
 const mockLogInfo = vi.hoisted(() => vi.fn());
 const mockLogWarn = vi.hoisted(() => vi.fn());
 
-const mockExecFile = vi.hoisted(() => vi.fn());
+/** Controllable charge percent for monitor integration tests (platform-independent). */
+const mockGetBatteryPercent = vi.hoisted(() => vi.fn().mockResolvedValue(75));
 
 vi.mock("electron", () => ({
   app: { isPackaged: false },
@@ -20,13 +21,17 @@ vi.mock("electron-log", () => ({
   default: { info: mockLogInfo, warn: mockLogWarn, error: vi.fn() },
 }));
 
-vi.mock("node:child_process", () => ({
-  execFile: mockExecFile,
-}));
+vi.mock("../../src/main/platform/index.js", async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...(actual as Record<string, unknown>),
+    getBatteryPercent: (...args: unknown[]) =>
+      mockGetBatteryPercent(...args) as Promise<number | null>,
+  };
+});
 
 describe("battery-monitor", () => {
   let handle: BatteryMonitorHandle;
-  let getBatteryPercent: () => Promise<number | null>;
   let mockGetThreshold: ReturnType<typeof vi.fn<() => number>>;
   let mockOnAutoStop: ReturnType<typeof vi.fn<() => void>>;
   let mockIsActive: ReturnType<typeof vi.fn<() => boolean>>;
@@ -50,24 +55,9 @@ describe("battery-monitor", () => {
     mockGetThreshold = vi.fn<() => number>().mockReturnValue(0);
     mockOnAutoStop = vi.fn<() => void>();
     mockIsActive = vi.fn<() => boolean>().mockReturnValue(false);
-
-    mockExecFile.mockImplementation(
-      (
-        _cmd: string,
-        _args: string[],
-        _opts: Record<string, unknown>,
-        cb: (_err: Error | null, _result: { stdout: string }) => void,
-      ) => {
-        cb(null, {
-          stdout:
-            "Now drawing from 'Battery Power'\n -InternalBattery-0 (id=1234)\t75%; discharging",
-        });
-      },
-    );
+    mockGetBatteryPercent.mockResolvedValue(75);
 
     handle = await buildHandle();
-    const mod = await import("../../src/main/battery-monitor.js");
-    getBatteryPercent = mod.getBatteryPercent;
   });
 
   afterEach(() => {
@@ -85,52 +75,6 @@ describe("battery-monitor", () => {
       await handle.initBatteryMonitoring();
 
       expect(mockPowerMonitor.on).toHaveBeenCalledWith("on-ac", expect.any(Function));
-    });
-  });
-
-  describe("getBatteryPercent", () => {
-    it("parses battery percentage from pmset output", async () => {
-      const percent = await getBatteryPercent();
-
-      expect(percent).toBe(75);
-    });
-
-    it("returns null when pmset output has no percentage", async () => {
-      mockExecFile.mockImplementation(
-        (
-          _cmd: string,
-          _args: string[],
-          _opts: Record<string, unknown>,
-          cb: (_err: Error | null, _result: { stdout: string }) => void,
-        ) => {
-          cb(null, { stdout: "No battery found" });
-        },
-      );
-
-      vi.resetModules();
-      const mod = await import("../../src/main/battery-monitor.js");
-      const percent = await mod.getBatteryPercent();
-
-      expect(percent).toBe(null);
-    });
-
-    it("returns null on error", async () => {
-      mockExecFile.mockImplementation(
-        (
-          _cmd: string,
-          _args: string[],
-          _opts: Record<string, unknown>,
-          cb: (_err: Error | null, _result: { stdout: string }) => void,
-        ) => {
-          cb(new Error("Command failed"), { stdout: "" });
-        },
-      );
-
-      vi.resetModules();
-      const mod = await import("../../src/main/battery-monitor.js");
-      const percent = await mod.getBatteryPercent();
-
-      expect(percent).toBe(null);
     });
   });
 
@@ -188,25 +132,14 @@ describe("battery-monitor", () => {
       onBatteryCallback();
 
       await vi.advanceTimersByTimeAsync(50);
+
+      expect(mockGetBatteryPercent).toHaveBeenCalled();
     });
 
     it("calls auto-stop callback when battery below threshold", async () => {
       mockIsActive.mockReturnValue(true);
       mockGetThreshold.mockReturnValue(80);
-
-      mockExecFile.mockImplementation(
-        (
-          _cmd: string,
-          _args: string[],
-          _opts: Record<string, unknown>,
-          cb: (_err: Error | null, _result: { stdout: string }) => void,
-        ) => {
-          cb(null, {
-            stdout:
-              "Now drawing from 'Battery Power'\n -InternalBattery-0 (id=1234)\t75%; discharging",
-          });
-        },
-      );
+      mockGetBatteryPercent.mockResolvedValue(75);
 
       await handle.initBatteryMonitoring();
 
@@ -224,21 +157,7 @@ describe("battery-monitor", () => {
     it("treats threshold 0 as disabled and does NOT auto-stop even at low battery", async () => {
       mockIsActive.mockReturnValue(true);
       mockGetThreshold.mockReturnValue(0);
-
-      // Battery at 5% but threshold 0 (disabled) → must NOT auto-stop.
-      mockExecFile.mockImplementation(
-        (
-          _cmd: string,
-          _args: string[],
-          _opts: Record<string, unknown>,
-          cb: (_err: Error | null, _result: { stdout: string }) => void,
-        ) => {
-          cb(null, {
-            stdout:
-              "Now drawing from 'Battery Power'\n -InternalBattery-0 (id=1234)\t5%; discharging",
-          });
-        },
-      );
+      mockGetBatteryPercent.mockResolvedValue(5);
 
       await handle.initBatteryMonitoring();
 
@@ -256,20 +175,7 @@ describe("battery-monitor", () => {
     it("treats negative threshold as disabled and does NOT auto-stop", async () => {
       mockIsActive.mockReturnValue(true);
       mockGetThreshold.mockReturnValue(-10);
-
-      mockExecFile.mockImplementation(
-        (
-          _cmd: string,
-          _args: string[],
-          _opts: Record<string, unknown>,
-          cb: (_err: Error | null, _result: { stdout: string }) => void,
-        ) => {
-          cb(null, {
-            stdout:
-              "Now drawing from 'Battery Power'\n -InternalBattery-0 (id=1234)\t1%; discharging",
-          });
-        },
-      );
+      mockGetBatteryPercent.mockResolvedValue(1);
 
       await handle.initBatteryMonitoring();
 
@@ -304,6 +210,7 @@ describe("battery-monitor", () => {
     it("does NOT auto-stop when battery above threshold", async () => {
       mockIsActive.mockReturnValue(true);
       mockGetThreshold.mockReturnValue(20);
+      mockGetBatteryPercent.mockResolvedValue(75);
 
       await handle.initBatteryMonitoring();
 
@@ -317,89 +224,23 @@ describe("battery-monitor", () => {
 
       expect(mockOnAutoStop).not.toHaveBeenCalled();
     });
-  });
 
-  describe("getBatteryPercent edge cases", () => {
-    it("parses 0% battery", async () => {
-      mockExecFile.mockImplementation(
-        (
-          _cmd: string,
-          _args: string[],
-          _opts: Record<string, unknown>,
-          cb: (_err: Error | null, _result: { stdout: string }) => void,
-        ) => {
-          cb(null, {
-            stdout:
-              "Now drawing from 'Battery Power'\n -InternalBattery-0 (id=1234)\t0%; discharging",
-          });
-        },
+    it("does NOT auto-stop when charge percent is unavailable", async () => {
+      mockIsActive.mockReturnValue(true);
+      mockGetThreshold.mockReturnValue(80);
+      mockGetBatteryPercent.mockResolvedValue(null);
+
+      await handle.initBatteryMonitoring();
+
+      const onBatteryCall = mockPowerMonitor.on.mock.calls.find(
+        (call: unknown[]) => call[0] === "on-battery",
       );
+      const onBatteryCallback = onBatteryCall![1] as () => void;
+      onBatteryCallback();
 
-      vi.resetModules();
-      const mod = await import("../../src/main/battery-monitor.js");
-      const percent = await mod.getBatteryPercent();
+      await vi.advanceTimersByTimeAsync(50);
 
-      expect(percent).toBe(0);
-    });
-
-    it("parses 100% battery", async () => {
-      mockExecFile.mockImplementation(
-        (
-          _cmd: string,
-          _args: string[],
-          _opts: Record<string, unknown>,
-          cb: (_err: Error | null, _result: { stdout: string }) => void,
-        ) => {
-          cb(null, {
-            stdout:
-              "Now drawing from 'AC Power'\n -InternalBattery-0 (id=1234)\t100%; charged",
-          });
-        },
-      );
-
-      vi.resetModules();
-      const mod = await import("../../src/main/battery-monitor.js");
-      const percent = await mod.getBatteryPercent();
-
-      expect(percent).toBe(100);
-    });
-
-    it("returns null for malformed pmset output", async () => {
-      mockExecFile.mockImplementation(
-        (
-          _cmd: string,
-          _args: string[],
-          _opts: Record<string, unknown>,
-          cb: (_err: Error | null, _result: { stdout: string }) => void,
-        ) => {
-          cb(null, { stdout: "garbage output with no percentage" });
-        },
-      );
-
-      vi.resetModules();
-      const mod = await import("../../src/main/battery-monitor.js");
-      const percent = await mod.getBatteryPercent();
-
-      expect(percent).toBe(null);
-    });
-
-    it("returns null for empty pmset output", async () => {
-      mockExecFile.mockImplementation(
-        (
-          _cmd: string,
-          _args: string[],
-          _opts: Record<string, unknown>,
-          cb: (_err: Error | null, _result: { stdout: string }) => void,
-        ) => {
-          cb(null, { stdout: "" });
-        },
-      );
-
-      vi.resetModules();
-      const mod = await import("../../src/main/battery-monitor.js");
-      const percent = await mod.getBatteryPercent();
-
-      expect(percent).toBe(null);
+      expect(mockOnAutoStop).not.toHaveBeenCalled();
     });
   });
 
@@ -416,49 +257,6 @@ describe("battery-monitor", () => {
       onAcCallback();
 
       expect(mockLogInfo).toHaveBeenCalled();
-    });
-  });
-
-  describe("parsePmsetOutput", () => {
-    let parsePmsetOutput: (stdout: string) => number | null;
-
-    beforeEach(async () => {
-      const mod = await import("../../src/main/battery-monitor.js");
-      parsePmsetOutput = mod.parsePmsetOutput;
-    });
-
-    it("parses normal output with 75%", () => {
-      const stdout =
-        "Now drawing from 'Battery Power'\n -InternalBattery-0 (id=1234)\t75%; discharging";
-      expect(parsePmsetOutput(stdout)).toBe(75);
-    });
-
-    it("parses 0% battery", () => {
-      const stdout =
-        "Now drawing from 'Battery Power'\n -InternalBattery-0 (id=1234)\t0%; discharging";
-      expect(parsePmsetOutput(stdout)).toBe(0);
-    });
-
-    it("parses 100% battery", () => {
-      const stdout =
-        "Now drawing from 'AC Power'\n -InternalBattery-0 (id=1234)\t100%; charged";
-      expect(parsePmsetOutput(stdout)).toBe(100);
-    });
-
-    it("returns null when no InternalBattery (desktop Mac)", () => {
-      expect(parsePmsetOutput("Now drawing from 'AC Power'\n")).toBeNull();
-    });
-
-    it("returns null for empty string", () => {
-      expect(parsePmsetOutput("")).toBeNull();
-    });
-
-    it("returns null for malformed output with no %", () => {
-      expect(parsePmsetOutput("garbage output")).toBeNull();
-    });
-
-    it("returns null for missing battery format", () => {
-      expect(parsePmsetOutput("Now drawing from 'AC Power'\n -SomethingElse-0 75%")).toBeNull();
     });
   });
 
@@ -517,9 +315,7 @@ describe("battery-monitor", () => {
       mockPowerMonitor.isOnBatteryPower.mockReturnValue(true);
       mockIsActive.mockReturnValue(true);
       const fakeInterval = { unref: vi.fn() } as unknown as ReturnType<typeof setInterval>;
-      const setIntervalSpy = vi
-        .spyOn(globalThis, "setInterval")
-        .mockReturnValue(fakeInterval);
+      const setIntervalSpy = vi.spyOn(globalThis, "setInterval").mockReturnValue(fakeInterval);
 
       await handle.initBatteryMonitoring();
 
@@ -549,6 +345,7 @@ describe("battery-monitor", () => {
       mockPowerMonitor.isOnBatteryPower.mockReturnValue(true);
       mockIsActive.mockReturnValue(true);
       mockGetThreshold.mockReturnValue(80);
+      mockGetBatteryPercent.mockResolvedValue(75);
 
       await handle.initBatteryMonitoring();
 
