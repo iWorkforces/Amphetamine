@@ -1,14 +1,15 @@
 /**
- * Generate the macOS app icon (.icns) for Amphetamine.
+ * Generate app icons for Amphetamine.
  *
- * Creates a coffee cup icon with a colored background suitable for macOS
- * at all required resolutions, then packages into .icns via iconutil.
+ * Creates a coffee cup icon with a colored background at all required
+ * resolutions, then packages into .icns (macOS, via iconutil) and .ico (Windows).
  *
  * Usage:
  *   bun scripts/generate-app-icon.mjs
  *
  * Output:
- *   build/icon.icns
+ *   build/icon.icns   (macOS only when iconutil is available)
+ *   build/icon.ico    (Windows; always generated)
  *   src/assets/settings-hero-icon.png
  */
 
@@ -25,7 +26,11 @@ const BUILD_DIR = join(__dirname, "..", "build");
 const ASSETS_DIR = join(__dirname, "..", "src", "assets");
 const ICONSET_DIR = join(BUILD_DIR, "AppIcon.iconset");
 const OUTPUT_ICNS = join(BUILD_DIR, "icon.icns");
+const OUTPUT_ICO = join(BUILD_DIR, "icon.ico");
 const SETTINGS_HERO_ICON = join(ASSETS_DIR, "settings-hero-icon.png");
+
+/** Windows ICO sizes (square PNG-in-ICO entries). */
+const ICO_SIZES = [16, 24, 32, 48, 64, 128, 256];
 
 // iconutil requires these exact filenames
 const ICON_SIZES = [
@@ -122,15 +127,51 @@ function appIconSvg(size) {
 
 const log = (...msg) => process.stdout.write(msg.join(" ") + "\n");
 
+/**
+ * Build a multi-resolution .ico from PNG buffers (PNG-compressed ICO entries).
+ * @param {{ width: number; height: number; data: Buffer }[]} images
+ */
+function buildIcoFromPngs(images) {
+  const count = images.length;
+  const headerSize = 6 + count * 16;
+  let offset = headerSize;
+  const totalSize = headerSize + images.reduce((sum, img) => sum + img.data.length, 0);
+  const buf = Buffer.alloc(totalSize);
+
+  // ICONDIR
+  buf.writeUInt16LE(0, 0); // reserved
+  buf.writeUInt16LE(1, 2); // type = icon
+  buf.writeUInt16LE(count, 4);
+
+  let entryOffset = 6;
+  for (const img of images) {
+    const w = img.width >= 256 ? 0 : img.width;
+    const h = img.height >= 256 ? 0 : img.height;
+    buf.writeUInt8(w, entryOffset);
+    buf.writeUInt8(h, entryOffset + 1);
+    buf.writeUInt8(0, entryOffset + 2); // color palette
+    buf.writeUInt8(0, entryOffset + 3); // reserved
+    buf.writeUInt16LE(1, entryOffset + 4); // color planes
+    buf.writeUInt16LE(32, entryOffset + 6); // bits per pixel
+    buf.writeUInt32LE(img.data.length, entryOffset + 8);
+    buf.writeUInt32LE(offset, entryOffset + 12);
+    img.data.copy(buf, offset);
+    offset += img.data.length;
+    entryOffset += 16;
+  }
+  return buf;
+}
+
 // --- Main ---
 
-log("Generating macOS app icon...\n");
+log("Generating app icons...\n");
+mkdirSync(BUILD_DIR, { recursive: true });
 
-// Create iconset directory
+// Create iconset directory for macOS
 if (ICONSET_DIR) rmSync(ICONSET_DIR, { recursive: true, force: true });
 mkdirSync(ICONSET_DIR, { recursive: true });
 
-// Generate all PNG sizes
+// Generate all PNG sizes for .icns
 for (const { name, size } of ICON_SIZES) {
   const svg = appIconSvg(size);
   const png = await sharp(Buffer.from(svg)).resize(size, size).png().toBuffer();
@@ -140,13 +181,33 @@ for (const { name, size } of ICON_SIZES) {
   log(`  OK: ${name} (${size}x${size})`);
 }
 
-// Convert iconset to .icns
-log("\n  Converting iconset to .icns...");
-execSync(`iconutil -c icns "${ICONSET_DIR}" -o "${OUTPUT_ICNS}"`);
-log(`  OK: ${OUTPUT_ICNS}`);
+// Convert iconset to .icns (macOS iconutil only)
+if (process.platform === "darwin") {
+  log("\n  Converting iconset to .icns...");
+  try {
+    execSync(`iconutil -c icns "${ICONSET_DIR}" -o "${OUTPUT_ICNS}"`);
+    log(`  OK: ${OUTPUT_ICNS}`);
+  } catch (err) {
+    log(`  WARN: iconutil failed (keeping existing icon.icns if present): ${err}`);
+  }
+} else {
+  log("\n  Skipping .icns (iconutil is macOS-only)");
+}
 
 // Cleanup iconset
 rmSync(ICONSET_DIR, { recursive: true, force: true });
+
+// Generate multi-size .ico for Windows
+log("\n  Building Windows .ico...");
+const icoImages = [];
+for (const size of ICO_SIZES) {
+  const svg = appIconSvg(size);
+  const png = await sharp(Buffer.from(svg)).resize(size, size).png().toBuffer();
+  icoImages.push({ width: size, height: size, data: png });
+  log(`  OK: ico ${size}x${size}`);
+}
+writeFileSync(OUTPUT_ICO, buildIcoFromPngs(icoImages));
+log(`  OK: ${OUTPUT_ICO}`);
 
 // Generate settings hero icon (80px for 40px @2x display)
 const heroSvg = appIconSvg(80);
