@@ -772,4 +772,11 @@ describe("coordinator", () => {
       expect(mockSyncPreventSleep).not.toHaveBeenCalled();
     });
   });
+
+  describe("getTrayDeps before init", () => {
+    it("throws when composition not ready", async () => {
+      const { getTrayDeps } = await import("../../src/main/coordinator.js");
+      expect(() => getTrayDeps()).toThrow(/before init/i);
+    });
+  });
 });

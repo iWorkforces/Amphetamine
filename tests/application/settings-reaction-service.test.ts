@@ -108,4 +108,23 @@ describe("createSettingsReactionService", () => {
     );
     expect(recomputeSleepPrevention).toHaveBeenCalledWith(false);
   });
+
+  it("logs when a reaction throws", () => {
+    const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+    const service = createSettingsReactionService({
+      recomputeSleepPrevention: () => {
+        throw new Error("boom");
+      },
+      autoLaunch: { sync: vi.fn() },
+      isPreventingSleep: () => false,
+      getSessionActive: () => false,
+      reconfigureBattery: vi.fn(),
+      registerShortcut: vi.fn(),
+      reconcileSession: vi.fn(),
+      notifier: { publish: vi.fn() },
+      logger,
+    });
+    service.handleChange({ ...DEFAULT_SETTINGS, preventSleep: true }, DEFAULT_SETTINGS);
+    expect(logger.error).toHaveBeenCalled();
+  });
 });

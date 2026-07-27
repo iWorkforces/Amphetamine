@@ -205,4 +205,21 @@ describe("sleep-prevention", () => {
       expect(mockPowerSaveBlocker.stop).not.toHaveBeenCalled();
     });
   });
+
+  describe("façade accessors", () => {
+    it("getActiveSleepBlockMode returns current mode after start", async () => {
+      const mod = await import("../../src/main/sleep-prevention.js");
+      mod.startPreventingSleep("prevent-app-suspension");
+      expect(mod.getActiveSleepBlockMode()).toBe("prevent-app-suspension");
+    });
+
+    it("getSleepBlockerPort exposes sync/isActive/stop", async () => {
+      const mod = await import("../../src/main/sleep-prevention.js");
+      const port = mod.getSleepBlockerPort();
+      port.sync(true, "prevent-display-sleep");
+      expect(port.isActive()).toBe(true);
+      port.stop();
+      expect(port.isActive()).toBe(false);
+    });
+  });
 });

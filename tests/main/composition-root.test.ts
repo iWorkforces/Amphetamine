@@ -167,4 +167,19 @@ describe("createAppComposition", () => {
     expect(startSession).toHaveBeenCalledWith(30);
     composition.cleanup();
   });
+
+  it("getTrayDeps works after init and cleanup clears ready", async () => {
+    const { createAppComposition } = await import("../../src/main/composition-root.js");
+    const composition = createAppComposition();
+    await composition.init();
+    const tray = composition.getTrayDeps();
+    expect(typeof tray.getEffectiveActive).toBe("function");
+    expect(typeof tray.checkForUpdates).toBe("function");
+    expect(tray.getPreventSleep()).toBe(false);
+    tray.checkForUpdates();
+    const unsub = tray.onActiveStateChanged(() => {});
+    unsub();
+    composition.cleanup();
+    expect(composition.ready).toBe(false);
+  });
 });

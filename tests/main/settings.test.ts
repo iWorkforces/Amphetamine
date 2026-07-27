@@ -376,4 +376,14 @@ describe("settings", () => {
       expect(dialog.showErrorBox).not.toHaveBeenCalled();
     });
   });
+
+  describe("store façade accessors", () => {
+    it("getSettingsStore returns the live store", async () => {
+      const mod = await import("../../src/main/settings.js");
+      await mod.initSettings();
+      const store = mod.getSettingsStore();
+      expect(store.get().preventSleep).toBe(false);
+      await mod.flushSettingsWriteChain();
+    });
+  });
 });

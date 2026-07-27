@@ -28,4 +28,27 @@ describe("createTogglePreventSleep", () => {
 
     expect(update).toHaveBeenCalledWith({ preventSleep: true });
   });
+
+  it("logs when store.update rejects", async () => {
+    const update = vi.fn(async () => {
+      throw new Error("disk full");
+    });
+    const store: SettingsStorePort = {
+      init: vi.fn(),
+      get: vi.fn(() => ({ ...DEFAULT_SETTINGS, preventSleep: false })),
+      update,
+      onChange: vi.fn(() => () => {}),
+      flush: vi.fn(),
+    };
+    const logger: LoggerPort = {
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn(),
+    };
+    const toggle = createTogglePreventSleep({ store, logger, logTag: "[test]" });
+    toggle();
+    await vi.waitFor(() => {
+      expect(logger.error).toHaveBeenCalled();
+    });
+  });
 });

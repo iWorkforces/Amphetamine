@@ -169,7 +169,10 @@ describe("preload", () => {
     expect(mockOn).toHaveBeenCalledWith(IPC_CHANNELS.AUTO_UPDATER_STATUS, expect.any(Function));
 
     // Simulate status push from main process
-    const listener = mockOn.mock.calls[0]![1];
+    const statusCall = mockOn.mock.calls.find(
+      (c: unknown[]) => c[0] === IPC_CHANNELS.AUTO_UPDATER_STATUS,
+    );
+    const listener = statusCall![1];
     const testStatus = {
       status: "available",
       info: { version: "2.0.0", releaseDate: "2025-01-01" },
@@ -180,5 +183,36 @@ describe("preload", () => {
     // Unsubscribe removes the listener
     unsubscribe();
     expect(mockRemoveListener).toHaveBeenCalledWith(IPC_CHANNELS.AUTO_UPDATER_STATUS, listener);
+  });
+
+  it("onWindowHide registers listener and returns unsubscribe", () => {
+    const callback = vi.fn();
+    const unsubscribe = api.onWindowHide(callback);
+    const hideCall = mockOn.mock.calls.find((c: unknown[]) => c[0] === IPC_CHANNELS.WINDOW_HIDE);
+    const listener = hideCall![1];
+    listener({});
+    expect(callback).toHaveBeenCalled();
+    unsubscribe();
+    expect(mockRemoveListener).toHaveBeenCalledWith(IPC_CHANNELS.WINDOW_HIDE, listener);
+  });
+
+  it("onShortcutRegistrationFailed registers listener and returns unsubscribe", () => {
+    const callback = vi.fn();
+    const unsubscribe = api.onShortcutRegistrationFailed(callback);
+    const failCall = mockOn.mock.calls.find(
+      (c: unknown[]) => c[0] === IPC_CHANNELS.SHORTCUT_REGISTRATION_FAILED,
+    );
+    const listener = failCall![1];
+    listener({}, { accelerator: "Cmd+Shift+A" });
+    expect(callback).toHaveBeenCalledWith({ accelerator: "Cmd+Shift+A" });
+    unsubscribe();
+    expect(mockRemoveListener).toHaveBeenCalledWith(
+      IPC_CHANNELS.SHORTCUT_REGISTRATION_FAILED,
+      listener,
+    );
+  });
+
+  it("benchmark.isEnabled reflects env", () => {
+    expect(typeof api.benchmark.isEnabled()).toBe("boolean");
   });
 });

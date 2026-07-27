@@ -1,0 +1,95 @@
+import { describe, it, expect, vi, beforeEach } from "vitest";
+
+vi.mock("electron", () => ({
+  app: { getVersion: () => "1.2.3" },
+}));
+
+describe("benchmark-metrics", () => {
+  beforeEach(() => {
+    vi.resetModules();
+  });
+
+  it("summarize returns median/p95/min/max", async () => {
+    const { summarize } = await import(
+      "../../src/infrastructure/benchmark/benchmark-metrics.js"
+    );
+    const s = summarize([10, 20, 30, 40, 50]);
+    expect(s.minMs).toBe(10);
+    expect(s.maxMs).toBe(50);
+    expect(s.medianMs).toBeGreaterThan(0);
+    expect(s.p95Ms).toBeGreaterThan(0);
+    expect(s.samplesMs).toHaveLength(5);
+  });
+
+  it("summarize handles empty samples", async () => {
+    const { summarize } = await import(
+      "../../src/infrastructure/benchmark/benchmark-metrics.js"
+    );
+    const s = summarize([]);
+    expect(s.minMs).toBe(0);
+    expect(s.maxMs).toBe(0);
+  });
+
+  it("sumCpuPercent and sumIdleWakeups aggregate metrics", async () => {
+    const { sumCpuPercent, sumIdleWakeups } = await import(
+      "../../src/infrastructure/benchmark/benchmark-metrics.js"
+    );
+    const metrics = [
+      { cpu: { percentCPUUsage: 10, idleWakeupsPerSecond: 2 } },
+      { cpu: { percentCPUUsage: 5, idleWakeupsPerSecond: 3 } },
+    ] as Electron.ProcessMetric[];
+    expect(sumCpuPercent(metrics)).toBe(15);
+    expect(sumIdleWakeups(metrics)).toBe(5);
+  });
+
+  it("round trims to 3 decimals", async () => {
+    const { round } = await import(
+      "../../src/infrastructure/benchmark/benchmark-metrics.js"
+    );
+    expect(round(1.23456)).toBe(1.235);
+  });
+
+  it("buildRuntimeInfo includes app version", async () => {
+    const { buildRuntimeInfo } = await import(
+      "../../src/infrastructure/benchmark/benchmark-metrics.js"
+    );
+    const info = buildRuntimeInfo();
+    expect(info.appVersion).toBe("1.2.3");
+    expect(info.cpuCount).toBeGreaterThan(0);
+  });
+
+  it("summarizeIdle maps sample fields", async () => {
+    const { summarizeIdle } = await import(
+      "../../src/infrastructure/benchmark/benchmark-metrics.js"
+    );
+    const summary = summarizeIdle([
+      {
+        elapsedMs: 1,
+        totalCpuPercent: 2,
+        totalIdleWakeups: 3,
+        rssBytes: 4,
+        heapUsedBytes: 5,
+        appMetrics: [],
+        timerCounters: {
+          main: {
+            timerResourcesCreated: 0,
+            timerCallbacks: 0,
+            timerResourcesDestroyed: 0,
+            activeTimerResources: 0,
+          },
+          rendererCountdown: {
+            starts: 0,
+            schedules: 0,
+            callbacks: 0,
+            fires: 0,
+            stops: 0,
+            clears: 0,
+            active: false,
+          },
+        },
+      },
+    ]);
+    expect(summary.cpuPercent.samplesMs).toEqual([2]);
+    expect(summary.rssBytes.samplesMs).toEqual([4]);
+  });
+});
