@@ -29,7 +29,7 @@ _Configure launch-at-login, sleep prevention, sleep block mode, session duration
 | Platform | Versions |
 |----------|----------|
 | macOS | 11+ (Apple Silicon arm64 or Intel x64) |
-| Windows | 10/11 (x64 packaging; arm64 not in default CI matrix) |
+| Windows | 10/11 (**x64 and arm64** native packaging) |
 | Tooling | Bun ≥ 1.3.14 (recommended) or Node.js `>=26 <27` |
 
 Linux is out of scope.
@@ -90,12 +90,15 @@ bun run package:universal   # universal DMG + ZIP + fuses
 bun run package:dir         # unpacked .app only (no fuses)
 
 # Windows
-bun run package:win         # x64 NSIS installer + portable EXE, then flip fuses
-bun run package:win:dir     # unpacked win-unpacked only (no fuses)
+bun run package:win              # x64 NSIS + portable, then flip fuses
+bun run package:win:dir          # unpacked win-unpacked only (no fuses)
+bun run package:win:arm64        # arm64 NSIS + portable, then flip fuses
+bun run package:win:dir:arm64    # unpacked win-arm64-unpacked only (no fuses)
 
 # Fuses (after packaging)
 node build/flip-fuses.cjs mac arm64   # dist/mac-arm64/Amphetamine.app
 node build/flip-fuses.cjs win x64     # dist/win-unpacked/Amphetamine.exe
+node build/flip-fuses.cjs win arm64   # dist/win-arm64-unpacked/Amphetamine.exe
 node build/flip-fuses.cjs arm64       # legacy mac alias
 
 # Icons
@@ -103,7 +106,7 @@ bun scripts/generate-app-icon.mjs       # build/icon.icns (mac) + build/icon.ico
 bun scripts/generate-coffee-tray-icons.mjs
 ```
 
-Outputs go to `dist/` (e.g. `Amphetamine-1.9.7-arm64.dmg`, `Amphetamine-1.9.7-x64.exe`, portable `*-portable.exe`).
+Outputs go to `dist/` (e.g. `Amphetamine-1.9.7-arm64.dmg`, `Amphetamine-1.9.7-x64.exe`, `Amphetamine-1.9.7-arm64.exe`, portable `*-portable.exe`).
 
 Local macOS helper:
 
@@ -122,16 +125,16 @@ Installs deps, builds, packages, Developer ID-signs when available (else ad-hoc)
 | Windows signing | **Unsigned** by default in CI (`CSC_IDENTITY_AUTO_DISCOVERY: false`); Authenticode is a follow-up |
 | Fuses | `build/flip-fuses.cjs` disables RunAsNode / inspect / `NODE_OPTIONS`; enables ASAR integrity + cookie encryption |
 | macOS targets | DMG (`ULFO`) + ZIP; minimum macOS 11; arm64 and x64 |
-| Windows targets | NSIS (custom install dir) + portable; x64; Start Menu shortcut, no desktop shortcut by default |
-| Updates | GitHub Releases (`OCWorkforces/Amphetamine`); feeds `latest-mac.yml` / `latest.yml` when published |
+| Windows targets | NSIS (custom install dir) + portable; **x64 and arm64**; Start Menu shortcut, no desktop shortcut by default |
+| Updates | GitHub Releases (`OCWorkforces/Amphetamine`); feeds `latest-mac.yml` / `latest.yml` (multi-arch Windows assets) when published |
 
 ### CI / CD / Beta
 
 | Pipeline | Trigger | What it does |
 |----------|---------|----------------|
-| **CI** | PR / push to `main` & `develop` | Lint, sticky typecheck, tests. **Push to `main` only:** package macOS arm64/x64 + Windows x64 artifacts |
-| **CD** | Successful CI `workflow_run` on `main` | Tag `v<version>` if missing; publish GitHub release (DMG/ZIP/EXE + updater metadata when present) |
-| **Beta** | Push to `develop` | Package macOS + Windows with `-beta` filename suffix; GitHub **prerelease** `v{version}-beta.{run}` (not latest) |
+| **CI** | PR / push to `main` & `develop` | Lint, sticky typecheck, tests. **Push to `main` only:** package macOS arm64/x64 + Windows **x64 and arm64** artifacts |
+| **CD** | Successful CI `workflow_run` on `main` | Tag `v<version>` if missing; publish GitHub release (DMG/ZIP/EXE for all arches + updater metadata when present) |
+| **Beta** | Push to `develop` | Package macOS + Windows (x64 + arm64) with `-beta` filename suffix; GitHub **prerelease** `v{version}-beta.{run}` (not latest) |
 
 CI concurrency: PR runs cancel outdated checks for the same PR; branch-push runs do not cancel mid-flight (keyed by commit SHA).
 
@@ -147,9 +150,11 @@ Manual multi-OS smoke: see [`docs/windows-qa-checklist.md`](docs/windows-qa-chec
 
 **Windows**
 
-1. Run the NSIS installer from `dist/` / the release, **or** use the portable EXE.
-2. Launch from the Start Menu (installer) or the portable binary.
-3. Look for the tray / notification-area icon (may be under “hidden icons”).
+1. Download the installer matching your CPU: **x64** or **arm64** (filenames include the arch).
+2. Run the NSIS installer from `dist/` / the release, **or** use the portable EXE.
+3. Launch from the Start Menu (installer) or the portable binary.
+4. Look for the tray / notification-area icon (may be under “hidden icons”).
+5. On ARM PCs, prefer the **arm64** build (Task Manager → Architecture should show ARM64, not emulated x64).
 
 ### Troubleshooting (macOS security)
 
