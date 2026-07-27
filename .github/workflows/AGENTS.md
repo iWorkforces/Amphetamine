@@ -13,7 +13,9 @@ Workflow definitions for lint/test/build, production release publishing, and dev
 ## CI Rules
 
 - CI runs on push and pull request for `main` and `develop`.
-- Concurrency cancels in-progress runs per workflow/ref.
+- Concurrency: PR runs cancel outdated checks for the same PR number; push runs use
+  `github.sha` and do **not** cancel in-progress work (avoids aborted develop/main
+  merges when a second request for the same ref is queued).
 - Node is pinned to `26.3.0`; Bun is pinned to `1.3.14`.
 - Install uses `bun install --frozen-lockfile`.
 - Lint job includes a source guard: fail if `OCWorkforces` appears under `src/`.

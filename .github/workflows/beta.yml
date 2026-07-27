@@ -10,6 +10,8 @@ on:
     branches: [develop]
   workflow_dispatch:
 
+# Prefer completing the latest develop push; cancel only older beta runs for the same ref
+# when a newer push supersedes them (intentional for prerelease packaging).
 concurrency:
   group: beta-${{ github.ref }}
   cancel-in-progress: true

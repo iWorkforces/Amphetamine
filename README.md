@@ -1,66 +1,74 @@
 # Amphetamine
 
-A tray app that keeps your computer awake on **macOS** and **Windows**. Lives in the system tray, prevents the system from going to sleep, and stays out of the Dock / taskbar when idle.
+A tray app that keeps your computer awake on **macOS** and **Windows**. Lives in the system tray, prevents sleep through user intent or timed sessions, and stays out of the Dock / taskbar when idle.
+
+**Current version:** 1.9.7
 
 ## Features
 
-- **Sleep Prevention**: blocks system and/or display sleep via Electron's `powerSaveBlocker` (configurable display vs system-only mode).
-- **Session Timer**: start timed sessions (configurable duration) or run indefinitely from the tray popover or Settings. Runtime state is separate from the saved default duration preference.
-- **Battery-Aware Auto-Disable**: polls system battery charge (macOS `pmset`, Windows PowerShell) and automatically stops sleep prevention when battery drops below a configurable threshold.
-- **Global Shortcut**: toggle sleep prevention with `CommandOrControl+Shift+A` (⌘/Ctrl; configurable).
-- **Launch at Login**: optional OS login item / start-at-login, managed through native APIs.
-- **Tray-Only UX**: no Dock icon by default on macOS (`LSUIElement`); Windows uses the notification area with `skipTaskbar`. The popover provides prevent-sleep toggle and quick session start; the settings window appears in the Dock/taskbar only while open.
-- **Settings Window**: configure launch-at-login, sleep prevention default, session duration, battery threshold, and the keyboard shortcut.
-- **Auto-Updater**: checks GitHub releases via `electron-updater` shortly after launch and every 4 hours, with exponential backoff up to 24h on failure. Manual "Check for Updates" available from the tray menu.
-- **Secure IPC**: sandboxed preload exposes a strictly typed `window.api` bridge. Main-side handlers validate sender origin against an allowlist; all 15 channels are typed end-to-end.
-- **Benchmark Harness**: production-only benchmark mode measures startup, idle samples, popover/tray/settings responsiveness, and renderer countdown timer counters.
+- **Sleep Prevention**: Electron `powerSaveBlocker` with configurable mode — keep the display on (`prevent-display-sleep`, default) or allow display sleep while keeping the system awake (`prevent-app-suspension`).
+- **Session Timer**: timed or indefinite sessions from the tray popover or Settings. Runtime session state is separate from the saved `defaultSessionDuration` preference.
+- **Battery-Aware Auto-Disable**: polls charge percent (macOS `pmset`, Windows PowerShell `Win32_Battery`) and auto-stops sleep prevention below a configurable threshold (`0` = disabled).
+- **Global Shortcut**: default `CommandOrControl+Shift+A` (⌘ on macOS, Ctrl on Windows); configurable via Settings with platform-aware reserved-key validation.
+- **Launch at Login**: optional OS login item / start-at-login (macOS uses `openAsHidden`; Windows uses `openAtLogin` only).
+- **Tray-Only UX**: macOS `LSUIElement` / accessory activation policy (no Dock by default); Windows notification-area tray with `skipTaskbar` on the popover. Settings and About appear in the Dock (macOS) or taskbar (Windows) only while open.
+- **Settings Window**: launch at login, prevent-sleep default, sleep block mode, default session duration, battery threshold, and keyboard shortcut (recorder with platform labels).
+- **Auto-Updater (hybrid)**: background checks via `electron-updater` (GitHub provider) after startup and every 4 hours (backoff up to 24h). **Check for Updates** tries in-app download/install when the platform feed allows (macOS ZIP + `latest-mac.yml`; Windows EXE + `latest.yml`); otherwise opens the GitHub release page. Background checks do not auto-download.
+- **Secure IPC**: sandboxed preload `window.api` bridge; main handlers validate sender origin; 15 typed channels end-to-end.
+- **Platform adapters**: OS differences live under `src/main/platform/` (`os`, `shell`, `window-chrome`, `battery-percent`).
+- **Benchmark Harness**: production-only mode measures startup, idle samples, popover/tray/settings responsiveness, and renderer countdown counters.
 
 ## Screenshots
 
 ![Settings](assets/setting-page.png)
 
-_Configure launch-at-login, sleep prevention, session duration, battery threshold, and keyboard shortcut._
+_Configure launch-at-login, sleep prevention, sleep block mode, session duration, battery threshold, and keyboard shortcut._
 
 ## Requirements
 
-- macOS 11 or later (Apple Silicon arm64 or Intel x64), **or** Windows 10/11 (x64)
-- Bun ≥ 1.3.14 (recommended) or Node.js `>=26 <27`
+| Platform | Versions |
+|----------|----------|
+| macOS | 11+ (Apple Silicon arm64 or Intel x64) |
+| Windows | 10/11 (x64 packaging; arm64 not in default CI matrix) |
+| Tooling | Bun ≥ 1.3.14 (recommended) or Node.js `>=26 <27` |
+
+Linux is out of scope.
 
 ## Development
 
 ```bash
 bun install
-bun run dev               # Dev orchestration: rslib watch (main + preload) + rsbuild dev server + Electron
-bun run build             # Build all processes (main + preload + renderer)
-bun run build:main        # Build main process only (rslib)
-bun run build:preload     # Build preload only (rslib)
-bun run build:renderer    # Build renderer only (rsbuild)
+bun run dev               # rslib watch (main + preload) + rsbuild dev + Electron
+bun run build             # production main + preload + renderer
+bun run build:main        # rslib main → lib/main/
+bun run build:preload     # rslib preload → lib/preload/
+bun run build:renderer    # rsbuild renderer → lib/renderer/
 bun run typecheck         # tsc -b for src/
-bun run typecheck:sticky  # assert sticky strict TS flags
+bun run typecheck:sticky  # assert sticky strict compiler flags
 bun run typecheck:tests   # tsc for tests/
-bun run test              # Run Vitest workspace (~391 tests across 23 files)
-bun run test:watch        # Vitest in watch mode
-bun run test:coverage     # Vitest with v8 coverage
+bun run test              # Vitest workspace (25 files, 467 tests)
+bun run test:watch
+bun run test:coverage
 bun run benchmark:performance -- --out artifacts/perf/latest.json
-bun run lint              # ESLint over src/ tests/
-bun run lint:fix          # ESLint with --fix
-bun run format            # Prettier write
-bun run clean             # Remove lib/ and dist/
+bun run lint
+bun run lint:fix
+bun run format
+bun run clean             # remove lib/ and dist/
 ```
 
-### Dev Orchestration
+### Dev orchestration
 
-`bun run dev` (`scripts/dev.ts`) starts three build processes in parallel:
+`bun run dev` (`scripts/dev.ts`) starts three processes:
 
-1. `rslib` watch for the main process → `lib/main/index.cjs`
-2. `rslib` watch for the preload → `lib/preload/index.cjs`
-3. `rsbuild` dev server for the renderer on `http://localhost:5173` (two entry points: main popover + settings window)
+1. `rslib` watch — main → `lib/main/index.cjs`
+2. `rslib` watch — preload → `lib/preload/index.cjs`
+3. `rsbuild` dev server — `http://localhost:5173` (popover + settings entries)
 
-It waits until both CJS outputs exist on disk and the renderer's TCP port is accepting connections, then launches Electron with `--disable-gpu-sandbox`.
+It waits until both CJS outputs exist and port 5173 accepts connections, then launches Electron with `--disable-gpu-sandbox`.
 
-### Performance Benchmark
+### Performance benchmark
 
-`bun run benchmark:performance` runs the built app in production benchmark mode. Run `bun run build` first because the harness requires `lib/main/index.cjs` and `lib/renderer/index.html`.
+Requires a prior `bun run build` (`lib/main/index.cjs` and `lib/renderer/index.html`).
 
 ```bash
 bun run build
@@ -68,132 +76,165 @@ bun run benchmark:performance -- --label local --out artifacts/perf/local.json
 bun run benchmark:performance -- --label compare --out artifacts/perf/compare.json --baseline artifacts/perf/local.json
 ```
 
-The script launches Electron with `AMPHETAMINE_BENCHMARK=1` and an isolated temporary user-data directory. The app prints an `AMPHETAMINE_BENCHMARK_RESULT:` JSON payload, then quits; the harness wraps that payload with run metadata and writes the requested artifact.
+Launches Electron with `AMPHETAMINE_BENCHMARK=1` and an isolated user-data directory. The app prints `AMPHETAMINE_BENCHMARK_RESULT:` JSON and quits; the harness writes the artifact.
 
-## Build & Packaging
+## Build & packaging
 
-Packaging is handled by `electron-builder`, configured in `electron-builder.yml`. Build resources (icon, entitlements, after-pack hook, fuse flipper) live under `build/`.
+`electron-builder` (`electron-builder.yml`). Resources under `build/` (icons, entitlements, after-pack, fuses).
 
 ```bash
-bun run package             # arm64 DMG + ZIP, then flip Electron fuses
-bun run package:x64         # Intel x64 DMG + ZIP
-bun run package:universal   # Universal (arm64 + x64) DMG + ZIP
-bun run package:win         # Windows x64 NSIS installer + portable, then flip fuses
-bun run package:win:dir     # Windows unpacked dir only
-bun run package:dir         # Unpacked .app directory only (faster, for local testing)
-bun run flip-fuses arm64    # Apply fuses manually if needed
+# macOS
+bun run package             # arm64 DMG + ZIP, then flip fuses
+bun run package:x64         # Intel x64 DMG + ZIP + fuses
+bun run package:universal   # universal DMG + ZIP + fuses
+bun run package:dir         # unpacked .app only (no fuses)
+
+# Windows
+bun run package:win         # x64 NSIS installer + portable EXE, then flip fuses
+bun run package:win:dir     # unpacked win-unpacked only (no fuses)
+
+# Fuses (after packaging)
+node build/flip-fuses.cjs mac arm64   # dist/mac-arm64/Amphetamine.app
+node build/flip-fuses.cjs win x64     # dist/win-unpacked/Amphetamine.exe
+node build/flip-fuses.cjs arm64       # legacy mac alias
+
+# Icons
+bun scripts/generate-app-icon.mjs       # build/icon.icns (mac) + build/icon.ico (win)
+bun scripts/generate-coffee-tray-icons.mjs
 ```
 
-Outputs are written to `dist/` (for current version `1.9.0`, e.g. `Amphetamine-1.9.0-arm64.dmg`, `Amphetamine-1.9.0-arm64-mac.zip`).
+Outputs go to `dist/` (e.g. `Amphetamine-1.9.7-arm64.dmg`, `Amphetamine-1.9.7-x64.exe`, portable `*-portable.exe`).
 
-For local DMG builds, `./build-macOS-dmg.sh --arch arm64 --environment prd` wraps the same build, handles ad-hoc signing when no Developer ID certificate is available, and appends the environment suffix to the DMG name.
+Local macOS helper:
 
-Notes on packaging:
+```bash
+./build-macOS-dmg.sh --arch arm64 --environment beta   # or stable / prd
+```
 
-- **Tray agent**: `LSUIElement` is set so the app does not appear in the Dock or app switcher.
-- **Hardened runtime is intentionally disabled** and the app is **not notarized**. Electron's V8 renderer requires JIT and unsigned executable memory; enabling hardened runtime without notarization would cause Gatekeeper to reject the app for most users.
-- **Fuses**: after packaging, `build/flip-fuses.cjs` disables `RunAsNode` and enables cookie encryption + ASAR integrity checks.
-- **Targets**: DMG (`ULFO` format) and ZIP for both `arm64` and `x64`. Minimum macOS 11.
-- **Updates**: published to GitHub releases (`OCWorkforces/Amphetamine`).
+Installs deps, builds, packages, Developer ID-signs when available (else ad-hoc), and appends an environment suffix to the DMG name.
 
-CI builds arm64 and x64 artifacts only for pushes to `main` after lint and tests pass. CD runs from the successful CI workflow, tags `v<package.json version>` when missing, downloads those artifacts, and publishes the GitHub release.
+### Packaging notes
 
-Pushes to `develop` (including merged PRs) run CI lint/test **and** the **Beta** workflow, which packages arm64 and x64 DMG/ZIP artifacts with a `-beta` filename suffix (e.g. `Amphetamine-1.9.6-arm64-beta.dmg`), uploads Actions artifacts, and publishes a GitHub **prerelease** tagged `v{version}-beta.{run_number}` (not marked latest). Production releases remain `vX.Y.Z` from `main` via CD.
+| Topic | Behavior |
+|-------|----------|
+| Tray agent (macOS) | `LSUIElement: true` — no Dock / app switcher by default |
+| Hardened runtime | **Disabled**; app is **not notarized** (JIT + unsigned executable memory for Electron V8) |
+| Windows signing | **Unsigned** by default in CI (`CSC_IDENTITY_AUTO_DISCOVERY: false`); Authenticode is a follow-up |
+| Fuses | `build/flip-fuses.cjs` disables RunAsNode / inspect / `NODE_OPTIONS`; enables ASAR integrity + cookie encryption |
+| macOS targets | DMG (`ULFO`) + ZIP; minimum macOS 11; arm64 and x64 |
+| Windows targets | NSIS (custom install dir) + portable; x64; Start Menu shortcut, no desktop shortcut by default |
+| Updates | GitHub Releases (`OCWorkforces/Amphetamine`); feeds `latest-mac.yml` / `latest.yml` when published |
 
-### Install to Applications
+### CI / CD / Beta
 
-1. Open the DMG from `dist/`.
+| Pipeline | Trigger | What it does |
+|----------|---------|----------------|
+| **CI** | PR / push to `main` & `develop` | Lint, sticky typecheck, tests. **Push to `main` only:** package macOS arm64/x64 + Windows x64 artifacts |
+| **CD** | Successful CI `workflow_run` on `main` | Tag `v<version>` if missing; publish GitHub release (DMG/ZIP/EXE + updater metadata when present) |
+| **Beta** | Push to `develop` | Package macOS + Windows with `-beta` filename suffix; GitHub **prerelease** `v{version}-beta.{run}` (not latest) |
+
+CI concurrency: PR runs cancel outdated checks for the same PR; branch-push runs do not cancel mid-flight (keyed by commit SHA).
+
+Manual multi-OS smoke: see [`docs/windows-qa-checklist.md`](docs/windows-qa-checklist.md). Design notes: [`docs/windows-support-development-plan.md`](docs/windows-support-development-plan.md).
+
+### Install
+
+**macOS**
+
+1. Open the DMG from `dist/` (or a release).
 2. Drag **Amphetamine.app** into **Applications**.
 3. Eject the DMG.
 
-### Troubleshooting Security Warnings
+**Windows**
 
-Because builds are not notarized, macOS may show "cannot be opened because it is from an unidentified developer".
+1. Run the NSIS installer from `dist/` / the release, **or** use the portable EXE.
+2. Launch from the Start Menu (installer) or the portable binary.
+3. Look for the tray / notification-area icon (may be under “hidden icons”).
 
-**Option 1: Remove quarantine attribute**
+### Troubleshooting (macOS security)
+
+Builds are not notarized; Gatekeeper may block first open.
+
+**Remove quarantine**
 
 ```bash
 sudo xattr -rd com.apple.quarantine "/Applications/Amphetamine.app"
 ```
 
-**Option 2: System Settings**
+**System Settings**
 
-1. Open **System Settings** → **Privacy & Security**.
-2. Find the security warning for Amphetamine.
-3. Click **Open Anyway**, then **Open** in the dialog.
+1. **System Settings** → **Privacy & Security**
+2. Find the Amphetamine warning → **Open Anyway** → **Open**
 
-**Option 3: Right-click open**
+**Right-click open**
 
-1. Right-click (or Control-click) **Amphetamine.app**.
-2. Select **Open**, then confirm.
+1. Right-click **Amphetamine.app** → **Open** → confirm
 
-### App Won't Start / Crashes on Launch
+### App won't start (macOS)
 
-1. **Check Console logs:**
+```bash
+# Console stream
+log stream --predicate 'process == "Amphetamine"' --level debug
 
-   ```bash
-   log stream --predicate 'process == "Amphetamine"' --level debug
-   ```
+# Ad-hoc re-sign
+codesign --force --deep --sign - "/Applications/Amphetamine.app"
 
-2. **Re-sign the app bundle (ad-hoc):**
-
-   ```bash
-   codesign --force --deep --sign - "/Applications/Amphetamine.app"
-   ```
-
-3. **Reinstall:**
-
-   ```bash
-   rm -rf "/Applications/Amphetamine.app"
-   # Then reinstall from the DMG
-   ```
-
-## Project Structure
-
+# Clean reinstall
+rm -rf "/Applications/Amphetamine.app"
+# reinstall from DMG
 ```
+
+### Windows notes
+
+- Unsigned installers may trigger SmartScreen; “More info” → “Run anyway” is expected until Authenticode is wired.
+- Low-battery auto-disable needs a battery (desktops without one never auto-stop — same as Mac desktops without `InternalBattery`).
+- Sleep prevention uses Chromium power requests; behavior can vary by Windows version (S3 vs Modern Standby).
+
+## Project structure
+
+```text
 Amphetamine/
 ├── src/
-│   ├── main/        # Electron main process: tray, IPC, settings, session timer,
-│   │                # sleep prevention, battery monitor, global shortcut, auto-updater,
-│   │                # benchmark mode and metrics
-│   ├── preload/     # Sandboxed context bridge exposing typed window.api
-│   ├── renderer/    # Vanilla TS UI (popover + settings window, benchmark counters)
-│   ├── assets/      # Generated tray icons and settings hero image packaged at runtime
-│   └── shared/      # Cross-process IPC, settings, session, benchmark contracts
-├── tests/           # Vitest workspace (main + renderer projects)
-├── scripts/         # dev orchestration, benchmark harness, icon generators
-├── build/           # electron-builder resources (icon, entitlements, hooks, fuses)
-├── .github/workflows/       # CI builds artifacts; CD publishes releases
-├── rslib.config.ts          # Main process build
-├── rslib.config.preload.ts  # Preload build
-├── rsbuild.config.ts        # Renderer build (two envs)
+│   ├── main/           # Electron main: tray, IPC, settings, sessions, sleep,
+│   │   │               # battery, shortcut, auto-updater, benchmark
+│   │   └── platform/   # OS adapters (shell, chrome, battery percent)
+│   ├── preload/        # contextBridge window.api (+ platform.os)
+│   ├── renderer/       # Vanilla TS popover + settings UI
+│   ├── assets/         # Tray PNGs + settings hero (packaged)
+│   └── shared/         # IPC / settings / session / benchmark contracts
+├── tests/              # Vitest: main (Node + mocked Electron) + renderer (jsdom)
+├── scripts/            # dev orchestration, benchmark, icon generators
+├── build/              # electron-builder resources, flip-fuses, entitlements
+├── docs/               # Windows plan + QA checklist
+├── .github/workflows/  # CI, CD, Beta
+├── rslib.config.ts / rslib.config.preload.ts / rsbuild.config.ts
 ├── electron-builder.yml
 └── vitest.workspace.ts
 ```
 
-## Tech Stack
+## Tech stack
 
-| Layer       | Tech                                             |
-| ----------- | ------------------------------------------------ |
-| Runtime     | Electron 43                                      |
-| Language    | TypeScript 6.0.3 (strict, ESM source → CJS output) |
-| Build       | Rslib (main + preload), Rsbuild (renderer)       |
-| Package Mgr | Bun 1.3.14 (`engines`: Bun ≥ 1.3.14, Node `>=26 <27`)  |
-| Test        | Vitest 4.1.9 workspace (~391 tests across 23 files) |
-| Lint/Format | ESLint 10 (flat config) + Prettier 3             |
-| UI          | Vanilla TypeScript, no UI framework              |
-| Updates     | electron-updater (GitHub provider)               |
+| Layer | Tech |
+|-------|------|
+| Runtime | Electron `^43.2.0` |
+| Language | TypeScript `^6.0.3` (strict sticky flags; ESM source → CJS main/preload) |
+| Build | Rslib (main + preload), Rsbuild (renderer) |
+| Package manager | Bun 1.3.14 (`engines`: Bun ≥ 1.3.14, Node `>=26 <27`) |
+| Test | Vitest `^4.1.10` workspace — **25** files, **467** tests |
+| Lint / format | ESLint 10 flat + Prettier 3 |
+| UI | Vanilla TypeScript (no UI framework) |
+| Logging / updates | `electron-log`, `electron-updater` (GitHub provider) |
 
-## Testing & Linting
+## Testing & linting
 
-- `bun run test` runs the Vitest workspace with two projects: `main/` (Node env, Electron mocked via `vi.hoisted`) and `renderer/` (jsdom).
-- ESLint flat config enforces strict rules: `no-explicit-any`, `no-floating-promises`, `strict-boolean-expressions`, `consistent-type-imports` (all `error`).
-- TypeScript runs in strict mode with `exactOptionalPropertyTypes`, `verbatimModuleSyntax`, `noUncheckedIndexedAccess`, `noImplicitOverride`, and `noImplicitReturns`.
-- Benchmark output is generated evidence under `artifacts/`; source and release packages use built `lib/` output and packaged runtime assets.
+- `bun run test` — main project (mocked Electron) + renderer (jsdom).
+- Sticky ESLint on `src/`: `no-explicit-any`, `no-unsafe-*`, `no-floating-promises`, `strict-boolean-expressions`, `ban-ts-comment`, `no-non-null-assertion`, `no-unnecessary-condition` (all error).
+- Sticky TypeScript: full `strict` family plus `exactOptionalPropertyTypes`, `verbatimModuleSyntax`, `noUncheckedIndexedAccess`, `noImplicitOverride`, `noImplicitReturns` — enforced by `bun run typecheck:sticky`.
+- Benchmark artifacts under `artifacts/`; runtime packages use built `lib/` plus checked-in assets.
 
 ## Contact
 
-Questions or issues? Reach out at [kennydizi@ocworkforces.com](mailto:kennydizi@ocworkforces.com).
+Questions or issues? [kennydizi@ocworkforces.com](mailto:kennydizi@ocworkforces.com).
 
 ## License
 
