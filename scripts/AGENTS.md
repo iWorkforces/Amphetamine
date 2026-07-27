@@ -9,6 +9,7 @@ Developer-only Bun/Node scripts. Runtime app code must not import from here. Scr
 | `dev.ts` | Starts Rslib main/preload watchers, Rsbuild dev server, waits for readiness, launches Electron |
 | `benchmark-performance.ts` | Runs built app in benchmark mode and writes harness JSON artifact |
 | `check-sticky-ts.mjs` | Asserts sticky TypeScript compiler flags via `tsc --showConfig` |
+| `check-layer-imports.mjs` | Asserts domain/application import boundaries (no Electron / outer layers) |
 | `generate-app-icon.mjs` | Generates `build/icon.icns` and `src/assets/settings-hero-icon.png` |
 | `generate-coffee-tray-icons.mjs` | Generates 8 tray PNGs for active/inactive x light/dark x scale |
 
@@ -30,6 +31,13 @@ Developer-only Bun/Node scripts. Runtime app code must not import from here. Scr
 - Fails if sticky flags are missing or not `true` (`strict` family + project extras).
 - Invoked by `bun run typecheck:sticky` and the CI lint job.
 - Do not weaken the flag list without an intentional sticky-policy change in root `AGENTS.md`.
+
+## Layer Import Guard
+
+- `check-layer-imports.mjs` scans `src/domain` and `src/application` for forbidden imports.
+- Domain: no `electron*`, `main`, `application`, `infrastructure`, `preload`, `renderer`.
+- Application: no `electron*`, `main`, `infrastructure`, `preload`, `renderer` (may import domain + shared).
+- Invoked by `bun run typecheck:layers` and the CI lint job.
 
 ## Benchmark Harness
 
@@ -61,6 +69,7 @@ Developer-only Bun/Node scripts. Runtime app code must not import from here. Scr
 bun run dev
 bun run build && bun run benchmark:performance
 bun run typecheck:sticky
+bun run typecheck:layers
 bun scripts/generate-app-icon.mjs
 bun scripts/generate-coffee-tray-icons.mjs
 ```

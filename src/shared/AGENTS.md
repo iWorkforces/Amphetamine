@@ -1,61 +1,57 @@
-# Shared Types - Cross-Process Contracts
+# Shared — Cross-Process Transport Contracts
 
-Zero-runtime-dependency contracts shared by main, preload, renderer, scripts, and tests. Treat this directory as the source of truth for IPC, settings, sessions, updater status, and benchmark payload shapes.
+Zero-runtime-dependency contracts shared by main, preload, renderer, scripts, and tests. **IPC wire shapes live here.** Pure settings types and validators own their source of truth under `src/domain/` and are re-exported for stable import paths.
 
 ## Files
 
 | File | Role |
 |------|------|
-| `types.ts` | IPC channels, push channels, channel map, settings, session/updater unions, `PerfTimestamp`, `SleepBlockMode` |
-| `settings-validators.ts` | Runtime predicates, migrate + validate disk JSON, `VALIDATORS` dispatch table |
-| `benchmark-types.ts` | Benchmark env name, renderer counter type/defaults, runtime guard |
+| `types.ts` | `IPC_CHANNELS`, `PUSH_CHANNELS`, `IpcChannelMap`, session/updater wire DTOs; re-exports domain `AppSettings` / `DEFAULT_SETTINGS` / `PerfTimestamp` / `SleepBlockMode` / `asPerf` |
+| `settings-validators.ts` | Re-export of domain settings validation |
+| `benchmark-types.ts` | Benchmark env name, renderer counter types/defaults, runtime guard |
 
 ## IPC Contract
 
-- `IPC_CHANNELS` contains 15 channel literals.
-- `PUSH_CHANNELS` contains the main-to-renderer push-only subset (includes `SHORTCUT_REGISTRATION_FAILED`).
-- `IpcChannelMap` maps every channel to request and response types.
-- Adding a channel requires updates in shared types, preload `api`, preload `WiredChannels`, main `registerIpcHandlers()`, and tests.
-- Push-only channels still need response payload types because preload listeners and broadcasts are typed.
+- `IPC_CHANNELS` holds the channel name literals.
+- `PUSH_CHANNELS` is the main→renderer push subset (includes `SHORTCUT_REGISTRATION_FAILED`).
+- `IpcChannelMap` maps every channel to request/response types.
+- Adding a channel requires updates in: shared types, preload `api` + `WiredChannels`, main `registerIpcHandlers()`, and tests.
+- Push-only channels still need response payload types (typed listeners/broadcasts).
 
-## Settings Contract
-
-`AppSettings` fields:
+## Settings Contract (domain-owned)
 
 | Field | Meaning |
 |-------|---------|
-| `launchAtLogin` | OS login-item / start-at-login toggle (macOS + Windows) |
-| `preventSleep` | user sleep-prevention intent (not live session state) |
-| `defaultSessionDuration` | preference only: minutes or `null` for indefinite |
-| `sleepBlockMode` | `prevent-display-sleep` or `prevent-app-suspension` |
-| `batteryThreshold` | low-battery auto-disable percent; 0 disables |
-| `shortcut` | accelerator string; empty means default |
+| `launchAtLogin` | OS login-item toggle |
+| `preventSleep` | User sleep-prevention **intent** (not live session) |
+| `defaultSessionDuration` | Preference only: minutes or `null` for indefinite |
+| `sleepBlockMode` | `prevent-display-sleep` \| `prevent-app-suspension` |
+| `batteryThreshold` | Low-battery auto-disable percent; `0` disables |
+| `shortcut` | Accelerator; empty means default |
 
-- `DEFAULT_SETTINGS` is `Readonly<AppSettings>`; always clone with spread.
-- Runtime session state is **not** an `AppSettings` field; it lives in `session-timer` and `SessionStatusResponse`.
-- `mergeValidatedPartial()` uses `VALIDATORS`; extend the table for new fields.
-- `validateRawSettings()`: `migrateRawSettingsRecord` (legacy `sessionDuration` → `defaultSessionDuration`) then merge through `VALIDATORS` + defaults.
-- Shortcut validation rejects reserved Cmd aliases (Q/W/Tab/Space) and Windows Ctrl+W / Alt+F4; pure Cmd is normalized to CommandOrControl on win32.
-- `isSleepBlockMode` guards the two Electron `powerSaveBlocker` type strings.
+- Always clone `DEFAULT_SETTINGS` / snapshots with spread.
+- Runtime session state is **not** settings; it lives in the session engine + `SessionStatusResponse`.
+- Validation: domain `VALIDATORS` / `validateRawSettings` / `mergeValidatedPartial` (re-exported here).
+- Legacy disk key: `sessionDuration` → `defaultSessionDuration` via `migrateRawSettingsRecord`.
+- Shortcut reserved combos and win32 Cmd→CommandOrControl normalization live in domain validators.
 
-## Data Model Rules
+## Session / updater wire DTOs
 
-- `SessionStatusResponse` is a 3-arm discriminated union: stopped, timed, indefinite.
-- `SessionStartResponse` is ok/fail; handle both explicitly.
-- `AutoUpdaterStatus` is a discriminated union for checking, available, not-available, downloaded, downloading, and errors.
-- `PerfTimestamp` is `performance.now()` branded via `asPerf(n)`. Never raw-cast.
-- `SleepBlockMode` is the only allowed sleep-blocker type string set.
+- `SessionStatusResponse`: 3-arm union (stopped / timed / indefinite).
+- `SessionStartResponse`: ok/fail (`invalid-duration`, `Duration cannot exceed 24 hours`, `rejected`).
+- `AutoUpdaterStatus`: checking / available / not-available / downloaded / downloading / errors.
+- `PerfTimestamp` is branded via domain `asPerf(n)`.
 
 ## Benchmark Contract
 
 - `BENCHMARK_ENV_NAME` is `AMPHETAMINE_BENCHMARK`.
-- Renderer countdown counters are exposed by `benchmark-countdown.ts` and read by main benchmark mode.
-- Use `isRendererCountdownTimerCounters()` before trusting data returned from renderer JavaScript.
+- Renderer counters: `benchmark-countdown.ts`; main harness under `infrastructure/benchmark`.
+- Guard with `isRendererCountdownTimerCounters()` before trusting executeJavaScript results.
 
 ## Anti-Patterns
 
 - Never put Electron imports here.
-- Never encode process-specific behavior in shared types.
-- Never widen shared contracts with `unknown`/`Record` unless a runtime guard narrows them immediately.
-- Never reintroduce a settings field that doubles as live session state.
-- Never add generated benchmark artifacts here; output belongs under `artifacts/`.
+- Never encode process-specific side effects in shared modules.
+- Never reintroduce domain type bodies into this package (re-export only).
+- Never add a settings field that doubles as live session state.
+- Never commit benchmark artifacts under `shared/`; use `artifacts/`.

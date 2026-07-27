@@ -37,6 +37,7 @@ jobs:
       - run: bun run typecheck
       - run: bun run typecheck:tests
       - run: bun run typecheck:sticky
+      - run: bun run typecheck:layers
       - run: bun run lint
 
   test:

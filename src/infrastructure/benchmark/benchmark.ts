@@ -3,7 +3,7 @@ import { createHook, type AsyncHook } from "node:async_hooks";
 import {
   isRendererCountdownTimerCounters,
   type RendererCountdownTimerCounters,
-} from "../shared/benchmark-types.js";
+} from "../../shared/benchmark-types.js";
 import {
   BENCHMARK_LABEL_ENV_NAME,
   BENCHMARK_USER_DATA_ENV_NAME,
@@ -153,14 +153,16 @@ function sampleSync(action: () => void): readonly number[] {
 }
 
 async function sampleTrayMenuProxy(): Promise<readonly number[]> {
-  const { measureBenchmarkTrayMenuProxy } = await import("./tray.js");
+  const { measureBenchmarkTrayMenuProxy } = await import("../../main/tray.js");
   return sampleSync(() => {
     measureBenchmarkTrayMenuProxy();
   });
 }
 
 async function sampleSettingsWindowReady(): Promise<readonly number[]> {
-  const { createSettingsWindow, closeSettingsWindow } = await import("./settings-window.js");
+  const { createSettingsWindow, closeSettingsWindow } = await import(
+    "../../main/settings-window.js"
+  );
   const samples: number[] = [];
   for (let index = 0; index < RESPONSIVENESS_SAMPLE_COUNT; index += 1) {
     const win = createSettingsWindow();

@@ -1,6 +1,7 @@
 import "./styles/main.css";
 import type { AppSettings, PerfTimestamp, SessionStatusResponse } from "../shared/types.js";
 import { asPerf, DEFAULT_SETTINGS } from "../shared/types.js";
+import { isEffectivelyActive as isEffectivelyActiveState } from "../domain/session/effective-active.js";
 import {
   installRendererBenchmarkCounters,
   recordCountdownCallback,
@@ -75,9 +76,9 @@ function computeRemainingSeconds(expiresAtPerf: PerfTimestamp | null): number | 
   return Math.floor(remainingMs / 1000);
 }
 
-/** Effective active state: true if persisted preventSleep OR a session is actively running. */
+/** Effective active state: user intent OR live session (domain pure rule). */
 function isEffectivelyActive(): boolean {
-  return settings.preventSleep || Boolean(sessionStatus?.isRunning);
+  return isEffectivelyActiveState(settings.preventSleep, Boolean(sessionStatus?.isRunning));
 }
 
 function formatTimerValue(): string {

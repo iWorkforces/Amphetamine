@@ -1,26 +1,27 @@
-# Preload - Context Bridge
+# Preload — Context Bridge
 
-Sandboxed Electron preload script. Exposes the only renderer API surface through `contextBridge.exposeInMainWorld("api", api)`. Security-critical boundary: no Node.js APIs are exposed to renderer code.
+Sandboxed Electron preload. Exposes the only renderer API through `contextBridge.exposeInMainWorld("api", api)`. Security-critical: no Node APIs to renderer.
 
 ## File
 
 | File | Role |
 |------|------|
-| `index.ts` | Defines typed `window.api`, `invoke<K>()`, push subscriptions, benchmark env helper, channel exhaustiveness check |
+| `index.ts` | Typed `window.api`, `invoke<K>()`, push subscriptions, benchmark env helper, channel exhaustiveness |
 
-## API Shape
+## API shape
 
 | Namespace | Methods | Pattern |
 |-----------|---------|---------|
 | `window` | `setHeight(n)` | validated fire-and-forget send |
 | `app` | `getVersion()`, `quit()` | `ipcRenderer.invoke` |
-| `settings` | `get()`, `set(partial)`, `open()` | `ipcRenderer.invoke` |
-| `session` | `start(durationMinutes)`, `cancel()`, `getStatus()` | `ipcRenderer.invoke` |
-| `autoUpdater` | `checkForUpdates()`, `onStatus(cb)` | invoke + push subscription |
-| `benchmark` | `isEnabled()` | reads benchmark env bridge value |
-| root callbacks | `onSettingsChanged`, `onWindowHide`, `onSessionStatusUpdate`, `onShortcutRegistrationFailed` | push subscriptions |
+| `settings` | `get()`, `set(partial)`, `open()` | invoke |
+| `session` | `start`, `cancel`, `getStatus` | invoke |
+| `autoUpdater` | `checkForUpdates()`, `onStatus(cb)` | invoke + push |
+| `benchmark` | `isEnabled()` | env bridge read-only |
+| `platform` | `os` (and related) | host identity for UI labels |
+| root | `onSettingsChanged`, `onWindowHide`, `onSessionStatusUpdate`, `onShortcutRegistrationFailed` | push subscriptions |
 
-## Push Subscription Pattern
+## Push subscription pattern
 
 ```typescript
 onXxx: (callback: (data: T) => void) => {
@@ -30,22 +31,18 @@ onXxx: (callback: (data: T) => void) => {
 };
 ```
 
-- Always return an unsubscribe function.
-- Listener payload types come from `IpcChannelMap` or push-channel response types.
-- Renderer owns cleanup; preload owns narrow exposure.
-- Settings UI must subscribe to `onShortcutRegistrationFailed` for registration failures from main.
+Always return unsubscribe. Payload types from `IpcChannelMap` / push responses.
 
-## Type Safety
+## Type safety
 
-- The exported `Api` type is derived from the concrete `api` object.
-- `invoke<K>()` is parameterized by shared `IpcChannelMap`; never hand-write request/response shapes.
-- `WiredChannels` plus `_ExhaustivenessCheck` intentionally fails typecheck if shared channels are not wired here.
-- `benchmark.isEnabled()` should remain read-only and side-effect free.
-- `settings.set` accepts `Partial<AppSettings>`; response is `{ settings, rejectedKeys }`.
+- Exported `Api` derived from concrete `api` object.
+- `invoke<K>()` parameterized by shared `IpcChannelMap`.
+- `WiredChannels` exhaustiveness fails typecheck if shared channels are not wired.
+- Imports: **shared** contracts only — never `application`, `infrastructure`, or `main`.
 
 ## Anti-Patterns
 
 - Never expose `ipcRenderer`, `shell`, `fs`, `process`, or arbitrary channel names.
 - Never disable `contextIsolation` to simplify renderer code.
-- Never add a push listener without a cleanup return.
-- Never make renderer import Electron directly; fix preload API instead.
+- Never add a push listener without cleanup return.
+- Never make renderer import Electron; extend preload instead.
