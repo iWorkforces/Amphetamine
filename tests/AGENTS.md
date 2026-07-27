@@ -7,6 +7,8 @@ Two Vitest projects: main-process tests in Node with mocked Electron, renderer t
 ```text
 tests/
   setup.main.ts        baseline Electron mock for main tests
+  domain/              pure domain unit tests (no Electron)
+  application/         application use-case tests (ports mocked)
   main/                Node-environment tests; see main/AGENTS.md
   renderer/            jsdom tests; see renderer/AGENTS.md
 ```
@@ -15,7 +17,9 @@ tests/
 
 | Project | Environment | Includes | Coverage Include |
 |---------|-------------|----------|------------------|
-| `main` | `node` | `tests/main/**/*.test.ts` | `src/main/**/*.ts` |
+| `domain` | `node` | `tests/domain/**/*.test.ts` | `src/domain/**/*.ts` |
+| `application` | `node` | `tests/application/**/*.test.ts` | `src/application/**/*.ts` |
+| `main` | `node` | `tests/main/**/*.test.ts` | `src/main/**/*.ts`, `src/infrastructure/**/*.ts` |
 | `renderer` | `jsdom` | `tests/renderer/**/*.test.ts` | `src/renderer/**/*.ts` |
 
 - Coverage provider is v8.
@@ -46,6 +50,7 @@ bun run test -- tests/renderer
 bun run test:coverage
 bun run typecheck:tests
 bun run typecheck:sticky
+bun run typecheck:layers
 ```
 
 ## Notes

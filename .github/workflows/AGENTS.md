@@ -19,7 +19,7 @@ Workflow definitions for lint/test/build, production release publishing, and dev
 - Node is pinned to `26.3.0`; Bun is pinned to `1.3.14`.
 - Install uses `bun install --frozen-lockfile`.
 - Lint job includes a source guard: fail if `OCWorkforces` appears under `src/`.
-- Lint job runs: `typecheck`, `typecheck:tests`, `typecheck:sticky`, then `lint`.
+- Lint job runs: `typecheck`, `typecheck:tests`, `typecheck:sticky`, `typecheck:layers`, then `lint`.
 - Build jobs run only for push to `main` after lint and test pass.
 - macOS matrix packages arm64 on `macos-latest` and x64 on `macos-15-intel`.
 - Windows matrix packages **x64** on `windows-latest` and **arm64** on `windows-11-arm` (NSIS + portable `.exe`).

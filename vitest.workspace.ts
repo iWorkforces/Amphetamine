@@ -17,6 +17,32 @@ export default defineConfig({
     projects: [
       {
         test: {
+          name: 'domain',
+          environment: 'node',
+          include: ['tests/domain/**/*.test.ts'],
+          coverage: {
+            provider: 'v8',
+            reporter: ['text', 'json-summary'],
+            include: ['src/domain/**/*.ts'],
+            exclude: ['src/domain/**/*.d.ts'],
+          },
+        },
+      },
+      {
+        test: {
+          name: 'application',
+          environment: 'node',
+          include: ['tests/application/**/*.test.ts'],
+          coverage: {
+            provider: 'v8',
+            reporter: ['text', 'json-summary'],
+            include: ['src/application/**/*.ts'],
+            exclude: ['src/application/**/*.d.ts'],
+          },
+        },
+      },
+      {
+        test: {
           name: 'main',
           environment: 'node',
           include: ['tests/main/**/*.test.ts'],
@@ -24,8 +50,8 @@ export default defineConfig({
           coverage: {
             provider: 'v8',
             reporter: ['text', 'json-summary'],
-            include: ['src/main/**/*.ts'],
-            exclude: ['src/main/**/*.d.ts'],
+            include: ['src/main/**/*.ts', 'src/infrastructure/**/*.ts'],
+            exclude: ['src/main/**/*.d.ts', 'src/infrastructure/**/*.d.ts'],
           },
         },
       },

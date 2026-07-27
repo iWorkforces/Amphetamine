@@ -17,6 +17,8 @@ Product platforms: **darwin** and **win32**. OS differences go through thin main
 ## Source Map
 
 ```text
+src/domain/               Pure types/rules (settings, session, battery, validators) — no Electron
+src/application/          Use cases + ports (interfaces only until adapters land)
 src/main/                 Electron main process, tray, IPC, settings, timers, updater
   index.ts                bootstrap, single quit orchestrator, benchmark entry
   coordinator.ts          settings -> system sync hub
@@ -26,9 +28,9 @@ src/main/                 Electron main process, tray, IPC, settings, timers, up
 src/renderer/             popover UI (controls + status), CSS, benchmark countdown
   settings/               separate settings-window entry; see local AGENTS.md
 src/preload/              sandboxed contextBridge API
-src/shared/               IPC/settings/session/benchmark contracts
+src/shared/               IPC transport contracts; re-exports domain settings types
 src/assets/               checked-in generated PNGs consumed at runtime
-scripts/                  Bun tooling, icon generation, dev orchestration, benchmarks, sticky typecheck guard
+scripts/                  Bun tooling, icon generation, dev orchestration, benchmarks, sticky/layer guards
 build/                    electron-builder resources, entitlements, fuses
 .github/workflows/        CI/CD + develop beta packaging; see local AGENTS.md
 lib/, dist/, artifacts/   generated outputs; do not add AGENTS.md here
@@ -39,7 +41,8 @@ lib/, dist/, artifacts/   generated outputs; do not add AGENTS.md here
 | Task | Location | Notes |
 |------|----------|-------|
 | Add IPC channel | `src/shared/types.ts`, `src/preload/index.ts`, `src/main/ipc.ts` | Keep `IPC_CHANNELS`, `IpcChannelMap`, preload wiring, and handlers in sync |
-| Add settings field | `src/shared/types.ts`, `src/shared/settings-validators.ts` | Extend `AppSettings`, `DEFAULT_SETTINGS`, and `VALIDATORS`; migrate legacy keys in `migrateRawSettingsRecord` if needed |
+| Add settings field | `src/domain/settings/app-settings.ts`, `src/domain/settings-validation/validators.ts` | Extend `AppSettings`, `DEFAULT_SETTINGS`, and `VALIDATORS`; shared re-exports stay in sync; migrate legacy keys in `migrateRawSettingsRecord` if needed |
+| Domain pure rules | `src/domain/` | No Electron/Node I/O; application ports under `src/application/ports/` |
 | Settings -> system sync | `src/main/coordinator.ts` | Only coordinator maps settings into system side effects |
 | Session logic | `src/main/session-timer.ts` | Discriminated state union, `performance.now()`, `asPerf()`; runtime only (not settings) |
 | Sleep prevention | `src/main/sleep-prevention.ts` | Sole `powerSaveBlocker` owner; mode from `sleepBlockMode` |
@@ -101,6 +104,7 @@ bun run package:win            # Windows x64 NSIS + portable + flip-fuses; also 
 bun run package:win:arm64      # Windows arm64 NSIS + portable + flip-fuses; also :win:dir:arm64
 bun run typecheck              # tsc -b; use typecheck:tests for tests
 bun run typecheck:sticky       # assert sticky strict compiler flags
+bun run typecheck:layers       # assert domain/application import boundaries
 bun run lint                   # ESLint src/ tests/
 bun run format                 # Prettier src/tests targets
 bun run clean                  # remove lib/dist outputs

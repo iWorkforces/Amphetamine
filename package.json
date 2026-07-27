@@ -61,6 +61,7 @@
     "typecheck": "tsc -b",
     "typecheck:tests": "tsc --project tsconfig.tests.json --noEmit",
     "typecheck:sticky": "node scripts/check-sticky-ts.mjs",
+    "typecheck:layers": "node scripts/check-layer-imports.mjs",
     "test": "vitest run -c vitest.workspace.ts",
     "test:watch": "vitest -c vitest.workspace.ts",
     "test:coverage": "vitest run -c vitest.workspace.ts --coverage",
