@@ -198,7 +198,7 @@ export type SleepBlockMode = "prevent-display-sleep" | "prevent-app-suspension";
 export interface AppSettings {
   /** Whether to launch the app at login (auto-start on system restart) */
   launchAtLogin: boolean;
-  /** Whether to prevent the Mac from sleeping */
+  /** Whether to prevent the system from sleeping (user intent) */
   preventSleep: boolean;
   /**
    * Default session duration preference in minutes (`null` = indefinite).

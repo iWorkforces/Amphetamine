@@ -27,7 +27,9 @@
   --radius-sm: 7px;
   --shadow: 0 4px 24px rgba(0, 0, 0, 0.18);
   --shadow-sm: 0 1px 4px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04);
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+  font-family:
+    -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable", "Segoe UI",
+    system-ui, sans-serif;
   font-size: 13px;
   -webkit-font-smoothing: antialiased;
 }
@@ -255,7 +257,7 @@ body {
   letter-spacing: 0.01em;
 }
 
-/* ---- Toggle switch (iOS/macOS style) ---- */
+/* ---- Toggle switch ---- */
 .setting-row--toggle {
   margin-top: 10px;
 }
@@ -511,7 +513,9 @@ body {
   height: 30px;
   padding: 0 12px;
   font-size: 12.5px;
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+  font-family:
+    -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable", "Segoe UI",
+    system-ui, sans-serif;
   font-weight: 600;
   color: var(--text-primary);
   background: var(--surface-elevated);

@@ -55,7 +55,7 @@ export function showAbout(_mainWindow?: BrowserWindow): void {
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
-    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI Variable", "Segoe UI", "Helvetica Neue", sans-serif;
     -webkit-font-smoothing: antialiased;
     display: flex;
     flex-direction: column;

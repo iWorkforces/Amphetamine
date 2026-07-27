@@ -155,7 +155,7 @@ function buildSettingsForm(): string {
           <label class="setting-label" for="session-duration-select">
             ⏳ Activate for
           </label>
-          <span class="setting-description">Duration to keep your Mac awake</span>
+          <span class="setting-description">Duration to keep your computer awake</span>
         </div>
         <div class="setting-control">
           <span class="save-indicator" id="duration-save-indicator"></span>
