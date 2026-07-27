@@ -132,6 +132,14 @@ const api = {
   benchmark: {
     isEnabled: (): boolean => process.env[BENCHMARK_ENV_NAME] === "1",
   },
+
+  /**
+   * Host OS identity for renderer UI (shortcut labels, etc.).
+   * Read-only snapshot of Node `process.platform` in the preload sandbox.
+   */
+  platform: {
+    os: process.platform,
+  },
 };
 
 contextBridge.exposeInMainWorld("api", api);
