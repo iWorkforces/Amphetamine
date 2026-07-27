@@ -51,61 +51,61 @@ describe("global-shortcut: unregister-before-register + failure broadcast", () =
   });
 
   it("does not call unregister on first registration (no previous accelerator)", () => {
-    registerGlobalShortcut(createDeps("Cmd+Shift+A"));
+    registerGlobalShortcut(createDeps("CommandOrControl+Shift+A"));
     expect(mockUnregister).not.toHaveBeenCalled();
-    expect(mockRegister).toHaveBeenCalledWith("Cmd+Shift+A", expect.any(Function));
+    expect(mockRegister).toHaveBeenCalledWith("CommandOrControl+Shift+A", expect.any(Function));
   });
 
   it("unregisters previous accelerator before registering a new one", () => {
-    registerGlobalShortcut(createDeps("Cmd+Shift+A"));
-    registerGlobalShortcut(createDeps("Cmd+Shift+K"));
+    registerGlobalShortcut(createDeps("CommandOrControl+Shift+A"));
+    registerGlobalShortcut(createDeps("CommandOrControl+Shift+K"));
 
     expect(mockUnregister).toHaveBeenCalledTimes(1);
-    expect(mockUnregister).toHaveBeenCalledWith("Cmd+Shift+A");
-    expect(mockRegister).toHaveBeenLastCalledWith("Cmd+Shift+K", expect.any(Function));
+    expect(mockUnregister).toHaveBeenCalledWith("CommandOrControl+Shift+A");
+    expect(mockRegister).toHaveBeenLastCalledWith("CommandOrControl+Shift+K", expect.any(Function));
   });
 
   it("uses globalShortcut.unregister (not unregisterAll) when swapping shortcuts", () => {
-    registerGlobalShortcut(createDeps("Cmd+Shift+A"));
-    registerGlobalShortcut(createDeps("Cmd+Shift+B"));
+    registerGlobalShortcut(createDeps("CommandOrControl+Shift+A"));
+    registerGlobalShortcut(createDeps("CommandOrControl+Shift+B"));
 
     expect(mockUnregisterAll).not.toHaveBeenCalled();
-    expect(mockUnregister).toHaveBeenCalledWith("Cmd+Shift+A");
+    expect(mockUnregister).toHaveBeenCalledWith("CommandOrControl+Shift+A");
   });
 
   it("broadcasts SHORTCUT_REGISTRATION_FAILED when register() returns false", () => {
     mockRegister.mockReturnValue(false);
-    registerGlobalShortcut(createDeps("Cmd+Shift+A"));
+    registerGlobalShortcut(createDeps("CommandOrControl+Shift+A"));
 
     expect(mockSend).toHaveBeenCalledWith("shortcut:registration-failed", {
-      accelerator: "Cmd+Shift+A",
+      accelerator: "CommandOrControl+Shift+A",
     });
   });
 
   it("does not broadcast failure when register() returns true", () => {
     mockRegister.mockReturnValue(true);
-    registerGlobalShortcut(createDeps("Cmd+Shift+A"));
+    registerGlobalShortcut(createDeps("CommandOrControl+Shift+A"));
 
     expect(mockSend).not.toHaveBeenCalled();
   });
 
   it("on failure, prevAccelerator is not advanced (next call does not unregister failed shortcut)", () => {
     mockRegister.mockReturnValue(false);
-    registerGlobalShortcut(createDeps("Cmd+Shift+A"));
+    registerGlobalShortcut(createDeps("CommandOrControl+Shift+A"));
     expect(mockUnregister).not.toHaveBeenCalled();
 
     mockRegister.mockReturnValue(true);
-    registerGlobalShortcut(createDeps("Cmd+Shift+B"));
+    registerGlobalShortcut(createDeps("CommandOrControl+Shift+B"));
 
     expect(mockUnregister).not.toHaveBeenCalled();
   });
 
   it("after unregisterGlobalShortcut(), next register() does not call unregister", () => {
-    registerGlobalShortcut(createDeps("Cmd+Shift+A"));
+    registerGlobalShortcut(createDeps("CommandOrControl+Shift+A"));
     unregisterGlobalShortcut();
     mockUnregister.mockClear();
 
-    registerGlobalShortcut(createDeps("Cmd+Shift+B"));
+    registerGlobalShortcut(createDeps("CommandOrControl+Shift+B"));
 
     expect(mockUnregister).not.toHaveBeenCalled();
   });
@@ -119,22 +119,22 @@ describe("global-shortcut: unregister-before-register + failure broadcast", () =
     ]);
     mockRegister.mockReturnValue(false);
 
-    registerGlobalShortcut(createDeps("Cmd+Shift+X"));
+    registerGlobalShortcut(createDeps("CommandOrControl+Shift+X"));
 
     expect(send1).toHaveBeenCalledWith("shortcut:registration-failed", {
-      accelerator: "Cmd+Shift+X",
+      accelerator: "CommandOrControl+Shift+X",
     });
     expect(send2).toHaveBeenCalledWith("shortcut:registration-failed", {
-      accelerator: "Cmd+Shift+X",
+      accelerator: "CommandOrControl+Shift+X",
     });
   });
 
-  it("falls back to default Cmd+Shift+A on failure broadcast when shortcut is empty", () => {
+  it("falls back to default CommandOrControl+Shift+A on failure broadcast when shortcut is empty", () => {
     mockRegister.mockReturnValue(false);
     registerGlobalShortcut(createDeps(""));
 
     expect(mockSend).toHaveBeenCalledWith("shortcut:registration-failed", {
-      accelerator: "Cmd+Shift+A",
+      accelerator: "CommandOrControl+Shift+A",
     });
   });
 });
