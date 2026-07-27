@@ -34,11 +34,9 @@ vi.mock("../../src/main/settings.js", () => ({
  */
 async function buildHandle(): Promise<SessionTimerHandle> {
   const mod = await import("../../src/main/session-timer.js");
-  const handle = mod.createSessionTimer({
+  return mod.createSessionTimer({
     broadcast: mockBroadcastToWindows,
   });
-  mod.setActiveSessionTimer(handle);
-  return handle;
 }
 
 describe("session-timer", () => {
@@ -46,6 +44,7 @@ describe("session-timer", () => {
   let cancelSession: () => SessionState;
   let getStatus: () => SessionStatusResponse;
   let cleanup: () => void;
+  let reconcileSessionState: () => void;
 
   beforeEach(async () => {
     vi.useRealTimers();
@@ -66,6 +65,7 @@ describe("session-timer", () => {
     cancelSession = handle.cancelSession;
     getStatus = handle.getStatus;
     cleanup = handle.cleanup;
+    reconcileSessionState = handle.reconcileSessionState;
   });
 
   afterEach(() => {
@@ -148,13 +148,12 @@ describe("session-timer", () => {
       expect(state.durationMinutes).toBe(30);
     });
 
-    it("reconcileSessionState is a no-op (preference must not kill live session)", async () => {
+    it("reconcileSessionState is a no-op (preference must not kill live session)", () => {
       startSession(30);
       expect(getStatus().isRunning).toBe(true);
       // Preference null must not cancel runtime session.
       settingsState = { ...settingsState, defaultSessionDuration: null };
-      const mod = await import("../../src/main/session-timer.js");
-      mod.reconcileSessionState();
+      reconcileSessionState();
       expect(getStatus().isRunning).toBe(true);
     });
 
@@ -475,6 +474,7 @@ describe("session-timer additional edge cases", () => {
   let startSession: (_durationMinutes: number | null) => SessionState;
   let cancelSession: () => SessionState;
   let getStatus: () => SessionStatusResponse;
+  let reconcileSessionState: () => void;
 
   beforeEach(async () => {
     vi.useRealTimers();
@@ -491,6 +491,7 @@ describe("session-timer additional edge cases", () => {
     startSession = handle.startSession;
     cancelSession = handle.cancelSession;
     getStatus = handle.getStatus;
+    reconcileSessionState = handle.reconcileSessionState;
   });
 
   afterEach(() => {
@@ -625,8 +626,7 @@ describe("session-timer additional edge cases", () => {
         defaultSessionDuration: null,
       };
 
-      const mod = await import("../../src/main/session-timer.js");
-      mod.reconcileSessionState();
+      reconcileSessionState();
 
       const after = getStatus();
       expect(after.isRunning).toBe(true);
@@ -649,12 +649,6 @@ describe("session-timer additional edge cases", () => {
       ).toThrow(/broadcast/);
     });
 
-    it("module-level startSession throws when no active handle is registered", async () => {
-      vi.resetModules();
-      const mod = await import("../../src/main/session-timer.js");
-      mod.setActiveSessionTimer(null);
-      expect(() => mod.startSession(30)).toThrow(/No active handle/);
-    });
   });
 
   describe("handleResume — sleep-resilient expiry (FIX 2)", () => {
@@ -667,7 +661,6 @@ describe("session-timer additional edge cases", () => {
         broadcast: mockBroadcastToWindows,
         powerMonitor: mockPowerMonitor as unknown as typeof powerMonitor,
       });
-      mod.setActiveSessionTimer(handle);
 
       // Start a 30-min timed session.
       handle.startSession(30);
@@ -700,7 +693,6 @@ describe("session-timer additional edge cases", () => {
         broadcast: mockBroadcastToWindows,
         powerMonitor: mockPowerMonitor as unknown as typeof powerMonitor,
       });
-      mod.setActiveSessionTimer(handle);
 
       // Anchor wallClockExpiresAt at 0 + 30*60_000.
       dateNowSpy.mockReturnValue(0);
@@ -732,7 +724,6 @@ describe("session-timer additional edge cases", () => {
         broadcast: mockBroadcastToWindows,
         powerMonitor: mockPowerMonitor as unknown as typeof powerMonitor,
       });
-      mod.setActiveSessionTimer(handle);
 
       const resumeCall = mockPowerMonitor.on.mock.calls.find(
         (c: unknown[]) => c[0] === "resume",
@@ -756,7 +747,6 @@ describe("session-timer additional edge cases", () => {
         broadcast: mockBroadcastToWindows,
         powerMonitor: mockPowerMonitor as unknown as typeof powerMonitor,
       });
-      mod.setActiveSessionTimer(handle);
       handle.startSession(null);
 
       const resumeCall = mockPowerMonitor.on.mock.calls.find(
@@ -781,7 +771,6 @@ describe("session-timer additional edge cases", () => {
         broadcast: mockBroadcastToWindows,
         powerMonitor: mockPowerMonitor as unknown as typeof powerMonitor,
       });
-      mod.setActiveSessionTimer(handle);
 
       handle.cleanup();
 

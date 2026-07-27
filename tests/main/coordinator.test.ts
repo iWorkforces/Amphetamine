@@ -60,7 +60,6 @@ const mockCreateSessionTimer = vi.hoisted(() =>
     broadcastSessionUpdate: mockSessionBroadcast,
   })),
 );
-const mockSetActiveSessionTimer = vi.hoisted(() => vi.fn());
 
 const mockCreateSettingsWindow = vi.hoisted(() => vi.fn());
 
@@ -122,7 +121,6 @@ vi.mock("../../src/main/battery-monitor.js", () => ({
 
 vi.mock("../../src/main/session-timer.js", () => ({
   createSessionTimer: mockCreateSessionTimer,
-  setActiveSessionTimer: mockSetActiveSessionTimer,
 }));
 
 vi.mock("../../src/main/auto-updater.js", () => ({
@@ -214,13 +212,13 @@ describe("coordinator", () => {
       expect(typeof deps.broadcast).toBe("function");
     });
 
-    it("registers the session-timer handle as the module-level active handle", async () => {
+    it("constructs a session timer handle for injection (no module-level delegators)", async () => {
       await initCoordinator();
 
-      expect(mockSetActiveSessionTimer).toHaveBeenCalledWith(
+      expect(mockCreateSessionTimer).toHaveBeenCalledTimes(1);
+      expect(mockCreateSessionTimer).toHaveBeenCalledWith(
         expect.objectContaining({
-          startSession: mockSessionStart,
-          cancelSession: mockSessionCancel,
+          broadcast: expect.any(Function),
         }),
       );
     });
@@ -400,7 +398,7 @@ describe("coordinator", () => {
     it("logs initialization", async () => {
       await initCoordinator();
 
-      expect(mockLogInfo).toHaveBeenCalledWith("[coordinator] Initialized");
+      expect(mockLogInfo).toHaveBeenCalledWith("[composition] Initialized");
     });
   });
 
@@ -496,19 +494,19 @@ describe("coordinator", () => {
       expect(mockBatteryCleanup).toHaveBeenCalledTimes(1);
     });
 
-    it("clears the active session-timer handle", async () => {
+    it("cleans up the session timer on cleanup", async () => {
       await initCoordinator();
-      mockSetActiveSessionTimer.mockClear();
+      mockSessionCleanup.mockClear();
       cleanupCoordinator();
 
-      expect(mockSetActiveSessionTimer).toHaveBeenCalledWith(null);
+      expect(mockSessionCleanup).toHaveBeenCalledTimes(1);
     });
 
     it("logs cleanup", async () => {
       await initCoordinator();
       cleanupCoordinator();
 
-      expect(mockLogInfo).toHaveBeenCalledWith("[coordinator] Cleaned up");
+      expect(mockLogInfo).toHaveBeenCalledWith("[composition] Cleaned up");
     });
 
     it("handles cleanup when not initialized", async () => {

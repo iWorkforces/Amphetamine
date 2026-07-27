@@ -34,6 +34,7 @@ Main-process Vitest suites run in Node with Electron mocked. They cover lifecycl
 - Tray cleanup: `destroy()` called.
 - Sleep mode: `powerSaveBlocker.start` receives configured mode string.
 - Effective sleep OR matrix: `preventSleep || sessionActive` (4 rows) via `getTrayDeps` / `syncPreventSleep`.
+- Composition: session IPC deps throw before `init()`; no `setActiveSessionTimer` module globals.
 - `SESSION_START` duration goldens: `invalid-duration`, `Duration cannot exceed 24 hours` (>1440), bound 1440 inclusive, `null` indefinite.
 - `SETTINGS_CHANGED` only for `preventSleep` | `batteryThreshold` | `shortcut` — not `launchAtLogin` / `sleepBlockMode` / `defaultSessionDuration`.
 - `sleepBlockMode` change recomputes only when `isPreventingSleep() || preventSleep || sessionActive`; `recompute` reads mode from `getSettings()` (advance mock cache before subscriber callback).
