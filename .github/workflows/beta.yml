@@ -439,7 +439,7 @@ jobs:
           DMG_COUNT=$(find artifacts -name "*-${SUFFIX}.dmg" 2>/dev/null | wc -l | tr -d ' ')
           ZIP_COUNT=$(find artifacts -name "*-${SUFFIX}.zip" 2>/dev/null | wc -l | tr -d ' ')
           EXE_COUNT=$(find artifacts -name "*-${SUFFIX}.exe" 2>/dev/null | wc -l | tr -d ' ')
-          echo "Found ${DMG_COUNT} beta DMG(s), ${ZIP_COUNT} beta ZIP(s), ${EXE_COUNT} beta EXE(s) matching *- ${SUFFIX}"
+          echo "Found ${DMG_COUNT} beta DMG(s), ${ZIP_COUNT} beta ZIP(s), ${EXE_COUNT} beta EXE(s) matching *-${SUFFIX}"
           find artifacts -type f | sort
           if [ "$DMG_COUNT" -eq 0 ] && [ "$ZIP_COUNT" -eq 0 ] && [ "$EXE_COUNT" -eq 0 ]; then
             echo "ERROR: No beta DMG, ZIP, or EXE artifacts found (expected *-${SUFFIX}.*)"
