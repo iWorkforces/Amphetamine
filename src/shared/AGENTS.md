@@ -6,9 +6,11 @@ Zero-runtime-dependency contracts shared by main, preload, renderer, scripts, an
 
 | File | Role |
 |------|------|
-| `types.ts` | IPC channels, push channels, channel map, settings, session/updater unions, `PerfTimestamp`, `SleepBlockMode` |
-| `settings-validators.ts` | Runtime predicates, migrate + validate disk JSON, `VALIDATORS` dispatch table |
+| `types.ts` | IPC channels, push channels, channel map, session/updater unions; re-exports domain `AppSettings` / `PerfTimestamp` / `SleepBlockMode` |
+| `settings-validators.ts` | Compatibility re-export of domain settings validation |
 | `benchmark-types.ts` | Benchmark env name, renderer counter type/defaults, runtime guard |
+
+Pure settings types and validators own their source of truth under `src/domain/`.
 
 ## IPC Contract
 
