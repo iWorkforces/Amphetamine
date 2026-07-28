@@ -9,7 +9,7 @@ Implements application ports with Electron/Node. May import domain types and app
 | `clock/system-clock.ts` | `ClockPort` | `performance.now` + `Date.now` |
 | `schedule/node-schedule.ts` | `SchedulePort` | `setTimeout` + `unref` / `clearTimeout` |
 | `logging/electron-logger.ts` | `LoggerPort` | `electron-log` |
-| `notification/broadcast-notifier.ts` | `MainToRendererNotifierPort` | wraps injectible broadcast fn |
+| `notification/broadcast-notifier.ts` | `MainToRendererNotifierPort` | maps `AppPushEvent` → IPC PUSH_CHANNELS |
 | `settings/file-settings-store.ts` | `SettingsStorePort` | atomic JSON, write mutex, corrupt backup |
 | `settings/dialog-save-failure.ts` | `SettingsSaveFailurePort` | `dialog.showErrorBox` |
 | `sleep/power-save-blocker.ts` | `SleepBlockerPort` | **sole** `powerSaveBlocker` owner |
@@ -20,6 +20,8 @@ Implements application ports with Electron/Node. May import domain types and app
 | `benchmark/` | harness | production benchmark mode; see local `AGENTS.md` |
 
 ## Rules
+
+- Prefer `import … from "electron/main"` in main-process adapters (process role at import site).
 
 - Never call `powerSaveBlocker` outside `sleep/power-save-blocker.ts`.
 - Platform shell-outs stay under `main/platform` (not moved out of main).

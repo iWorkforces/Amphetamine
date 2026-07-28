@@ -96,6 +96,11 @@ Do not register a second `before-quit` handler on settings or other modules.
 - Skips auto-updater; measures then prints `AMPHETAMINE_BENCHMARK_RESULT:` and quits.
 - Harness may dynamically import tray/settings from main for measurement.
 
+## Process imports
+
+- Main/infrastructure use `from "electron/main"` (not bare `electron`) so process role is explicit.
+- Preload continues to use `from "electron"` / renderer-safe APIs.
+
 ## Anti-Patterns
 
 - Never call `powerSaveBlocker.start/stop` outside `infrastructure/sleep`.

@@ -18,7 +18,7 @@ Electron-free application services. Depends on **domain** and **port interfaces*
 
 ## Ports (budget)
 
-`SettingsStore`, `SettingsSaveFailure`, `SleepBlocker`, `MainToRendererNotifier`, `Clock`, `Schedule`, `AutoLaunch`, `GlobalShortcut`, `BatterySensor`, `Logger`, `Updater`.
+`SettingsStore`, `SettingsSaveFailure`, `SleepBlocker`, `MainToRendererNotifier (`AppPushEvent` — no IPC channel literals)`, `Clock`, `Schedule`, `AutoLaunch`, `GlobalShortcut`, `BatterySensor`, `Logger`, `Updater`.
 
 Do not add ports for Tray/Menu/BrowserWindow chrome.
 
