@@ -39,8 +39,11 @@ describe("createElectronUpdaterPort", () => {
       publish: (ch: string, data: unknown) => void;
       getRepositoryUrl: () => string;
     };
-    deps.publish("auto-updater:status", { status: "checking" });
-    expect(publish).toHaveBeenCalledWith("auto-updater:status", { status: "checking" });
+    deps.publish({ type: "auto-updater-status", status: { status: "checking" } });
+    expect(publish).toHaveBeenCalledWith({
+      type: "auto-updater-status",
+      status: { status: "checking" },
+    });
     expect(deps.getRepositoryUrl()).toBe("https://github.com/org/repo");
     port.init();
     port.checkNow();

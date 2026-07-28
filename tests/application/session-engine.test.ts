@@ -5,7 +5,6 @@ import type { ClockPort } from "../../src/application/ports/clock.port.js";
 import type { SchedulePort } from "../../src/application/ports/schedule.port.js";
 import type { LoggerPort } from "../../src/application/ports/logger.port.js";
 import type { MainToRendererNotifierPort } from "../../src/application/ports/main-to-renderer-notifier.port.js";
-import { IPC_CHANNELS } from "../../src/shared/types.js";
 
 type Scheduled = { ms: number; cb: () => void; cancelled: boolean };
 
@@ -107,10 +106,10 @@ describe("createSessionEngine", () => {
     expect(snap.expiresAt).toBeNull();
     expect(schedule.entries).toHaveLength(0);
     expect(onActiveMock).toHaveBeenCalledWith(true);
-    expect(publish).toHaveBeenCalledWith(
-      IPC_CHANNELS.SESSION_STATUS_UPDATE,
-      expect.objectContaining({ isRunning: true, durationMinutes: null }),
-    );
+    expect(publish).toHaveBeenCalledWith({
+      type: "session-status",
+      status: expect.objectContaining({ isRunning: true, durationMinutes: null }),
+    });
   });
 
   it("starts a timed session and schedules expiry via SchedulePort", () => {
@@ -134,10 +133,10 @@ describe("createSessionEngine", () => {
 
     expect(engine.sessionActive).toBe(false);
     expect(onActiveMock).toHaveBeenCalledWith(false);
-    expect(publish).toHaveBeenCalledWith(
-      IPC_CHANNELS.SESSION_STATUS_UPDATE,
-      expect.objectContaining({ isRunning: false }),
-    );
+    expect(publish).toHaveBeenCalledWith({
+      type: "session-status",
+      status: expect.objectContaining({ isRunning: false }),
+    });
   });
 
   it("cancel clears scheduled expiry and deactivates", () => {

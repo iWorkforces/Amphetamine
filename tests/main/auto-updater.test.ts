@@ -106,8 +106,14 @@ describe("auto-updater (hybrid infrastructure)", () => {
 
     const hybrid = await import("../../src/infrastructure/updater/hybrid-auto-updater.js");
     const { broadcastToWindows } = await import("../../src/main/utils/broadcast.js");
+    const { createBroadcastNotifier } = await import(
+      "../../src/infrastructure/notification/broadcast-notifier.js"
+    );
+    const notifier = createBroadcastNotifier(broadcastToWindows);
     hybrid.configureHybridAutoUpdater({
-      publish: broadcastToWindows,
+      publish: (event) => {
+        notifier.publish(event);
+      },
       getRepositoryUrl: () => String(mockGetPackageInfo().repository),
       prepareDialogPresentation: () => {
         mockEnterForegroundMode();
@@ -140,8 +146,14 @@ describe("auto-updater (hybrid infrastructure)", () => {
         vi.resetModules();
         const freshHybrid = await import("../../src/infrastructure/updater/hybrid-auto-updater.js");
         const { broadcastToWindows: bcast } = await import("../../src/main/utils/broadcast.js");
+        const { createBroadcastNotifier: makeN } = await import(
+          "../../src/infrastructure/notification/broadcast-notifier.js"
+        );
+        const n = makeN(bcast);
         freshHybrid.configureHybridAutoUpdater({
-          publish: bcast,
+          publish: (event) => {
+            n.publish(event);
+          },
           getRepositoryUrl: () => "https://github.com/OCWorkforces/Amphetamine",
           prepareDialogPresentation: () => {},
           restoreTrayPresentation: () => {},
@@ -667,8 +679,14 @@ describe("auto-updater (hybrid infrastructure)", () => {
         vi.resetModules();
         const freshMod = await import("../../src/infrastructure/updater/hybrid-auto-updater.js");
         const { broadcastToWindows: bcast2 } = await import("../../src/main/utils/broadcast.js");
+        const { createBroadcastNotifier: makeN2 } = await import(
+          "../../src/infrastructure/notification/broadcast-notifier.js"
+        );
+        const n2 = makeN2(bcast2);
         freshMod.configureHybridAutoUpdater({
-          publish: bcast2,
+          publish: (event) => {
+            n2.publish(event);
+          },
           getRepositoryUrl: () => "https://github.com/OCWorkforces/Amphetamine",
           prepareDialogPresentation: () => {
             mockEnterForegroundMode();

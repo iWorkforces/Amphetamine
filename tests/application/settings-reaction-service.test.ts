@@ -4,7 +4,6 @@ import {
   RENDERER_VISIBLE_SETTINGS_KEYS,
 } from "../../src/application/settings/settings-reaction-service.js";
 import { DEFAULT_SETTINGS } from "../../src/domain/settings/app-settings.js";
-import { IPC_CHANNELS } from "../../src/shared/types.js";
 import type { AppSettings } from "../../src/domain/settings/app-settings.js";
 
 describe("createSettingsReactionService", () => {
@@ -60,7 +59,7 @@ describe("createSettingsReactionService", () => {
       publish.mockClear();
       const next = { ...base, [key]: key === "shortcut" ? "Cmd+Shift+Z" : key === "batteryThreshold" ? 20 : true } as AppSettings;
       service.handleChange(next, base);
-      expect(publish).toHaveBeenCalledWith(IPC_CHANNELS.SETTINGS_CHANGED, next);
+      expect(publish).toHaveBeenCalledWith({ type: "settings-changed", settings: next });
     }
   });
 
