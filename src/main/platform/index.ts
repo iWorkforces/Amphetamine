@@ -13,7 +13,7 @@
  * Rules:
  * - Prefer these helpers over raw `process.platform` in main code.
  * - Never call macOS-only Electron APIs without an `isDarwin()` guard.
- * - Keep platform modules free of coordinator/settings policy.
+ * - Keep platform modules free of composition/settings policy.
  */
 
 import {

@@ -60,7 +60,7 @@ export interface TrayDeps {
   getPreventSleep: () => boolean;
   /**
    * Effective sleep-prevention active state used to drive the tray icon.
-   * Computed by the coordinator as (settings.preventSleep || sessionActive).
+   * Computed by composition as (settings.preventSleep || sessionActive).
    * The menu checkbox still mirrors user intent via getPreventSleep().
    */
   getEffectiveActive: () => boolean;

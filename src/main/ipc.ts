@@ -21,8 +21,7 @@ export { validateSender } from "./ipc-utils.js";
  * edges to settings, settings-window, auto-updater, or session-timer.
  *
  * `sessionTimer` is the subset of `SessionTimerHandle` actually consumed by
- * IPC handlers. The coordinator owns the live handle; ipc receives it (or an
- * equivalent namespace import) here.
+ * IPC handlers. Composition owns the live handle; ipc receives it here.
  */
 export interface IpcDeps {
   getSettings: () => AppSettings;

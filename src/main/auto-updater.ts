@@ -33,7 +33,7 @@ let consecutiveFailures = 0;
 /** Strict semver (optionally pre-release / build metadata) for release URL safety. */
 const SEMVER_RE = /^\d+\.\d+\.\d+(-[\w.-]+)?(\+[\w.-]+)?$/;
 
-/** Inject broadcast function (called from coordinator) */
+/** Inject broadcast function (called from composition / updater port) */
 export function setBroadcastFn(
   fn: <K extends PushChannel>(channel: K, data: IpcResponse<K>) => void,
 ): void {
