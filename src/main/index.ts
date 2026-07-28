@@ -2,7 +2,7 @@
  * Main process entry — app lifecycle events only.
  * Process graph wiring lives in AppShell.
  */
-import { app, dialog } from "electron";
+import { app, dialog } from "electron/main";
 import log from "electron-log";
 import os from "node:os";
 import { getPackageInfo } from "./utils/packageInfo.js";

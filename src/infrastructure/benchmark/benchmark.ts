@@ -1,4 +1,4 @@
-import { app, type BrowserWindow } from "electron";
+import { app, type BrowserWindow } from "electron/main";
 import { createHook, type AsyncHook } from "node:async_hooks";
 import {
   isRendererCountdownTimerCounters,

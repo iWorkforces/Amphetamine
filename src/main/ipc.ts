@@ -1,4 +1,4 @@
-import { ipcMain, app, type BrowserWindow } from "electron";
+import { ipcMain, app, type BrowserWindow } from "electron/main";
 import log from "electron-log";
 import {
   IPC_CHANNELS,

@@ -5,7 +5,7 @@
  * and uses solid (or mica) chrome so windows render correctly without mac-only APIs.
  */
 
-import type { BrowserWindowConstructorOptions } from "electron";
+import type { BrowserWindowConstructorOptions } from "electron/main";
 import { isDarwin, isWin32, type ProcessPlatform } from "./os.js";
 
 /** Chrome keys we set per platform (merged with shared window options at call sites). */

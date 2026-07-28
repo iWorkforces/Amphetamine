@@ -1,11 +1,11 @@
 import {
   Tray,
-  nativeImage,
   nativeTheme,
   Menu,
   app,
   type MenuItemConstructorOptions,
-} from "electron";
+} from "electron/main";
+import { nativeImage } from "electron/common";
 import log from "electron-log";
 import path from "node:path";
 import { fileURLToPath } from "node:url";

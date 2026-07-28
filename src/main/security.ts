@@ -1,4 +1,4 @@
-import { type BrowserWindow } from "electron";
+import { type BrowserWindow } from "electron/main";
 import log from "electron-log";
 import { validateSenderUrl } from "./ipc-utils.js";
 

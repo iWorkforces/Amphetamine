@@ -1,4 +1,4 @@
-import { app } from "electron";
+import { app } from "electron/main";
 import { cpus, freemem, totalmem } from "node:os";
 import type { RendererCountdownTimerCounters } from "../../shared/benchmark-types.js";
 

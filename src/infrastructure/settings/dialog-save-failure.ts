@@ -1,4 +1,4 @@
-import { dialog } from "electron";
+import { dialog } from "electron/main";
 import log from "electron-log";
 import type { SettingsSaveFailurePort } from "../../application/ports/settings-save-failure.port.js";
 

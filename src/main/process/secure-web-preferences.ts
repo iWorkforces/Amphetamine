@@ -3,7 +3,7 @@
  * Every app window (popover, settings, about) must go through this factory so
  * the Electron process-model security triad cannot drift between surfaces.
  */
-import type { WebPreferences } from "electron";
+import type { WebPreferences } from "electron/main";
 
 export interface SecureWebPreferencesOptions {
   /**

@@ -4,7 +4,8 @@
  * Process-model role: the only place that spawns renderer processes. Shared
  * secure webPreferences, navigation hardening, and singleton tracking live here.
  */
-import { BrowserWindow, nativeImage, shell } from "electron";
+import { BrowserWindow } from "electron/main";
+import { nativeImage, shell } from "electron/common";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {

@@ -1,4 +1,4 @@
-import { powerMonitor } from "electron";
+import { powerMonitor } from "electron/main";
 import log from "electron-log";
 import { getBatteryPercent } from "./platform/index.js";
 import { isThresholdEnabled } from "../domain/battery/threshold.js";

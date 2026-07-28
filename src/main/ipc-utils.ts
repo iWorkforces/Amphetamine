@@ -1,4 +1,4 @@
-import { ipcMain, app, type IpcMainEvent, type IpcMainInvokeEvent } from "electron";
+import { ipcMain, app, type IpcMainEvent, type IpcMainInvokeEvent } from "electron/main";
 import path from "node:path";
 import log from "electron-log";
 import { type IpcChannelMap } from "../shared/types.js";

@@ -4,7 +4,7 @@
  * Owns ready/quit ordering for windows, composition, IPC, tray, and updater.
  * Composition remains the ports/use-cases wiring; this module is the topology.
  */
-import type { BrowserWindow } from "electron";
+import type { BrowserWindow } from "electron/main";
 import log from "electron-log";
 import { createAppComposition, type AppComposition } from "./composition-root.js";
 import { registerIpcHandlers } from "./ipc.js";

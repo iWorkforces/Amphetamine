@@ -1,4 +1,4 @@
-import { app } from "electron";
+import { app } from "electron/main";
 import { isBenchmarkMode } from "../infrastructure/benchmark/benchmark-env.js";
 
 // === Window Dimensions ===

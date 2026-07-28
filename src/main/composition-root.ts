@@ -4,7 +4,7 @@
  * No Partial overrides — tests use lower-level factories (KD-21).
  */
 import log from "electron-log";
-import { app, powerMonitor } from "electron";
+import { app, powerMonitor } from "electron/main";
 import type { AppSettings } from "../shared/types.js";
 import {
   initSettings,
