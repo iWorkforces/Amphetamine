@@ -1,0 +1,150 @@
+import { describe, it, expect, vi, beforeEach } from "vitest";
+
+const mockCompositionInit = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+const mockCompositionCleanup = vi.hoisted(() => vi.fn());
+const mockGetIpcDeps = vi.hoisted(() => vi.fn().mockReturnValue({ sessionTimer: {} }));
+const mockGetTrayDeps = vi.hoisted(() => vi.fn().mockReturnValue({}));
+const mockCreateAppComposition = vi.hoisted(() =>
+  vi.fn(() => ({
+    init: mockCompositionInit,
+    cleanup: mockCompositionCleanup,
+    getIpcDeps: mockGetIpcDeps,
+    getTrayDeps: mockGetTrayDeps,
+    ready: true,
+  })),
+);
+const mockSetupTray = vi.hoisted(() => vi.fn().mockReturnValue(vi.fn()));
+const mockRegisterIpcHandlers = vi.hoisted(() => vi.fn());
+const mockFlushSettings = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+const mockInitAutoUpdater = vi.hoisted(() => vi.fn());
+const mockEnterTrayOnlyMode = vi.hoisted(() => vi.fn());
+const mockCreatePopoverWindow = vi.hoisted(() =>
+  vi.fn().mockReturnValue({ id: 1, show: vi.fn(), isDestroyed: () => false }),
+);
+const mockDestroyAllWindows = vi.hoisted(() => vi.fn());
+const mockGetPopoverWindow = vi.hoisted(() => vi.fn().mockReturnValue(null));
+const mockIsBenchmarkMode = vi.hoisted(() => vi.fn().mockReturnValue(false));
+
+vi.mock("electron-log", () => ({
+  default: { error: vi.fn(), info: vi.fn(), warn: vi.fn() },
+}));
+
+vi.mock("../../src/main/composition-root.js", () => ({
+  createAppComposition: mockCreateAppComposition,
+}));
+
+vi.mock("../../src/main/ipc.js", () => ({
+  registerIpcHandlers: mockRegisterIpcHandlers,
+}));
+
+vi.mock("../../src/main/tray.js", () => ({
+  setupTray: mockSetupTray,
+}));
+
+vi.mock("../../src/main/settings.js", () => ({
+  flushSettingsWriteChain: mockFlushSettings,
+}));
+
+vi.mock("../../src/main/auto-updater.js", () => ({
+  initAutoUpdater: mockInitAutoUpdater,
+}));
+
+vi.mock("../../src/infrastructure/benchmark/benchmark-env.js", () => ({
+  isBenchmarkMode: () => mockIsBenchmarkMode(),
+}));
+
+vi.mock("../../src/main/platform/index.js", () => ({
+  enterTrayOnlyMode: mockEnterTrayOnlyMode,
+}));
+
+vi.mock("../../src/main/process/window-graph.js", () => ({
+  createPopoverWindow: mockCreatePopoverWindow,
+  destroyAllWindows: mockDestroyAllWindows,
+  getPopoverWindow: mockGetPopoverWindow,
+}));
+
+describe("createAppShell", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.resetModules();
+    mockIsBenchmarkMode.mockReturnValue(false);
+    mockGetPopoverWindow.mockReturnValue(null);
+    mockCreatePopoverWindow.mockReturnValue({
+      id: 1,
+      show: vi.fn(),
+      isDestroyed: () => false,
+    });
+  });
+
+  it("init follows process-graph ready order", async () => {
+    const { createAppShell } = await import("../../src/main/app-shell.js");
+    const shell = createAppShell();
+    await shell.init();
+
+    expect(mockEnterTrayOnlyMode).toHaveBeenCalled();
+    expect(mockCreatePopoverWindow).toHaveBeenCalled();
+    expect(mockCreateAppComposition).toHaveBeenCalled();
+    expect(mockCompositionInit).toHaveBeenCalled();
+    expect(mockRegisterIpcHandlers).toHaveBeenCalled();
+    expect(mockSetupTray).toHaveBeenCalled();
+    expect(mockInitAutoUpdater).toHaveBeenCalled();
+    expect(shell.ready).toBe(true);
+
+    // Order: tray-only → popover → composition.init → ipc → tray → updater
+    const order = [
+      mockEnterTrayOnlyMode.mock.invocationCallOrder[0],
+      mockCreatePopoverWindow.mock.invocationCallOrder[0],
+      mockCompositionInit.mock.invocationCallOrder[0],
+      mockRegisterIpcHandlers.mock.invocationCallOrder[0],
+      mockSetupTray.mock.invocationCallOrder[0],
+      mockInitAutoUpdater.mock.invocationCallOrder[0],
+    ];
+    for (let i = 1; i < order.length; i++) {
+      expect(order[i]!).toBeGreaterThan(order[i - 1]!);
+    }
+  });
+
+  it("skips auto-updater init in benchmark mode", async () => {
+    mockIsBenchmarkMode.mockReturnValue(true);
+    const { createAppShell } = await import("../../src/main/app-shell.js");
+    await createAppShell().init();
+    expect(mockInitAutoUpdater).not.toHaveBeenCalled();
+  });
+
+  it("cleanup is ordered and idempotent", async () => {
+    const trayCleanup = vi.fn();
+    mockSetupTray.mockReturnValue(trayCleanup);
+    const { createAppShell } = await import("../../src/main/app-shell.js");
+    const shell = createAppShell();
+    await shell.init();
+    await shell.cleanup();
+    await shell.cleanup();
+
+    expect(mockFlushSettings).toHaveBeenCalledTimes(1);
+    expect(trayCleanup).toHaveBeenCalledTimes(1);
+    expect(mockCompositionCleanup).toHaveBeenCalledTimes(1);
+    expect(mockDestroyAllWindows).toHaveBeenCalledTimes(1);
+    expect(shell.ready).toBe(false);
+  });
+
+  it("passes isQuitting predicate into createPopoverWindow", async () => {
+    const { createAppShell } = await import("../../src/main/app-shell.js");
+    const shell = createAppShell();
+    await shell.init();
+    const opts = mockCreatePopoverWindow.mock.calls[0]![0] as {
+      isQuitting: () => boolean;
+    };
+    expect(opts.isQuitting()).toBe(false);
+    await shell.cleanup();
+    expect(opts.isQuitting()).toBe(true);
+  });
+
+  it("showMainWindow uses popover registry", async () => {
+    const show = vi.fn();
+    mockGetPopoverWindow.mockReturnValue({ show });
+    const { createAppShell } = await import("../../src/main/app-shell.js");
+    const shell = createAppShell();
+    shell.showMainWindow();
+    expect(show).toHaveBeenCalled();
+  });
+});
