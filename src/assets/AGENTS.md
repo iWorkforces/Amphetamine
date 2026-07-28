@@ -6,7 +6,7 @@ Checked-in PNG assets consumed by Electron main/renderer. Most files are generat
 
 | File | Source | Consumer |
 |------|--------|----------|
-| `settings-hero-icon.png` | `scripts/generate-app-icon.mjs` | Settings UI hero; About window icon data URI |
+| `settings-hero-icon.png` | `scripts/generate-app-icon.mjs` | Settings UI hero; About renderer icon (`import.meta.url`); window taskbar icons |
 | `tray-icon-dark.png` / `tray-icon-dark@2x.png` | `scripts/generate-coffee-tray-icons.mjs` | Active tray icon on dark menu bar |
 | `tray-icon-light.png` / `tray-icon-light@2x.png` | `scripts/generate-coffee-tray-icons.mjs` | Active tray icon on light menu bar |
 | `tray-icon-inactive-dark.png` / `tray-icon-inactive-dark@2x.png` | `scripts/generate-coffee-tray-icons.mjs` | Inactive tray icon on dark menu bar |
@@ -18,8 +18,9 @@ Checked-in PNG assets consumed by Electron main/renderer. Most files are generat
 - `src/main/tray.ts` computes `tray-icon-${statePrefix}${suffix}.png` and `@2x` variants from `nativeTheme.shouldUseDarkColors` + **effective active** from composition tray deps (`getEffectiveActive` = domain OR of intent and session).
 - Menu checkbox still uses user intent only; do not drive the icon from intent alone.
 - `tray.ts` uses `nativeImage.createFromPath()` so paths work inside `app.asar`; never replace with `fs.readFileSync()`.
+- WindowGraph / settings / about windows use `settings-hero-icon.png` as the window icon path (asar-safe).
+- About **renderer** loads the hero PNG via bundler URL — not main-process data-URI HTML.
 - `electron-builder.yml` includes `src/assets/!(*Template).png`; template PNGs are excluded from packaged output.
-- About window embeds `settings-hero-icon.png` as a data URI (HTML-escaped package metadata).
 
 ## Commands
 

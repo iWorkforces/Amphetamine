@@ -1,15 +1,17 @@
 # Tests — Vitest Workspace
 
-Four Vitest projects: pure domain/application, main (Node + Electron mocks), renderer (jsdom). Process-specific rules live in child docs.
+Four Vitest projects: pure domain/application, main (Node + Electron mocks + infrastructure), renderer (jsdom). Process-specific rules live in child docs.
 
 ## Structure
 
 ```text
 tests/
-  setup.main.ts        baseline Electron mock for main tests
+  setup.main.ts        baseline Electron mock for main project
   domain/              pure domain unit tests (no Electron)
   application/         use-case tests (ports mocked / fakes)
   main/                Node + mocked Electron; see main/AGENTS.md
+  infrastructure/      adapters (run under main project)
+  shared/              shared contract tests (main project)
   renderer/            jsdom UI; see renderer/AGENTS.md
 ```
 
@@ -19,11 +21,12 @@ tests/
 |---------|-------------|----------|------------------|
 | `domain` | `node` | `tests/domain/**/*.test.ts` | `src/domain/**/*.ts` |
 | `application` | `node` | `tests/application/**/*.test.ts` | `src/application/**/*.ts` |
-| `main` | `node` | `tests/main/**/*.test.ts` | `src/main/**/*.ts`, `src/infrastructure/**/*.ts` |
+| `main` | `node` | `tests/main/**`, `tests/infrastructure/**`, `tests/shared/**` | `src/main/**`, `src/infrastructure/**`, `src/shared/**` |
 | `renderer` | `jsdom` | `tests/renderer/**/*.test.ts` | `src/renderer/**/*.ts` |
 
 - Root coverage `include`: `src/**/*.ts` (thresholds: lines/functions/branches **90%**).
-- Coverage excludes type-only ports/barrels, the benchmark integration harness, and Electron UI entry shells (`main/index`, tray, about/settings windows, renderer popover/settings shells, auto-updater hybrid module) that are exercised via suite behavior and manual smoke rather than full unit branch coverage.
+- Coverage excludes type-only ports/barrels, benchmark harness, Electron UI entry shells (`main/index`, tray, about/settings façades, renderer popover/settings/about shells, `hybrid-auto-updater`) exercised via suite behavior / smoke rather than full unit branch coverage.
+- Main project **aliases** `electron/main` and `electron/common` → `electron` so production process imports work under Node mocks.
 - `passWithNoTests: true` for filtered project runs.
 - `typecheck:tests` uses `tsconfig.tests.json` (sticky strict; unused locals/params relaxed).
 - Sticky ESLint full strength on `src/`; tests relax `no-unsafe-*`, non-null assertions, `no-unnecessary-condition`.
@@ -39,7 +42,8 @@ tests/
 - `createSessionTimer` deps: `{ broadcast, onSessionActiveChange?, powerMonitor? }` — no settings writers; **no** module-level session globals.
 - `TrayDeps` must include `checkForUpdates`.
 - Battery monitor mocks must include `reconfigure`.
-- Composition: session IPC deps throw before `init()`; use `getSettingsStore` / `getSleepBlockerPort` / `getAutoLaunchPort` mocks when testing composition façades.
+- Composition: session IPC deps throw before `init()`; mock hybrid updater / packageInfo / platform when constructing `createAppComposition`.
+- Application notifier mocks expect `publish({ type: "…", … })` (`AppPushEvent`), not channel strings.
 - No real filesystem, Electron windows, network, or OS battery queries in unit tests.
 
 ## Commands
@@ -59,10 +63,4 @@ bun run typecheck:layers
 ## Notes
 
 - Preload unit tests live under `tests/main/preload.test.ts`.
-- Coverage excludes type-only declaration files as configured.
-
-## Process-graph / AppPushEvent testing
-
-- Application notifier mocks expect `publish({ type: "…", … })` (`AppPushEvent`), not channel strings.
-- Main Vitest project aliases `electron/main` and `electron/common` → `electron` so existing `vi.mock("electron")` works.
-
+- Process-graph suites: `app-shell.test.ts`, `window-graph.test.ts`, `secure-web-preferences.test.ts`, `composition-wiring.test.ts`.

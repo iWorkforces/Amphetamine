@@ -7,7 +7,7 @@ Tray-only Electron app for **macOS and Windows**. Prevents system sleep through 
 | Layer | Tech |
 |------|------|
 | Runtime | Bun 1.3.14+ / Node `>=26 <27` |
-| Electron | `^43.0.0` |
+| Electron | `^43.2.0` (package pin; do not downgrade below patched 43.x) |
 | Build | Rslib main/preload to CJS + Rsbuild renderer |
 | Test | Vitest 4 workspace: domain + application + main (Node) + renderer (jsdom) |
 | Lint | ESLint 10 flat; sticky type-safety rules as errors for `src/` |
@@ -59,6 +59,8 @@ Dependency rule: **domain** and **application** must not import `electron` / `el
 | Tray/menu | `src/main/tray.ts`, `src/assets/AGENTS.md` | Icon = effective active; checkbox = user intent |
 | Renderer popover | `src/renderer/index.ts` | Domain `isEffectivelyActive`; chips start session only |
 | Settings UI | `src/renderer/settings/AGENTS.md` | Debounced saves, shortcut recorder, sleep mode |
+| About window | `src/renderer/about/`, WindowGraph `showAbout` | Built `about.html`; `app:get-about` for metadata |
+| Hybrid auto-updater | `src/infrastructure/updater/` (+ main IPC façade) | Policy in hybrid-auto-updater; `composition.initUpdater()` |
 | Benchmark mode | `src/infrastructure/benchmark/`, `src/renderer/benchmark-countdown.ts`, `scripts/benchmark-performance.ts` | Requires built `lib/` |
 | Platform OS gates | `src/main/platform/` | Prefer `isDarwin` / `isWin32` |
 | Test mocking | `tests/AGENTS.md` (+ main/renderer) | Domain/application pure; main mocks Electron |
@@ -155,8 +157,9 @@ bun run clean                  # remove lib/dist outputs
 - Login items: macOS uses `openAsHidden: true`; Windows uses `openAtLogin` without that flag.
 - Settings window: macOS temporarily shows the Dock icon; Windows shows a taskbar button while open. Tray-only mode returns on close.
 - Popover hide on blur uses typed `window:hide`, not DOM `CustomEvent`.
+- About is a third built renderer (`about.html`) with shared preload; not inline `data:` HTML.
 - Auto-updater is hybrid: **Check for Updates** tries in-app download/install when possible; falls back to the GitHub release page. Background checks do not auto-download or open the browser.
-- Electron pin is `^43.0.0`; do not downgrade below the patched line referenced by security comments.
+- Electron pin is `^43.2.0` in package.json; do not downgrade below the patched 43.x line referenced by security comments.
 - Runtime deps are only `electron-log` and `electron-updater`; externalized in Rslib. Renderer must not import `electron-log`.
 - Production Rslib/Rsbuild builds drop console output.
 - Develop pushes/merges: CI lint/test; **Beta** workflow packages `*-beta-{N}.*` and publishes prerelease tag `vX.Y.Z-beta.N`.

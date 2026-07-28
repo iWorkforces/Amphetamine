@@ -2,7 +2,7 @@
 
 Main process owns app lifecycle, BrowserWindows, tray, typed IPC registration, and the composition root. Business rules live under `application/` and `domain/`; OS/Electron I/O adapters under `infrastructure/` (with thin façades here for stable import paths).
 
-**Process graph:** `AppShell` is the topology root (ready/quit order). `process/window-graph` is the only production factory for popover, settings, and about `BrowserWindow`s. Renderers talk only through preload `window.api`.
+**Process graph:** `AppShell` is the topology root (ready/quit order). `process/window-graph` is the **only** production factory for popover, settings, and about `BrowserWindow`s. Renderers talk only through preload `window.api`.
 
 ## Files
 
@@ -10,11 +10,11 @@ Main process owns app lifecycle, BrowserWindows, tray, typed IPC registration, a
 |------|------|
 | `index.ts` | App lifecycle events only (ready, quit, single-instance, errors, benchmark entry) |
 | `app-shell.ts` | `createAppShell()` — process-graph root: windows + composition + IPC + tray + updater + quit cleanup |
-| `process/secure-web-preferences.ts` | Single `createSecureWebPreferences()` for all BrowserWindows |
-| `process/window-graph.ts` | Owns popover / settings / about BrowserWindows + registry |
-| `composition-root.ts` | `createAppComposition()` — ports, session handle, reactions, `getIpcDeps` / `getTrayDeps`, ordered `cleanup()` |
+| `process/secure-web-preferences.ts` | Single `createSecureWebPreferences()` for all BrowserWindows (sandbox / contextIsolation / no nodeIntegration) |
+| `process/window-graph.ts` | Owns popover / settings / about BrowserWindows + registry + `destroyAllWindows()` |
+| `composition-root.ts` | `createAppComposition()` — ports, session handle, reactions, `getIpcDeps` / `getTrayDeps` / `initUpdater`, ordered `cleanup()` |
 | `ipc.ts` | Typed handler registration; session handlers use injected `IpcDeps.sessionTimer` |
-| `ipc-utils.ts` | `validateSender`, `typedHandle` |
+| `ipc-utils.ts` | `validateSender`, `typedHandle`; allowlisted `index.html` / `settings.html` / `about.html` |
 | `tray.ts` | Tray icon/menu; Check for Updates; destroy on cleanup |
 | `settings.ts` | Façade over `infrastructure/settings` (`SettingsStorePort`); `flushSettingsWriteChain()` |
 | `sleep-prevention.ts` | Façade over `infrastructure/sleep` (`SleepBlockerPort`) |
@@ -22,14 +22,14 @@ Main process owns app lifecycle, BrowserWindows, tray, typed IPC registration, a
 | `global-shortcut.ts` | Façade over RegisterAppShortcut + GlobalShortcutPort |
 | `auto-launch.ts` | Login items + `AutoLaunchPort` view |
 | `battery-monitor.ts` | Threshold **detector** only; percent via `platform/battery-percent` |
-| `auto-updater.ts` | IPC registration + re-exports of hybrid policy |
-| `auto-updater-utils.ts` | Façade over infrastructure pure helpers + package repo URL |
-| `settings-window.ts` | Façade re-export of WindowGraph settings APIs |
-| `about-window.ts` | Façade re-export of WindowGraph about APIs (built about.html renderer) |
+| `auto-updater.ts` | IPC registration + re-exports of hybrid policy (`infrastructure/updater`) |
+| `auto-updater-utils.ts` | Façade over pure release-URL helpers + package repo lookup |
+| `settings-window.ts` | Thin re-export of WindowGraph settings APIs |
+| `about-window.ts` | Thin re-export of WindowGraph about APIs (built `about.html`) |
 | `security.ts` | WebContents hardening / navigation allowlist |
 | `constants.ts` | Window sizes, timeouts, UI timing constants |
 | `platform/` | OS adapters; see `platform/AGENTS.md` |
-| `utils/broadcast.ts` | Typed main→renderer push helper |
+| `utils/broadcast.ts` | Typed main→renderer push helper (`PushChannel`) |
 | `utils/packageInfo.ts` | Cached package metadata guard |
 
 ## Bootstrap and quit
@@ -58,15 +58,18 @@ Do not register a second `before-quit` handler on settings or other modules.
 - Effective sleep: `preventSleep` **OR** session active — via `createRecomputeSleepPrevention` + domain `isEffectivelyActive`.
 - Low-battery: detector calls `HandleLowBatteryAutoStop` (clear intent + cancel session).
 - Session IPC before `init` **fails closed** (throws); no module-level session globals.
+- Application → renderer pushes use `AppPushEvent` via `MainToRendererNotifierPort` (not raw `IPC_CHANNELS`).
 - `getTrayDeps().checkForUpdates` → `UpdaterPort.checkNow()`.
+- Updater port is configured with UI hooks (foreground/tray restore) and `getRepositoryUrl` at composition construct time.
 - `cleanup()` order: settings/about windows → unsubscribe reactions → battery → session → sleep stop → shortcut unregister → updater stop.
 
 ## IPC and security
 
 - Use `typedHandle()` for invoke channels (validates sender).
 - Raw `ipcMain.on()` only with explicit `validateSender()`.
-- Packaged senders: exact-match normalized renderer HTML; dev: `DEV_ORIGINS`.
+- Packaged senders: exact-match NFC-normalized `lib/renderer/{index,settings,about}.html`; dev: `DEV_ORIGINS`.
 - Renderer pushes: `broadcastToWindows<K>()`; skip destroyed windows.
+- About external links: `setWindowOpenHandler` allowlists `https://github.com/*` only.
 
 ## Timing and state
 
@@ -87,20 +90,21 @@ Do not register a second `before-quit` handler on settings or other modules.
 ## Platform
 
 - Prefer `isDarwin()` / `isWin32()` from `platform/`.
-- Tray-only boot: `enterTrayOnlyMode()`.
-- Window chrome: `popoverWindowChrome` / `settingsWindowChrome` / `aboutWindowChrome`.
+- Tray-only boot: `enterTrayOnlyMode()` (from AppShell).
+- Window chrome: `popoverWindowChrome` / `settingsWindowChrome` / `aboutWindowChrome` (applied inside WindowGraph).
 - Login items: `buildLoginItemSettings()` — no `openAsHidden` on non-darwin.
 - Battery shell-outs only in `platform/battery-percent.ts`.
 
 ## Benchmark
 
-- Early: `configureBenchmarkEnvironment()` + `installBenchmarkTimerCounters()` from `infrastructure/benchmark`.
-- Skips auto-updater; measures then prints `AMPHETAMINE_BENCHMARK_RESULT:` and quits.
+- Early (in `index.ts`): `configureBenchmarkEnvironment()` + `installBenchmarkTimerCounters()` from `infrastructure/benchmark`.
+- AppShell skips `initUpdater` when `isBenchmarkMode()`.
+- Measures then prints `AMPHETAMINE_BENCHMARK_RESULT:` and quits.
 - Harness may dynamically import tray/settings from main for measurement.
 
 ## Process imports
 
-- Main/infrastructure use `from "electron/main"` (not bare `electron`) so process role is explicit.
+- Main/infrastructure use `from "electron/main"` (and `electron/common` for `shell` / `nativeImage`).
 - Preload continues to use `from "electron"` / renderer-safe APIs.
 
 ## Anti-Patterns
@@ -115,6 +119,9 @@ Do not register a second `before-quit` handler on settings or other modules.
 - Never register a competing `before-quit` handler.
 - Never call macOS-only Electron APIs without `isDarwin()`.
 - Never reintroduce `setActiveSessionTimer` / module-level session exports.
+- Never create `BrowserWindow`s outside `process/window-graph` (except tests).
+- Never reintroduce inline `data:` About HTML; use the built `about.html` entry.
+- Never call `initAutoUpdater()` outside `UpdaterPort` / composition `initUpdater()`.
 
 ## Commands
 

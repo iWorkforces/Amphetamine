@@ -9,24 +9,24 @@ Implements application ports with Electron/Node. May import domain types and app
 | `clock/system-clock.ts` | `ClockPort` | `performance.now` + `Date.now` |
 | `schedule/node-schedule.ts` | `SchedulePort` | `setTimeout` + `unref` / `clearTimeout` |
 | `logging/electron-logger.ts` | `LoggerPort` | `electron-log` |
-| `notification/broadcast-notifier.ts` | `MainToRendererNotifierPort` | maps `AppPushEvent` → IPC PUSH_CHANNELS |
+| `notification/broadcast-notifier.ts` | `MainToRendererNotifierPort` | maps `AppPushEvent` → IPC `PUSH_CHANNELS` |
 | `settings/file-settings-store.ts` | `SettingsStorePort` | atomic JSON, write mutex, corrupt backup |
 | `settings/dialog-save-failure.ts` | `SettingsSaveFailurePort` | `dialog.showErrorBox` |
 | `sleep/power-save-blocker.ts` | `SleepBlockerPort` | **sole** `powerSaveBlocker` owner |
 | `shortcut/electron-global-shortcut.ts` | `GlobalShortcutPort` | register / unregisterAll |
-| `updater/hybrid-auto-updater.ts` | hybrid policy | electron-updater events; injected UI/repo deps |
-| `updater/auto-updater-utils.ts` | pure helpers | deriveReleaseUrlBase, categorizeUpdaterError |
-| `updater/electron-updater-port.ts` | `UpdaterPort` | configures hybrid; no main imports |
+| `updater/hybrid-auto-updater.ts` | hybrid policy | electron-updater events; injected UI/repo deps; semantic status events |
+| `updater/auto-updater-utils.ts` | pure helpers | `deriveReleaseUrlBase`, `categorizeUpdaterError` |
+| `updater/electron-updater-port.ts` | `UpdaterPort` | `configureHybridAutoUpdater` + lifecycle; **no main imports** |
 | `benchmark/` | harness | production benchmark mode; see local `AGENTS.md` |
 
 ## Rules
 
-- Prefer `import … from "electron/main"` in main-process adapters; use `electron/common` for `shell` / `nativeImage`.
-
+- Prefer `import … from "electron/main"`; use `electron/common` for `shell` / `nativeImage`.
 - Never call `powerSaveBlocker` outside `sleep/power-save-blocker.ts`.
 - Platform shell-outs stay under `main/platform` (not moved out of main).
-- Main façades (`settings.ts`, `sleep-prevention.ts`, …) may re-export or wrap these adapters for stable paths.
+- Main façades (`settings.ts`, `sleep-prevention.ts`, `auto-updater.ts`, …) may re-export or wrap these adapters for stable paths.
 - Prefer construction-time injection of ports over module-level mutable globals (updater notifier + UI hooks via `configureHybridAutoUpdater`).
+- Updater must not import `src/main/*` (layer inversion fixed on `refactoring-appgraph`).
 
 ## Log tags
 
@@ -35,4 +35,5 @@ Implements application ports with Electron/Node. May import domain types and app
 | sleep | `[sleep]` |
 | settings store | `[settings]` |
 | shortcut | `[shortcut]` |
+| updater | `[auto-updater]` |
 | benchmark | `[benchmark]` |

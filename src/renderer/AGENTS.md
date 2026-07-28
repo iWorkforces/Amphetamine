@@ -1,6 +1,6 @@
 # Renderer Process — UI Layer
 
-Electron renderer web context. Vanilla TypeScript only: popover, settings, and about window entries.
+Electron renderer web context. Vanilla TypeScript only. Three built entries (Rsbuild environments): **popover**, **settings**, **about**.
 
 ## Files
 
@@ -30,6 +30,14 @@ Electron renderer web context. Vanilla TypeScript only: popover, settings, and a
   - Cancel → `session.cancel()`
 - Footer: Settings… / Quit.
 
+## About flow
+
+- Built entry `about.html` (Rsbuild env `about`); loaded by WindowGraph with shared preload.
+- Bootstrap calls `window.api.app.getAbout()` for product name, version, description, repository.
+- Icon click uses `window.open(repository)` — main allowlists `https://github.com/*` via `setWindowOpenHandler`.
+- Close uses `window.close()`.
+- Hero icon: bundled `settings-hero-icon.png` via `import.meta.url` (not a main-process data URI).
+
 ## Countdown
 
 - Anchors map main remaining seconds into renderer `performance.now()`.
@@ -49,7 +57,7 @@ Electron renderer web context. Vanilla TypeScript only: popover, settings, and a
 ## Anti-Patterns
 
 - Never read `status.remainingSeconds` for display after anchoring without local recompute.
-- Never hardcode UI strings; use `constants.ts`.
+- Never hardcode UI strings; use `constants.ts` (or about static copy in HTML carefully).
 - Never update `defaultSessionDuration` from popover chips (settings window owns preference).
 - Never duplicate settings-window rules; see `settings/AGENTS.md`.
 

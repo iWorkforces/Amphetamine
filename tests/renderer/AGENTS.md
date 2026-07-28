@@ -9,6 +9,7 @@ Renderer Vitest suites run in jsdom and assert DOM behavior for vanilla TypeScri
 | `index.test.ts` | Popover render, status/timer, controls, pushes, effective-active OR matrix, benchmark API mock |
 | `settings.test.ts` | Settings form, debounced save, shortcut-failure subscription |
 | `delegation.test.ts` | Event delegation on `#app` |
+| *(none yet)* | About entry covered via main WindowGraph / IPC tests; add jsdom suite if UI grows |
 
 ## Setup
 
@@ -32,6 +33,7 @@ Renderer Vitest suites run in jsdom and assert DOM behavior for vanilla TypeScri
 - `window.api` mirrors preload shape for the entry under test.
 - Settings tests mock `settings.get` / `set` (`{ settings, rejectedKeys }`), `onSettingsChanged`, `onShortcutRegistrationFailed`.
 - Popover tests mock session status/pushes, `window.setHeight`, `app.getVersion`, settings/session/app methods as needed.
+- About UI (if tested): mock `app.getAbout()` returning `AboutInfo`.
 - Do not mock `electron-log` for renderer (modules must not import it).
 
 ## Anti-Patterns
