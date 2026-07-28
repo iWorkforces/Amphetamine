@@ -1,8 +1,7 @@
-import { app, BrowserWindow, dialog } from "electron";
+import { app, dialog } from "electron";
+import type { BrowserWindow } from "electron";
 import log from "electron-log";
 import os from "node:os";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { setupTray } from "./tray.js";
 import { registerIpcHandlers } from "./ipc.js";
 import { getPackageInfo } from "./utils/packageInfo.js";
@@ -10,25 +9,20 @@ import { createAppComposition, type AppComposition } from "./composition-root.js
 import { flushSettingsWriteChain } from "./settings.js";
 import { initAutoUpdater } from "./auto-updater.js";
 import { stopPreventingSleep } from "./sleep-prevention.js";
-import { broadcastToWindows } from "./utils/broadcast.js";
 import {
   configureBenchmarkEnvironment,
   installBenchmarkTimerCounters,
   runBenchmarkIfRequested,
   isBenchmarkMode,
 } from "../infrastructure/benchmark/index.js";
-import { IPC_CHANNELS } from "../shared/types.js";
+import { isDev } from "./constants.js";
+import { enterTrayOnlyMode } from "./platform/index.js";
 import {
-  MAIN_WINDOW_WIDTH,
-  MAIN_WINDOW_HEIGHT,
-  HIDE_DELAY_MS,
-  getDevServerUrl,
-  isDev,
-} from "./constants.js";
-import { hardenWebContents } from "./security.js";
-import { enterTrayOnlyMode, popoverWindowChrome } from "./platform/index.js";
+  createPopoverWindow,
+  destroyAllWindows,
+  getPopoverWindow,
+} from "./process/window-graph.js";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const mainProcessStartMs = performance.now();
 
 configureBenchmarkEnvironment();
@@ -95,71 +89,13 @@ async function runQuitCleanup(): Promise<void> {
   }
   composition = null;
 
-  if (mainWindow !== null && !mainWindow.isDestroyed()) {
-    mainWindow.destroy();
-  }
+  destroyAllWindows();
   mainWindow = null;
 }
 
-function createWindow(): BrowserWindow {
-  const win = new BrowserWindow({
-    width: MAIN_WINDOW_WIDTH,
-    height: MAIN_WINDOW_HEIGHT,
-    show: false,
-    frame: false,
-    resizable: false,
-    movable: false,
-    alwaysOnTop: true,
-    paintWhenInitiallyHidden: false,
-    ...popoverWindowChrome(),
-    webPreferences: {
-      preload: path.join(__dirname, "..", "preload", "index.cjs"),
-      sandbox: true,
-      contextIsolation: true,
-      nodeIntegration: false,
-    },
-  });
-
-  hardenWebContents(win);
-  if (isDev) {
-    const devUrl = getDevServerUrl();
-    void win.loadURL(devUrl);
-  } else {
-    void win.loadFile(path.join(__dirname, "..", "renderer", "index.html"));
-  }
-  // Intercept close/minimize → hide to tray (unless quitting)
-  win.on("close", (event) => {
-    if (isQuitting) return;
-    event.preventDefault();
-    win.hide();
-  });
-  win.on("minimize", () => {
-    if (!win.isDestroyed()) {
-      broadcastToWindows(IPC_CHANNELS.WINDOW_HIDE, undefined);
-      setTimeout(() => {
-        if (!win.isDestroyed()) {
-          win.hide();
-        }
-      }, HIDE_DELAY_MS);
-    }
-  });
-  // Hide when focus lost (popover behavior)
-  win.on("blur", () => {
-    if (!isDev && !isQuitting) {
-      if (!win.isDestroyed()) {
-        broadcastToWindows(IPC_CHANNELS.WINDOW_HIDE, undefined);
-        setTimeout(() => {
-          if (!win.isDestroyed()) {
-            win.hide();
-          }
-        }, HIDE_DELAY_MS);
-      }
-    }
-  });
-  return win;
-}
 app.on("second-instance", () => {
-  mainWindow?.show();
+  const win = getPopoverWindow() ?? mainWindow;
+  win?.show();
 });
 if (!app.requestSingleInstanceLock()) {
   app.quit();
@@ -169,7 +105,7 @@ void app.whenReady().then(async () => {
   const appReadyMs = performance.now() - mainProcessStartMs;
   // Tray-only shell: macOS accessory policy; Windows uses skipTaskbar per window
   enterTrayOnlyMode();
-  mainWindow = createWindow();
+  mainWindow = createPopoverWindow({ isQuitting: () => isQuitting });
   // Composition before IPC: handlers receive injected session handle (KD-6 / Wave 5).
   composition = createAppComposition();
   await composition.init();
