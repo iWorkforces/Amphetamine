@@ -6,7 +6,8 @@ Main process owns app lifecycle, BrowserWindows, tray, typed IPC registration, a
 
 | File | Role |
 |------|------|
-| `index.ts` | Bootstrap, quit orchestrator, benchmark entry (thin; windows via process graph) |
+| `index.ts` | App lifecycle events only (ready, quit, single-instance, errors, benchmark entry) |
+| `app-shell.ts` | `createAppShell()` — process-graph root: windows + composition + IPC + tray + updater + quit cleanup |
 | `process/secure-web-preferences.ts` | Single `createSecureWebPreferences()` for all BrowserWindows |
 | `process/window-graph.ts` | Owns popover / settings / about BrowserWindows + registry |
 | `composition-root.ts` | `createAppComposition()` — ports, session handle, reactions, `getIpcDeps` / `getTrayDeps`, ordered `cleanup()` |
@@ -32,7 +33,7 @@ Main process owns app lifecycle, BrowserWindows, tray, typed IPC registration, a
 
 ## Bootstrap and quit
 
-**Ready order (required):**
+**Ready order (required, owned by `AppShell.init()`):**
 
 1. `enterTrayOnlyMode()` + `createPopoverWindow()` (WindowGraph)
 2. `createAppComposition()` + `await composition.init()` (settings, session, battery, shortcut, reactions)
@@ -40,9 +41,9 @@ Main process owns app lifecycle, BrowserWindows, tray, typed IPC registration, a
 4. `setupTray(composition.getTrayDeps())`
 5. `initAutoUpdater()` unless benchmark mode
 
-**Quit (`index.ts` sole `before-quit` owner):**
+**Quit (`index.ts` sole `before-quit` owner → `AppShell.cleanup()`):**
 
-1. Idempotent `didRunQuitCleanup`
+1. Idempotent cleanup flags (`index` + shell)
 2. `flushSettingsWriteChain()` (2s race timeout)
 3. Tray `destroy`
 4. `composition.cleanup()`

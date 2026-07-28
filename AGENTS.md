@@ -22,7 +22,8 @@ src/domain/               Pure types and rules (no Electron, no Node I/O)
 src/application/          Use cases + port interfaces (no Electron)
 src/infrastructure/       Electron/Node adapters implementing ports + benchmark harness
 src/main/                 Composition root, IPC, tray, windows, process façades
-  index.ts                bootstrap, quit orchestrator, benchmark entry
+  index.ts                app lifecycle events; delegates graph to AppShell
+  app-shell.ts            createAppShell — process-graph root (windows/IPC/tray/composition)
   process/                WindowGraph + shared secure webPreferences
   composition-root.ts     createAppComposition — wire ports, use cases, reactions
   coordinator.ts          thin compatibility façade over composition
@@ -49,7 +50,7 @@ Dependency rule: **domain** and **application** must not import `electron` / `el
 | Domain pure rules | `src/domain/` | `isEffectivelyActive`, duration validation, threshold, `PerfTimestamp` |
 | Application use cases | `src/application/` | Session engine, recompute/toggle sleep, settings reactions, low-battery, shortcut |
 | Port interfaces | `src/application/ports/` | Closed budget (~11): store, sleep, schedule, clock, notifier, etc. |
-| Wire app / quit | `src/main/composition-root.ts`, `src/main/index.ts` | Composition before IPC; quit: flush → tray → `composition.cleanup()` → destroy window |
+| Wire app / quit | `src/main/app-shell.ts`, `src/main/index.ts` | AppShell owns ready/quit graph; composition before IPC; quit: flush → tray → composition → destroy windows |
 | Settings persistence | `src/infrastructure/settings/`, façade `src/main/settings.ts` | Atomic write, mutex, save-failure dialog port |
 | Sleep blocker | `src/infrastructure/sleep/`, façade `src/main/sleep-prevention.ts` | Sole `powerSaveBlocker` owner |
 | Session runtime | `src/application/session/`, façade `src/main/session-timer.ts` | Handle injection only; no module-level session globals |
@@ -67,6 +68,7 @@ Dependency rule: **domain** and **application** must not import `electron` / `el
 | Tag | Owner |
 | --- | --- |
 | `[main]` | Bootstrap / quit (`index.ts`) |
+| `[app-shell]` | Process-graph shell init and quit cleanup |
 | `[composition]` | Composition root wiring and lifecycle |
 | `[settings-reactions]` | `SettingsReactionService` field reactions |
 | `[session]` | Session engine; SESSION_START validation in IPC |
