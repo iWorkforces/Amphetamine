@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import type { AppPushEvent } from "../../src/application/ports/main-to-renderer-notifier.port.js";
 
 const mockConfigure = vi.hoisted(() => vi.fn());
 const mockInit = vi.hoisted(() => vi.fn());
@@ -36,7 +37,7 @@ describe("createElectronUpdaterPort", () => {
     );
     expect(mockConfigure).toHaveBeenCalled();
     const deps = mockConfigure.mock.calls[0]![0] as {
-      publish: (ch: string, data: unknown) => void;
+      publish: (event: AppPushEvent) => void;
       getRepositoryUrl: () => string;
     };
     deps.publish({ type: "auto-updater-status", status: { status: "checking" } });
