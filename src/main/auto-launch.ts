@@ -1,4 +1,4 @@
-import { app } from "electron";
+import { app } from "electron/main";
 import log from "electron-log";
 import { buildLoginItemSettings } from "./platform/index.js";
 import type { AutoLaunchPort } from "../application/ports/auto-launch.port.js";

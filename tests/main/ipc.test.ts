@@ -18,6 +18,13 @@ describe("validateSender", () => {
     expect(validateSender(event)).toBe(true);
   });
 
+  it("accepts file:// origin for about.html (exact match)", () => {
+    const event = {
+      senderFrame: { url: "file:///path/to/app.asar/lib/renderer/about.html" },
+    } as unknown as IpcMainEvent;
+    expect(validateSender(event)).toBe(true);
+  });
+
   it("rejects file:// origin with path prefix attack (substring bypass)", () => {
     const event = {
       senderFrame: { url: "file:///path/to/app.asar.evil/index.html" },

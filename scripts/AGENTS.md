@@ -19,7 +19,7 @@ Developer-only Bun/Node scripts. Runtime app code must not import from here. Scr
 
 1. Start `bun x rslib build --watch -c rslib.config.ts`.
 2. Start `bun x rslib build --watch -c rslib.config.preload.ts`.
-3. Start `bun x rsbuild dev --port 5173`.
+3. Start `bun x rsbuild dev --port 5173` (popover + settings + about environments).
 4. Wait for `lib/main/index.cjs` and `lib/preload/index.cjs`.
 5. TCP-connect to `localhost:5173` before Electron launch.
 6. Launch `bun x electron . --disable-gpu-sandbox --log-level=3` with `DEV_SERVER_URL`.
@@ -41,7 +41,7 @@ Developer-only Bun/Node scripts. Runtime app code must not import from here. Scr
 
 ## Benchmark Harness
 
-- Run `bun run build` before `bun run benchmark:performance`; the script requires built `lib/main/index.cjs` and `lib/renderer/index.html`.
+- Run `bun run build` before `bun run benchmark:performance`; the script requires built `lib/main/index.cjs` and `lib/renderer/index.html` (settings/about HTML also produced by Rsbuild multi-env).
 - It launches Electron with `NODE_ENV=production`, `AMPHETAMINE_BENCHMARK=1`, a temp user-data dir, and GPU sandbox disabled.
 - It waits for stdout line prefix `AMPHETAMINE_BENCHMARK_RESULT:` and wraps it with harness metadata.
 - It writes JSON to `--out`, supports optional `--baseline`, and removes temp user-data in cleanup.

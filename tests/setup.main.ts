@@ -224,4 +224,6 @@ const electronMock: MockElectronAPI = {
   },
 };
 
+// electron/main + electron/common → electron via vitest project alias
 vi.mock("electron", () => electronMock);
+// electron/main and electron/common resolve to "electron" via vitest alias (see vitest.workspace.ts).

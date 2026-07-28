@@ -1,5 +1,4 @@
 import type { AppSettings } from "../../domain/settings/app-settings.js";
-import { IPC_CHANNELS } from "../../shared/types.js";
 import type { AutoLaunchPort } from "../ports/auto-launch.port.js";
 import type { MainToRendererNotifierPort } from "../ports/main-to-renderer-notifier.port.js";
 import type { LoggerPort } from "../ports/logger.port.js";
@@ -86,7 +85,7 @@ export function createSettingsReactionService(
           (k) => settings[k] !== prevSettings[k],
         );
       if (hasRendererChange) {
-        deps.notifier.publish(IPC_CHANNELS.SETTINGS_CHANGED, settings);
+        deps.notifier.publish({ type: "settings-changed", settings });
       }
     } catch (err) {
       deps.logger.error(`${tag} Settings subscriber error:`, err);

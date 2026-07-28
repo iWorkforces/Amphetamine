@@ -6,7 +6,6 @@ import type { SchedulePort } from "../ports/schedule.port.js";
 import type { LoggerPort } from "../ports/logger.port.js";
 import type { MainToRendererNotifierPort } from "../ports/main-to-renderer-notifier.port.js";
 import type { SessionStatusResponse } from "../../shared/types.js";
-import { IPC_CHANNELS } from "../../shared/types.js";
 
 /** Public snapshot returned by start/cancel (not the wire SessionStartResponse). */
 export interface SessionSnapshot {
@@ -114,7 +113,7 @@ export function createSessionEngine(deps: SessionEngineDeps): SessionEngine {
   };
 
   const broadcastSessionUpdate = (): void => {
-    notifier.publish(IPC_CHANNELS.SESSION_STATUS_UPDATE, getStatus());
+    notifier.publish({ type: "session-status", status: getStatus() });
   };
 
   const fireExpiry = (): void => {

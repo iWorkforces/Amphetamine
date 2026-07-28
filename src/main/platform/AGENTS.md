@@ -29,16 +29,18 @@ Shortcut defaults, reserved keys, and accelerator validation live in domain vali
 - Do not put composition policy, settings validation, or renderer concerns here.
 - Never call macOS-only APIs (`setActivationPolicy`, `app.dock`, vibrancy, `openAsHidden`) without a darwin guard.
 - Physical path stays under `main/platform` (not moved to `infrastructure/`).
+- Electron imports: `electron/main` for `app`; types such as `NativeImage` from `electron/common` where needed.
 
 ## Call sites
 
 | Concern | Call site | Via |
 |---------|-----------|-----|
-| Tray-only boot | `index.ts` | `enterTrayOnlyMode()` |
-| Settings Dock / foreground | `settings-window.ts` | shell helpers |
-| Popover / settings / about chrome | windows modules | `*WindowChrome()` |
+| Tray-only boot | `app-shell.ts` | `enterTrayOnlyMode()` |
+| Settings Dock / foreground | WindowGraph settings path | shell helpers |
+| Popover / settings / about chrome | `process/window-graph.ts` | `*WindowChrome()` |
 | Login items | `auto-launch.ts` | `buildLoginItemSettings` |
 | Battery % | `battery-monitor.ts` | `getBatteryPercent` |
+| Updater dialog presentation | composition → hybrid updater hooks | `enterForegroundMode` / `enterTrayOnlyMode` |
 
 ## Battery percent
 
@@ -51,3 +53,4 @@ Shortcut defaults, reserved keys, and accelerator validation live in domain vali
 
 - Never scatter unguarded darwin-only Electron calls outside platform adapters.
 - Never add Linux product paths without an explicit product decision.
+- Never put composition, settings validation, or product policy into platform adapters.

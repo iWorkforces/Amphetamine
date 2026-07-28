@@ -308,7 +308,7 @@ describe("renderer settings", () => {
       await vi.advanceTimersByTimeAsync(350);
 
       // Renderer no longer writes preventSleep when starting a session.
-      // Sleep prevention is derived in the coordinator from
+      // Sleep prevention is derived in composition from
       // (settings.preventSleep || sessionTimer.sessionActive).
       const calls = mockApi.settings.set.mock.calls.map((c: unknown[]) => c[0]);
       const durationCall = calls.find(

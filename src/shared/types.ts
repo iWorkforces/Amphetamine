@@ -14,6 +14,7 @@ export const IPC_CHANNELS = {
   WINDOW_SET_HEIGHT: "window:set-height",
   WINDOW_HIDE: "window:hide",
   APP_GET_VERSION: "app:get-version",
+  APP_GET_ABOUT: "app:get-about",
   SETTINGS_GET: "settings:get",
   SETTINGS_SET: "settings:set",
   SESSION_START: "session:start",
@@ -93,6 +94,14 @@ export interface UpdateMeta {
   releaseNotes?: string;
 }
 
+/** About window package metadata (renderer-safe snapshot). */
+export interface AboutInfo {
+  productName: string;
+  version: string;
+  description: string;
+  repository: string;
+}
+
 /**
  * Discriminated union response for AUTO_UPDATER_STATUS. Each arm is keyed on
  * `status` so consumers can use exhaustive `switch` narrowing.
@@ -114,6 +123,10 @@ export type IpcChannelMap = {
   [IPC_CHANNELS.APP_GET_VERSION]: {
     request: void;
     response: string;
+  };
+  [IPC_CHANNELS.APP_GET_ABOUT]: {
+    request: void;
+    response: AboutInfo;
   };
   [IPC_CHANNELS.SETTINGS_GET]: {
     request: void;

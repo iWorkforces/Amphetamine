@@ -1,4 +1,4 @@
-import { globalShortcut } from "electron";
+import { globalShortcut } from "electron/main";
 import log from "electron-log";
 import type { GlobalShortcutPort } from "../../application/ports/global-shortcut.port.js";
 

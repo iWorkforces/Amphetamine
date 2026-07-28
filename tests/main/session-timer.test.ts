@@ -29,7 +29,7 @@ vi.mock("../../src/main/settings.js", () => ({
 
 /**
  * Build a fresh session-timer handle wired to the mock callbacks. Mirrors what
- * the coordinator does at runtime: construct via the factory, register as the
+ * composition does at runtime: construct via the factory, register as the
  * active module-level handle so module-level exports keep delegating.
  */
 async function buildHandle(): Promise<SessionTimerHandle> {

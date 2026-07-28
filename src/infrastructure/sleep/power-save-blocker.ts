@@ -1,4 +1,4 @@
-import { powerSaveBlocker } from "electron";
+import { powerSaveBlocker } from "electron/main";
 import type { SleepBlockMode } from "../../domain/settings/sleep-block-mode.js";
 import type { SleepBlockerPort } from "../../application/ports/sleep-blocker.port.js";
 import type { LoggerPort } from "../../application/ports/logger.port.js";

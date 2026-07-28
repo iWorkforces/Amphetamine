@@ -1,4 +1,4 @@
-import { powerMonitor } from "electron";
+import { powerMonitor } from "electron/main";
 import log from "electron-log";
 import { getBatteryPercent } from "./platform/index.js";
 import { isThresholdEnabled } from "../domain/battery/threshold.js";
@@ -10,7 +10,7 @@ const PERIODIC_BATTERY_CHECK_MS = 60_000;
  * Dependencies for the battery monitor.
  *
  * The battery monitor is a pure detector: when the threshold is crossed,
- * it notifies the coordinator via `onAutoStop()` and the coordinator owns
+ * it notifies composition via `onAutoStop()` and composition owns
  * the policy response (cancelling sessions, disabling standing preferences,
  * and stopping sleep prevention). The monitor never touches sleep-prevention
  * state directly.
@@ -23,7 +23,7 @@ const PERIODIC_BATTERY_CHECK_MS = 60_000;
 export interface BatteryDeps {
   /** Returns the configured battery threshold (%). 0 / non-positive ⇒ auto-disable is OFF. */
   getThreshold: () => number;
-  /** Invoked when battery drops at or below threshold; coordinator owns the response. */
+  /** Invoked when battery drops at or below threshold; composition owns the response. */
   onAutoStop: () => void;
   /** Returns true if sleep prevention is currently active (used to gate polling). */
   isPreventingSleep: () => boolean;
@@ -34,7 +34,7 @@ export interface BatteryMonitorHandle {
   initBatteryMonitoring: () => Promise<void>;
   cleanupBatteryMonitoring: () => void;
   /**
-   * Bridge invoked by the coordinator whenever sleep-prevention state flips.
+   * Bridge invoked by composition whenever sleep-prevention state flips.
    * Starts/stops the periodic battery polling loop based on (onBattery && active).
    */
   onPreventSleepChange: (active: boolean) => void;
@@ -171,7 +171,7 @@ export function createBatteryMonitor(deps: BatteryDeps): BatteryMonitorHandle {
   };
 
   /**
-   * Bridge from coordinator: sleep-prevention state changed. Start the polling
+   * Bridge from composition: sleep-prevention state changed. Start the polling
    * loop when prevention turns on (and we're on battery); stop it when off.
    */
   const onPreventSleepChange = (active: boolean): void => {

@@ -1,4 +1,4 @@
-import type { powerMonitor as PowerMonitorType } from "electron";
+import type { powerMonitor as PowerMonitorType } from "electron/main";
 import type { IpcResponse, PushChannel, SessionStatusResponse } from "../shared/types.js";
 import {
   createSessionEngine,

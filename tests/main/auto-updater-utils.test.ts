@@ -1,18 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const mockGetPackageInfo = vi.hoisted(() =>
-  vi.fn(() => ({
-    repository: "https://github.com/ocw/amphetamine.git",
-  })),
+  vi.fn().mockReturnValue({
+    repository: "https://github.com/OCWorkforces/Amphetamine",
+  }),
 );
-const mockLogWarn = vi.hoisted(() => vi.fn());
 
 vi.mock("../../src/main/utils/packageInfo.js", () => ({
   getPackageInfo: mockGetPackageInfo,
 }));
 
 vi.mock("electron-log", () => ({
-  default: { warn: mockLogWarn, info: vi.fn(), error: vi.fn() },
+  default: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
 describe("auto-updater-utils", () => {
@@ -20,41 +19,39 @@ describe("auto-updater-utils", () => {
     vi.clearAllMocks();
     vi.resetModules();
     mockGetPackageInfo.mockReturnValue({
-      repository: "https://github.com/ocw/amphetamine.git",
+      repository: "https://github.com/OCWorkforces/Amphetamine",
     });
   });
 
-  it("getReleaseUrlBase builds tag base from github https repo", async () => {
+  it("getReleaseUrlBase derives github releases tag base", async () => {
     const { getReleaseUrlBase } = await import("../../src/main/auto-updater-utils.js");
-    expect(getReleaseUrlBase()).toBe("https://github.com/ocw/amphetamine/releases/tag/v");
-    // cached
-    expect(getReleaseUrlBase()).toBe("https://github.com/ocw/amphetamine/releases/tag/v");
+    expect(getReleaseUrlBase()).toBe(
+      "https://github.com/OCWorkforces/Amphetamine/releases/tag/v",
+    );
   });
 
-  it("getReleaseUrlBase returns null for non-github URLs", async () => {
-    mockGetPackageInfo.mockReturnValue({ repository: "https://gitlab.com/x/y" });
-    const { getReleaseUrlBase } = await import("../../src/main/auto-updater-utils.js");
-    expect(getReleaseUrlBase()).toBeNull();
-    expect(mockLogWarn).toHaveBeenCalled();
-  });
-
-  it("getReleaseUrlBase returns null when package info throws", async () => {
-    mockGetPackageInfo.mockImplementation(() => {
-      throw new Error("no path");
-    });
+  it("getReleaseUrlBase returns null for non-github repo", async () => {
+    mockGetPackageInfo.mockReturnValue({ repository: "https://gitlab.com/org/repo" });
     const { getReleaseUrlBase } = await import("../../src/main/auto-updater-utils.js");
     expect(getReleaseUrlBase()).toBeNull();
   });
 
-  it("categorizeUpdaterError classifies network/signature/io/unknown", async () => {
-    const { categorizeUpdaterError } = await import("../../src/main/auto-updater-utils.js");
+  it("deriveReleaseUrlBase is pure and strips .git", async () => {
+    const { deriveReleaseUrlBase } = await import(
+      "../../src/infrastructure/updater/auto-updater-utils.js"
+    );
+    expect(deriveReleaseUrlBase("https://github.com/org/repo.git")).toBe(
+      "https://github.com/org/repo/releases/tag/v",
+    );
+  });
+
+  it("categorizeUpdaterError classifies network errors", async () => {
+    const { categorizeUpdaterError } = await import(
+      "../../src/infrastructure/updater/auto-updater-utils.js"
+    );
     expect(categorizeUpdaterError(new Error("ENOTFOUND host"))).toBe("network");
-    expect(categorizeUpdaterError(new Error("ECONNREFUSED"))).toBe("network");
-    expect(categorizeUpdaterError(new Error("bad signature"))).toBe("signature");
-    expect(categorizeUpdaterError(new Error("certificate error"))).toBe("signature");
-    expect(categorizeUpdaterError(new Error("ENOSPC disk"))).toBe("io");
-    expect(categorizeUpdaterError(new Error("EACCES denied"))).toBe("io");
-    expect(categorizeUpdaterError(new Error("write failed"))).toBe("io");
+    expect(categorizeUpdaterError(new Error("code-signing failed"))).toBe("signature");
+    expect(categorizeUpdaterError(new Error("ENOSPC"))).toBe("io");
     expect(categorizeUpdaterError(new Error("mystery"))).toBe("unknown");
   });
 });

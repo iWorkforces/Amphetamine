@@ -1674,3 +1674,20 @@ wave7: vitest coverage; AGENTS maps; publish and apply log-tag renames
 
 *End of design document.*
 
+---
+
+## Follow-up: AppShell process-graph refactor (`refactoring-appgraph`)
+
+Status: delivered on branch `refactoring-appgraph` (post Clean Architecture Lite).
+
+| Wave | Outcome |
+| --- | --- |
+| WindowGraph + secure prefs | Single BrowserWindow factory and security triad |
+| AppShell | Process-graph root for ready/quit; thin `index.ts` |
+| Coordinator removal | Dual-path façade deleted; composition wiring tests |
+| Hybrid updater in infrastructure | No infra → main inversion; `composition.initUpdater()` |
+| About renderer entry | Built `about.html` with shared preload |
+| AppPushEvent + `electron/main` | Application free of IPC channel literals; process-specific imports |
+
+See root `AGENTS.md` source map and `src/main/AGENTS.md` for the live process graph.
+

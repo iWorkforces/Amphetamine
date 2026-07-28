@@ -1,4 +1,4 @@
-import { BrowserWindow } from "electron";
+import { BrowserWindow } from "electron/main";
 import type { PushChannel, IpcResponse } from "../../shared/types.js";
 
 /**

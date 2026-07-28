@@ -1,21 +1,34 @@
+/**
+ * UpdaterPort adapter: wires notifier + UI hooks into hybrid policy.
+ * Does not import main process modules.
+ */
 import type { MainToRendererNotifierPort } from "../../application/ports/main-to-renderer-notifier.port.js";
 import type { UpdaterPort } from "../../application/ports/updater.port.js";
 import {
-  setBroadcastFn,
+  configureHybridAutoUpdater,
   initAutoUpdater,
   stopAutoUpdater,
   checkForUpdatesNow,
-} from "../../main/auto-updater.js";
+  type HybridAutoUpdaterDeps,
+} from "./hybrid-auto-updater.js";
+
+export type ElectronUpdaterPortOptions = Omit<HybridAutoUpdaterDeps, "publish">;
 
 /**
- * UpdaterPort façade: injects MainToRendererNotifierPort instead of a bare
- * setBroadcastFn call site, then delegates hybrid policy to auto-updater module.
+ * Create UpdaterPort over hybrid auto-updater policy.
+ * Call once at composition; injects notifier as publish channel.
  */
 export function createElectronUpdaterPort(
   notifier: MainToRendererNotifierPort,
+  options: ElectronUpdaterPortOptions,
 ): UpdaterPort {
-  setBroadcastFn((channel, data) => {
-    notifier.publish(channel, data);
+  configureHybridAutoUpdater({
+    publish: (event) => {
+      notifier.publish(event);
+    },
+    getRepositoryUrl: options.getRepositoryUrl,
+    prepareDialogPresentation: options.prepareDialogPresentation,
+    restoreTrayPresentation: options.restoreTrayPresentation,
   });
   return {
     init: () => {
