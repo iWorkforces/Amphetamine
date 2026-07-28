@@ -23,8 +23,8 @@ export function createElectronUpdaterPort(
   options: ElectronUpdaterPortOptions,
 ): UpdaterPort {
   configureHybridAutoUpdater({
-    publish: (channel, data) => {
-      notifier.publish(channel, data);
+    publish: (event) => {
+      notifier.publish(event);
     },
     getRepositoryUrl: options.getRepositoryUrl,
     prepareDialogPresentation: options.prepareDialogPresentation,

@@ -1,7 +1,7 @@
 export type { SettingsStorePort } from "./settings-store.port.js";
 export type { SettingsSaveFailurePort } from "./settings-save-failure.port.js";
 export type { SleepBlockerPort } from "./sleep-blocker.port.js";
-export type { MainToRendererNotifierPort } from "./main-to-renderer-notifier.port.js";
+export type { MainToRendererNotifierPort, AppPushEvent } from "./main-to-renderer-notifier.port.js";
 export type { ClockPort } from "./clock.port.js";
 export type { SchedulePort } from "./schedule.port.js";
 export type { AutoLaunchPort } from "./auto-launch.port.js";

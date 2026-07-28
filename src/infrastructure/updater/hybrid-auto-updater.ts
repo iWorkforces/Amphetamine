@@ -5,14 +5,11 @@
  */
 
 import { autoUpdater, type UpdateInfo, type ProgressInfo } from "electron-updater";
-import { app, shell, dialog, type MessageBoxOptions, type MessageBoxReturnValue } from "electron";
+import { app, dialog, type MessageBoxOptions, type MessageBoxReturnValue } from "electron/main";
+import { shell } from "electron/common";
 import log from "electron-log";
-import {
-  IPC_CHANNELS,
-  type PushChannel,
-  type IpcResponse,
-  type UpdateMeta,
-} from "../../shared/types.js";
+import type { AutoUpdaterStatus, UpdateMeta } from "../../shared/types.js";
+import type { AppPushEvent } from "../../application/ports/main-to-renderer-notifier.port.js";
 import { categorizeUpdaterError, deriveReleaseUrlBase } from "./auto-updater-utils.js";
 
 /** Timing constants (keep in sync with main/constants.ts updater values). */
@@ -39,7 +36,8 @@ const SEMVER_RE = /^\d+\.\d+\.\d+(-[\w.-]+)?(\+[\w.-]+)?$/;
  * Wired by createElectronUpdaterPort — no main-process imports.
  */
 export interface HybridAutoUpdaterDeps {
-  publish: <K extends PushChannel>(channel: K, data: IpcResponse<K>) => void;
+  /** Semantic push into MainToRendererNotifierPort (mapped to IPC in adapter). */
+  publish: (event: AppPushEvent) => void;
   /** Repository URL from package metadata (for browser fallback links). */
   getRepositoryUrl: () => string;
   /** Before native dialogs (e.g. Dock/foreground on macOS). */
@@ -64,8 +62,8 @@ function requireDeps(): HybridAutoUpdaterDeps {
   return deps;
 }
 
-function broadcast<K extends PushChannel>(channel: K, data: IpcResponse<K>): void {
-  requireDeps().publish(channel, data);
+function publishStatus(status: AutoUpdaterStatus): void {
+  requireDeps().publish({ type: "auto-updater-status", status });
 }
 
 function getReleaseUrlBase(): string | null {
@@ -211,7 +209,7 @@ function showUpdatesUnavailableDialog(): void {
 /** Handle "checking-for-update" event */
 function onCheckingForUpdate(): void {
   log.info("[auto-updater] Checking for updates...");
-  broadcast(IPC_CHANNELS.AUTO_UPDATER_STATUS, { status: "checking" });
+  publishStatus({ status: "checking" });
 }
 
 /**
@@ -228,7 +226,7 @@ function onUpdateAvailable(info: UpdateInfo): void {
   rescheduleCheckLoop();
   lastAvailableVersion = info.version;
 
-  broadcast(IPC_CHANNELS.AUTO_UPDATER_STATUS, {
+  publishStatus({
     status: "available",
     info: toUpdateMeta(info),
   });
@@ -256,7 +254,7 @@ function onUpdateNotAvailable(info: UpdateInfo): void {
   log.info("[auto-updater] No update available. Current version:", info.version);
   consecutiveFailures = 0;
   rescheduleCheckLoop();
-  broadcast(IPC_CHANNELS.AUTO_UPDATER_STATUS, {
+  publishStatus({
     status: "not-available",
     info: {
       version: info.version,
@@ -273,7 +271,7 @@ function onUpdateNotAvailable(info: UpdateInfo): void {
 /** Handle download progress during user-initiated update */
 function onDownloadProgress(progress: ProgressInfo): void {
   if (!userInitiatedCheck) return;
-  broadcast(IPC_CHANNELS.AUTO_UPDATER_STATUS, {
+  publishStatus({
     status: "downloading",
     progress: {
       percent: progress.percent,
@@ -290,7 +288,7 @@ function onDownloadProgress(progress: ProgressInfo): void {
  */
 function onUpdateDownloaded(info: UpdateInfo): void {
   log.info("[auto-updater] Update downloaded:", info.version);
-  broadcast(IPC_CHANNELS.AUTO_UPDATER_STATUS, {
+  publishStatus({
     status: "downloaded",
     info: toUpdateMeta(info),
   });
@@ -337,7 +335,7 @@ function onError(err: Error): void {
   log.error("[auto-updater] Error:", err.message);
   consecutiveFailures += 1;
   rescheduleCheckLoop();
-  broadcast(IPC_CHANNELS.AUTO_UPDATER_STATUS, {
+  publishStatus({
     status: "error",
     category: categorizeUpdaterError(err),
   });

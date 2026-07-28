@@ -1,4 +1,3 @@
-import { IPC_CHANNELS } from "../../shared/types.js";
 import type { GlobalShortcutPort } from "../ports/global-shortcut.port.js";
 import type { MainToRendererNotifierPort } from "../ports/main-to-renderer-notifier.port.js";
 import type { LoggerPort } from "../ports/logger.port.js";
@@ -32,7 +31,8 @@ export function createRegisterAppShortcut(
       );
     });
     if (!result.ok) {
-      deps.notifier.publish(IPC_CHANNELS.SHORTCUT_REGISTRATION_FAILED, {
+      deps.notifier.publish({
+        type: "shortcut-registration-failed",
         accelerator: result.accelerator,
       });
     }
