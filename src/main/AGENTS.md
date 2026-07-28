@@ -23,7 +23,7 @@ Main process owns app lifecycle, BrowserWindows, tray, typed IPC registration, a
 | `auto-updater.ts` | IPC registration + re-exports of hybrid policy |
 | `auto-updater-utils.ts` | Façade over infrastructure pure helpers + package repo URL |
 | `settings-window.ts` | Façade re-export of WindowGraph settings APIs |
-| `about-window.ts` | Façade re-export of WindowGraph about APIs |
+| `about-window.ts` | Façade re-export of WindowGraph about APIs (built about.html renderer) |
 | `security.ts` | WebContents hardening / navigation allowlist |
 | `constants.ts` | Window sizes, timeouts, UI timing constants |
 | `platform/` | OS adapters; see `platform/AGENTS.md` |

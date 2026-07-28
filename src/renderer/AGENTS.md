@@ -1,6 +1,6 @@
 # Renderer Process — UI Layer
 
-Electron renderer web context. Vanilla TypeScript only: main popover entry plus a separate settings-window entry under `settings/`.
+Electron renderer web context. Vanilla TypeScript only: popover, settings, and about window entries.
 
 ## Files
 
@@ -14,6 +14,7 @@ Electron renderer web context. Vanilla TypeScript only: main popover entry plus 
 | `css.d.ts` | CSS module declarations |
 | `styles/main.css` | Popover styling, dark mode, reduced motion |
 | `settings/` | Settings-window renderer; see `settings/AGENTS.md` |
+| `about/` | About-window renderer (package metadata + close) |
 
 ## Popover flow
 

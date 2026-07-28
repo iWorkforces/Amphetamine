@@ -29,7 +29,7 @@ src/main/                 Composition root, IPC, tray, windows, process façades
   platform/               OS adapters; public entry platform/index.ts
   utils/                  broadcastToWindows, packageInfo guard
 src/preload/              sandboxed contextBridge API
-src/renderer/             popover UI + settings window entry
+src/renderer/             popover UI + settings + about window entries
 src/shared/               IPC transport contracts; re-exports domain settings types
 src/assets/               checked-in generated PNGs consumed at runtime
 scripts/                  Bun tooling, icons, dev, benchmarks, sticky/layer guards
