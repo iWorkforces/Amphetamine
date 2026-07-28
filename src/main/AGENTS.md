@@ -6,7 +6,9 @@ Main process owns app lifecycle, BrowserWindows, tray, typed IPC registration, a
 
 | File | Role |
 |------|------|
-| `index.ts` | Bootstrap, popover window, quit orchestrator, benchmark entry |
+| `index.ts` | Bootstrap, quit orchestrator, benchmark entry (thin; windows via process graph) |
+| `process/secure-web-preferences.ts` | Single `createSecureWebPreferences()` for all BrowserWindows |
+| `process/window-graph.ts` | Owns popover / settings / about BrowserWindows + registry |
 | `composition-root.ts` | `createAppComposition()` — ports, session handle, reactions, `getIpcDeps` / `getTrayDeps`, ordered `cleanup()` |
 | `coordinator.ts` | Thin compatibility façade (`initCoordinator` / `cleanupCoordinator` / `getTrayDeps`) over composition |
 | `ipc.ts` | Typed handler registration; session handlers use injected `IpcDeps.sessionTimer` |
@@ -20,8 +22,8 @@ Main process owns app lifecycle, BrowserWindows, tray, typed IPC registration, a
 | `battery-monitor.ts` | Threshold **detector** only; percent via `platform/battery-percent` |
 | `auto-updater.ts` | Hybrid download/install policy; `UpdaterPort` wraps broadcast inject |
 | `auto-updater-utils.ts` | Pure updater helpers |
-| `settings-window.ts` | Settings BrowserWindow; Dock/taskbar while open |
-| `about-window.ts` | Custom About window |
+| `settings-window.ts` | Façade re-export of WindowGraph settings APIs |
+| `about-window.ts` | Façade re-export of WindowGraph about APIs |
 | `security.ts` | WebContents hardening / navigation allowlist |
 | `constants.ts` | Window sizes, timeouts, UI timing constants |
 | `platform/` | OS adapters; see `platform/AGENTS.md` |
@@ -32,8 +34,8 @@ Main process owns app lifecycle, BrowserWindows, tray, typed IPC registration, a
 
 **Ready order (required):**
 
-1. `createAppComposition()`
-2. `await composition.init()` (settings, session, battery, shortcut, reactions)
+1. `enterTrayOnlyMode()` + `createPopoverWindow()` (WindowGraph)
+2. `createAppComposition()` + `await composition.init()` (settings, session, battery, shortcut, reactions)
 3. `registerIpcHandlers(window, composition.getIpcDeps())`
 4. `setupTray(composition.getTrayDeps())`
 5. `initAutoUpdater()` unless benchmark mode
@@ -44,7 +46,7 @@ Main process owns app lifecycle, BrowserWindows, tray, typed IPC registration, a
 2. `flushSettingsWriteChain()` (2s race timeout)
 3. Tray `destroy`
 4. `composition.cleanup()`
-5. Destroy main window → `app.exit(0)`
+5. `destroyAllWindows()` (WindowGraph) → `app.exit(0)`
 
 Do not register a second `before-quit` handler on settings or other modules.
 

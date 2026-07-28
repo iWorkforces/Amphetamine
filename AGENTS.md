@@ -23,6 +23,7 @@ src/application/          Use cases + port interfaces (no Electron)
 src/infrastructure/       Electron/Node adapters implementing ports + benchmark harness
 src/main/                 Composition root, IPC, tray, windows, process façades
   index.ts                bootstrap, quit orchestrator, benchmark entry
+  process/                WindowGraph + shared secure webPreferences
   composition-root.ts     createAppComposition — wire ports, use cases, reactions
   coordinator.ts          thin compatibility façade over composition
   platform/               OS adapters; public entry platform/index.ts
