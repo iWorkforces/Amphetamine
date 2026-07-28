@@ -23,6 +23,7 @@ const mockGetTrayDeps = vi.hoisted(() => vi.fn().mockReturnValue({}));
 const mockCreateAppComposition = vi.hoisted(() =>
   vi.fn(() => ({
     init: mockCompositionInit,
+    initUpdater: vi.fn(),
     cleanup: mockCompositionCleanup,
     getIpcDeps: mockGetIpcDeps,
     getTrayDeps: mockGetTrayDeps,

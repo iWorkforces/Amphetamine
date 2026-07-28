@@ -26,6 +26,7 @@ export default defineConfig({
         // full-process harnesses. Pure helpers and adapters stay included.
         '**/main/index.ts',
         '**/main/auto-updater.ts',
+        '**/infrastructure/updater/hybrid-auto-updater.ts',
         '**/main/tray.ts',
         '**/main/about-window.ts',
         '**/main/settings-window.ts',

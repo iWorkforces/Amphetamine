@@ -77,15 +77,6 @@ vi.mock("../../src/main/utils/packageInfo.js", () => ({
   getPackageInfo: mockGetPackageInfo,
 }));
 
-vi.mock("../../src/main/platform/index.js", () => ({
-  enterForegroundMode: mockEnterForegroundMode,
-  enterTrayOnlyMode: mockEnterTrayOnlyMode,
-}));
-
-vi.mock("../../src/main/settings-window.js", () => ({
-  isSettingsWindowOpen: mockIsSettingsWindowOpen,
-}));
-
 vi.mock("electron-log", () => ({
   default: { info: mockLogInfo, warn: mockLogWarn, error: mockLogError },
 }));
@@ -96,7 +87,7 @@ function getHandler(eventName: string): (...args: unknown[]) => void {
   return call[1] as (...args: unknown[]) => void;
 }
 
-describe("auto-updater", () => {
+describe("auto-updater (hybrid infrastructure)", () => {
   let initAutoUpdater: () => void;
   let stopAutoUpdater: () => void;
   let registerAutoUpdaterIpc: () => void;
@@ -113,14 +104,26 @@ describe("auto-updater", () => {
     mockShowMessageBox.mockResolvedValue({ response: 1, checkboxChecked: false });
     mockIsSettingsWindowOpen.mockReturnValue(false);
 
-    const mod = await import("../../src/main/auto-updater.js");
-    initAutoUpdater = mod.initAutoUpdater;
-    stopAutoUpdater = mod.stopAutoUpdater;
-    registerAutoUpdaterIpc = mod.registerAutoUpdaterIpc;
-    checkForUpdatesNow = mod.checkForUpdatesNow;
-
+    const hybrid = await import("../../src/infrastructure/updater/hybrid-auto-updater.js");
     const { broadcastToWindows } = await import("../../src/main/utils/broadcast.js");
-    mod.setBroadcastFn(broadcastToWindows);
+    hybrid.configureHybridAutoUpdater({
+      publish: broadcastToWindows,
+      getRepositoryUrl: () => String(mockGetPackageInfo().repository),
+      prepareDialogPresentation: () => {
+        mockEnterForegroundMode();
+      },
+      restoreTrayPresentation: () => {
+        if (mockIsSettingsWindowOpen() === false) {
+          mockEnterTrayOnlyMode();
+        }
+      },
+    });
+    initAutoUpdater = hybrid.initAutoUpdater;
+    stopAutoUpdater = hybrid.stopAutoUpdater;
+    checkForUpdatesNow = hybrid.checkForUpdatesNow;
+
+    const facade = await import("../../src/main/auto-updater.js");
+    registerAutoUpdaterIpc = facade.registerAutoUpdaterIpc;
   });
 
   afterEach(() => {
@@ -135,8 +138,15 @@ describe("auto-updater", () => {
         Object.defineProperty(app, "isPackaged", { value: false, configurable: true, writable: true });
 
         vi.resetModules();
-        const freshMod = await import("../../src/main/auto-updater.js");
-        freshMod.initAutoUpdater();
+        const freshHybrid = await import("../../src/infrastructure/updater/hybrid-auto-updater.js");
+        const { broadcastToWindows: bcast } = await import("../../src/main/utils/broadcast.js");
+        freshHybrid.configureHybridAutoUpdater({
+          publish: bcast,
+          getRepositoryUrl: () => "https://github.com/OCWorkforces/Amphetamine",
+          prepareDialogPresentation: () => {},
+          restoreTrayPresentation: () => {},
+        });
+        freshHybrid.initAutoUpdater();
 
         expect(mockOn).not.toHaveBeenCalled();
       } finally {
@@ -146,7 +156,7 @@ describe("auto-updater", () => {
           Object.defineProperty(app, "isPackaged", { value: true, configurable: true, writable: true });
         }
         vi.resetModules();
-        await import("../../src/main/auto-updater.js");
+        await import("../../src/infrastructure/updater/hybrid-auto-updater.js");
       }
     });
 
@@ -655,7 +665,18 @@ describe("auto-updater", () => {
         });
 
         vi.resetModules();
-        const freshMod = await import("../../src/main/auto-updater.js");
+        const freshMod = await import("../../src/infrastructure/updater/hybrid-auto-updater.js");
+        const { broadcastToWindows: bcast2 } = await import("../../src/main/utils/broadcast.js");
+        freshMod.configureHybridAutoUpdater({
+          publish: bcast2,
+          getRepositoryUrl: () => "https://github.com/OCWorkforces/Amphetamine",
+          prepareDialogPresentation: () => {
+            mockEnterForegroundMode();
+          },
+          restoreTrayPresentation: () => {
+            mockEnterTrayOnlyMode();
+          },
+        });
         mockShowMessageBox.mockClear();
         mockCheckForUpdates.mockClear();
         freshMod.checkForUpdatesNow();
@@ -679,7 +700,7 @@ describe("auto-updater", () => {
           });
         }
         vi.resetModules();
-        await import("../../src/main/auto-updater.js");
+        await import("../../src/infrastructure/updater/hybrid-auto-updater.js");
       }
     });
 

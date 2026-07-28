@@ -64,7 +64,7 @@ const mockCreateSessionTimer = vi.hoisted(() =>
 const mockCreateSettingsWindow = vi.hoisted(() => vi.fn());
 
 vi.mock("electron", () => ({
-  app: { isPackaged: false },
+  app: { isPackaged: false, focus: vi.fn() },
   BrowserWindow: { getAllWindows: mockGetAllWindows },
   powerMonitor: {
     on: vi.fn(),
@@ -75,6 +75,14 @@ vi.mock("electron", () => ({
 
 vi.mock("electron-log", () => ({
   default: { info: mockLogInfo, error: vi.fn(), warn: vi.fn() },
+}));
+
+vi.mock("../../src/infrastructure/updater/hybrid-auto-updater.js", () => ({
+  configureHybridAutoUpdater: vi.fn(),
+  initAutoUpdater: vi.fn(),
+  stopAutoUpdater: vi.fn(),
+  checkForUpdatesNow: vi.fn(),
+  checkForUpdatesForIpc: vi.fn(),
 }));
 
 vi.mock("../../src/main/settings.js", () => ({
@@ -124,7 +132,7 @@ vi.mock("../../src/main/session-timer.js", () => ({
 }));
 
 vi.mock("../../src/main/auto-updater.js", () => ({
-  setBroadcastFn: vi.fn(),
+  registerAutoUpdaterIpc: vi.fn(),
   stopAutoUpdater: vi.fn(),
   initAutoUpdater: vi.fn(),
   checkForUpdatesNow: vi.fn(),
@@ -137,6 +145,19 @@ vi.mock("../../src/main/settings-window.js", () => ({
 
 vi.mock("../../src/main/about-window.js", () => ({
   closeAboutWindow: vi.fn(),
+}));
+vi.mock("../../src/main/utils/packageInfo.js", () => ({
+  getPackageInfo: () => ({
+    repository: "https://github.com/OCWorkforces/Amphetamine",
+    productName: "Amphetamine",
+    version: "1.0.0",
+    description: "",
+    author: "Test",
+  }),
+}));
+vi.mock("../../src/main/platform/index.js", () => ({
+  enterForegroundMode: vi.fn(),
+  enterTrayOnlyMode: vi.fn(),
 }));
 
 describe("composition wiring", () => {

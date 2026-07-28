@@ -4,9 +4,11 @@ const mockCompositionInit = vi.hoisted(() => vi.fn().mockResolvedValue(undefined
 const mockCompositionCleanup = vi.hoisted(() => vi.fn());
 const mockGetIpcDeps = vi.hoisted(() => vi.fn().mockReturnValue({ sessionTimer: {} }));
 const mockGetTrayDeps = vi.hoisted(() => vi.fn().mockReturnValue({}));
+const mockInitUpdater = vi.hoisted(() => vi.fn());
 const mockCreateAppComposition = vi.hoisted(() =>
   vi.fn(() => ({
     init: mockCompositionInit,
+    initUpdater: mockInitUpdater,
     cleanup: mockCompositionCleanup,
     getIpcDeps: mockGetIpcDeps,
     getTrayDeps: mockGetTrayDeps,
@@ -16,7 +18,6 @@ const mockCreateAppComposition = vi.hoisted(() =>
 const mockSetupTray = vi.hoisted(() => vi.fn().mockReturnValue(vi.fn()));
 const mockRegisterIpcHandlers = vi.hoisted(() => vi.fn());
 const mockFlushSettings = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
-const mockInitAutoUpdater = vi.hoisted(() => vi.fn());
 const mockEnterTrayOnlyMode = vi.hoisted(() => vi.fn());
 const mockCreatePopoverWindow = vi.hoisted(() =>
   vi.fn().mockReturnValue({ id: 1, show: vi.fn(), isDestroyed: () => false }),
@@ -43,10 +44,6 @@ vi.mock("../../src/main/tray.js", () => ({
 
 vi.mock("../../src/main/settings.js", () => ({
   flushSettingsWriteChain: mockFlushSettings,
-}));
-
-vi.mock("../../src/main/auto-updater.js", () => ({
-  initAutoUpdater: mockInitAutoUpdater,
 }));
 
 vi.mock("../../src/infrastructure/benchmark/benchmark-env.js", () => ({
@@ -87,7 +84,7 @@ describe("createAppShell", () => {
     expect(mockCompositionInit).toHaveBeenCalled();
     expect(mockRegisterIpcHandlers).toHaveBeenCalled();
     expect(mockSetupTray).toHaveBeenCalled();
-    expect(mockInitAutoUpdater).toHaveBeenCalled();
+    expect(mockInitUpdater).toHaveBeenCalled();
     expect(shell.ready).toBe(true);
 
     // Order: tray-only → popover → composition.init → ipc → tray → updater
@@ -97,7 +94,7 @@ describe("createAppShell", () => {
       mockCompositionInit.mock.invocationCallOrder[0],
       mockRegisterIpcHandlers.mock.invocationCallOrder[0],
       mockSetupTray.mock.invocationCallOrder[0],
-      mockInitAutoUpdater.mock.invocationCallOrder[0],
+      mockInitUpdater.mock.invocationCallOrder[0],
     ];
     for (let i = 1; i < order.length; i++) {
       expect(order[i]!).toBeGreaterThan(order[i - 1]!);
@@ -108,7 +105,7 @@ describe("createAppShell", () => {
     mockIsBenchmarkMode.mockReturnValue(true);
     const { createAppShell } = await import("../../src/main/app-shell.js");
     await createAppShell().init();
-    expect(mockInitAutoUpdater).not.toHaveBeenCalled();
+    expect(mockInitUpdater).not.toHaveBeenCalled();
   });
 
   it("cleanup is ordered and idempotent", async () => {
