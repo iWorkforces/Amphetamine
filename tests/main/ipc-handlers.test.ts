@@ -61,6 +61,16 @@ vi.mock("../../src/main/settings-window.js", () => ({
   createSettingsWindow: mockCreateSettingsWindow,
 }));
 
+vi.mock("../../src/main/utils/packageInfo.js", () => ({
+  getPackageInfo: () => ({
+    productName: "Amphetamine",
+    version: "1.0.0",
+    description: "Keep awake",
+    repository: "https://github.com/OCWorkforces/Amphetamine",
+    author: "Test",
+  }),
+}));
+
 vi.mock("../../src/main/session-timer.js", () => ({
   startSession: mockStartSession,
   cancelSession: mockCancelSession,
@@ -203,6 +213,28 @@ describe("ipc-handlers", () => {
 
       const result = await handler!(mockEvent);
       expect(result).toBe("1.0.0");
+    });
+  });
+
+  describe("APP_GET_ABOUT handler", () => {
+    it("returns package about info for valid sender", async () => {
+      const mockWindow = {};
+      registerIpcHandlers(mockWindow, makeIpcDeps());
+
+      const handler = registeredHandlers.get(IPC_CHANNELS.APP_GET_ABOUT);
+      expect(handler).toBeDefined();
+
+      const mockEvent = {
+        senderFrame: { url: "file:///mock/app/lib/renderer/about.html" },
+      };
+
+      const result = await handler!(mockEvent);
+      expect(result).toEqual({
+        productName: "Amphetamine",
+        version: "1.0.0",
+        description: "Keep awake",
+        repository: "https://github.com/OCWorkforces/Amphetamine",
+      });
     });
   });
 

@@ -111,7 +111,7 @@ describe("window-graph", () => {
     expect(String(opts.webPreferences.preload)).toContain("preload");
   });
 
-  it("showAbout uses secure triad without preload", async () => {
+  it("showAbout uses secure triad with shared preload", async () => {
     const { showAbout } = await import("../../src/main/process/window-graph.js");
     const { BrowserWindow } = await import("electron");
     showAbout();
@@ -123,7 +123,7 @@ describe("window-graph", () => {
       contextIsolation: true,
       nodeIntegration: false,
     });
-    expect(opts.webPreferences.preload).toBeUndefined();
+    expect(String(opts.webPreferences.preload)).toContain("preload");
   });
 
   it("destroyAllWindows closes utility windows and destroys popover", async () => {

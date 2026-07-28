@@ -5,6 +5,7 @@ const mockShow = vi.fn();
 const mockClose = vi.fn();
 const mockIsDestroyed = vi.fn().mockReturnValue(false);
 const mockLoadURL = vi.fn();
+const mockLoadFile = vi.fn();
 const mockOnce = vi.fn();
 const mockOn = vi.fn();
 const mockSetWindowOpenHandler = vi.fn();
@@ -19,6 +20,7 @@ vi.mock("electron", () => ({
     this.close = mockClose;
     this.isDestroyed = mockIsDestroyed;
     this.loadURL = mockLoadURL;
+    this.loadFile = mockLoadFile;
     this.once = mockOnce;
     this.on = mockOn;
     this.webContents = {
@@ -42,18 +44,14 @@ vi.mock("../../src/main/security.js", () => ({
   hardenWebContents: mockHarden,
 }));
 
-vi.mock("../../src/main/utils/packageInfo.js", () => ({
-  getPackageInfo: () => ({
-    productName: "Amphetamine",
-    version: "1.0.0",
-    description: "Keep awake",
-    repository: "https://github.com/example/amphetamine",
-    author: "Test",
-  }),
-}));
-
 vi.mock("../../src/main/platform/index.js", () => ({
   aboutWindowChrome: () => ({ skipTaskbar: true }),
+  popoverWindowChrome: () => ({ skipTaskbar: true }),
+  settingsWindowChrome: () => ({ skipTaskbar: false }),
+  appIconFileName: () => "icon.icns",
+  enterForegroundMode: vi.fn(),
+  enterTrayOnlyMode: vi.fn(),
+  setDockIcon: vi.fn(),
 }));
 
 describe("about-window", () => {
@@ -63,13 +61,22 @@ describe("about-window", () => {
     mockIsDestroyed.mockReturnValue(false);
   });
 
-  it("creates a BrowserWindow and hardens contents", async () => {
+  it("creates a BrowserWindow with shared secure prefs and preload", async () => {
     const { showAbout } = await import("../../src/main/about-window.js");
     const { BrowserWindow } = await import("electron");
     showAbout();
     expect(BrowserWindow).toHaveBeenCalled();
     expect(mockHarden).toHaveBeenCalled();
-    expect(mockLoadURL).toHaveBeenCalled();
+    const opts = vi.mocked(BrowserWindow).mock.calls[0]![0] as {
+      webPreferences: Record<string, unknown>;
+    };
+    expect(opts.webPreferences).toMatchObject({
+      sandbox: true,
+      contextIsolation: true,
+      nodeIntegration: false,
+    });
+    expect(String(opts.webPreferences.preload)).toContain("preload");
+    expect(mockLoadURL).toHaveBeenCalledWith(expect.stringContaining("/about.html"));
   });
 
   it("focuses existing window when not destroyed", async () => {
@@ -103,14 +110,17 @@ describe("about-window", () => {
     expect(mockShow).toHaveBeenCalled();
   });
 
-  it("window open handler opens external URL", async () => {
+  it("window open handler opens https github URLs only", async () => {
     let openHandler: ((arg: { url: string }) => { action: string }) | undefined;
     mockSetWindowOpenHandler.mockImplementation((cb: typeof openHandler) => {
       openHandler = cb;
     });
     const { showAbout } = await import("../../src/main/about-window.js");
     showAbout();
-    expect(openHandler?.({ url: "https://example.com" })).toEqual({ action: "deny" });
-    expect(mockOpenExternal).toHaveBeenCalledWith("https://example.com");
+    expect(openHandler?.({ url: "https://github.com/org/repo" })).toEqual({ action: "deny" });
+    expect(mockOpenExternal).toHaveBeenCalledWith("https://github.com/org/repo");
+    mockOpenExternal.mockClear();
+    expect(openHandler?.({ url: "https://evil.example/x" })).toEqual({ action: "deny" });
+    expect(mockOpenExternal).not.toHaveBeenCalled();
   });
 });

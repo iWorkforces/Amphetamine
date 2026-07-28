@@ -29,6 +29,7 @@ export default defineConfig({
         '**/infrastructure/updater/hybrid-auto-updater.ts',
         '**/main/tray.ts',
         '**/main/about-window.ts',
+        '**/renderer/about/index.ts',
         '**/main/settings-window.ts',
         '**/renderer/settings/index.ts',
         '**/renderer/benchmark-countdown.ts',

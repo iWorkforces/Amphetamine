@@ -56,6 +56,12 @@ describe("preload", () => {
     expect(mockInvoke).toHaveBeenCalledWith(IPC_CHANNELS.APP_GET_VERSION);
   });
 
+  it("app.getAbout calls ipcRenderer.invoke with correct channel", () => {
+    api.app.getAbout();
+
+    expect(mockInvoke).toHaveBeenCalledWith(IPC_CHANNELS.APP_GET_ABOUT);
+  });
+
   it("settings.get calls ipcRenderer.invoke with correct channel", () => {
     api.settings.get();
 
