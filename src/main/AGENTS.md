@@ -11,7 +11,6 @@ Main process owns app lifecycle, BrowserWindows, tray, typed IPC registration, a
 | `process/secure-web-preferences.ts` | Single `createSecureWebPreferences()` for all BrowserWindows |
 | `process/window-graph.ts` | Owns popover / settings / about BrowserWindows + registry |
 | `composition-root.ts` | `createAppComposition()` — ports, session handle, reactions, `getIpcDeps` / `getTrayDeps`, ordered `cleanup()` |
-| `coordinator.ts` | Thin compatibility façade (`initCoordinator` / `cleanupCoordinator` / `getTrayDeps`) over composition |
 | `ipc.ts` | Typed handler registration; session handlers use injected `IpcDeps.sessionTimer` |
 | `ipc-utils.ts` | `validateSender`, `typedHandle` |
 | `tray.ts` | Tray icon/menu; Check for Updates; destroy on cleanup |

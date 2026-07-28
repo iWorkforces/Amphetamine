@@ -8,7 +8,7 @@ Main-process Vitest suites run in Node with Electron mocked. They cover lifecycl
 |------|----------------|
 | Bootstrap / quit | `index.test.ts`, `settings-window*.test.ts` |
 | Composition | `composition-root.test.ts` (session IPC fail-closed before init) |
-| Coordinator façade | `coordinator.test.ts` (thin wrapper over composition; mock ports/deps) |
+| Composition wiring | `composition-wiring.test.ts` + `composition-root.test.ts` (mock ports/deps) |
 | IPC / security | `ipc.test.ts`, `ipc-handlers.test.ts`, `preload.test.ts` |
 | Session façade | `session-timer.test.ts` (handle from `createSessionTimer` only) |
 | Settings store | `settings.test.ts`, `settings.predicates.test.ts` |
@@ -28,7 +28,7 @@ Pure use-case / domain tests live under `tests/application` and `tests/domain` (
 - `createSessionTimer` deps: `broadcast` required; optional `onSessionActiveChange` / `powerMonitor`.
 - Battery handle mocks include `reconfigure`.
 - Tray deps include `checkForUpdates`.
-- Composition / coordinator tests often need: `getSettingsStore`, `getSleepBlockerPort`, `getAutoLaunchPort`, and `createSessionTimer` mocks.
+- Composition wiring tests often need: `getSettingsStore`, `getSleepBlockerPort`, `getAutoLaunchPort`, and `createSessionTimer` mocks.
 - Auto-launch: darwin expects `openAsHidden: true`; win32 only `openAtLogin`.
 
 ## Behavioral focus
