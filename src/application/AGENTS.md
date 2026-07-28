@@ -18,13 +18,14 @@ Electron-free application services. Depends on **domain** and **port interfaces*
 
 ## Ports (budget)
 
-`SettingsStore`, `SettingsSaveFailure`, `SleepBlocker`, `MainToRendererNotifier (`AppPushEvent` — no IPC channel literals)`, `Clock`, `Schedule`, `AutoLaunch`, `GlobalShortcut`, `BatterySensor`, `Logger`, `Updater`.
+`SettingsStore`, `SettingsSaveFailure`, `SleepBlocker`, `MainToRendererNotifier` (**`AppPushEvent` only** — no IPC channel literals), `Clock`, `Schedule`, `AutoLaunch`, `GlobalShortcut`, `BatterySensor`, `Logger`, `Updater`.
 
 Do not add ports for Tray/Menu/BrowserWindow chrome.
 
 ## Rules
 
 - No `electron`, `electron-log`, `setTimeout` (use `SchedulePort`), or main/infrastructure imports.
+- No `IPC_CHANNELS` / push channel string literals; use `AppPushEvent` on the notifier port.
 - `UpdateSettings` must not run field reactions; only `SettingsReactionService` on store `onChange`.
 - Session engine cancels outstanding schedule handles on cancel/cleanup/expiry.
 - Prefer factories (`createX(deps)`) matching existing style; no DI container.

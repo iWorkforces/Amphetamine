@@ -60,3 +60,9 @@ bun run typecheck:layers
 
 - Preload unit tests live under `tests/main/preload.test.ts`.
 - Coverage excludes type-only declaration files as configured.
+
+## Process-graph / AppPushEvent testing
+
+- Application notifier mocks expect `publish({ type: "…", … })` (`AppPushEvent`), not channel strings.
+- Main Vitest project aliases `electron/main` and `electron/common` → `electron` so existing `vi.mock("electron")` works.
+

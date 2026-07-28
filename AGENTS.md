@@ -20,7 +20,7 @@ Product platforms: **darwin** and **win32**. OS differences go through thin main
 ```text
 src/domain/               Pure types and rules (no Electron, no Node I/O)
 src/application/          Use cases + port interfaces (no Electron)
-src/infrastructure/       Electron/Node adapters implementing ports + benchmark harness
+src/infrastructure/       Electron/Node adapters + hybrid updater + benchmark harness
 src/main/                 Composition root, IPC, tray, windows, process façades
   index.ts                app lifecycle events; delegates graph to AppShell
   app-shell.ts            createAppShell — process-graph root (windows/IPC/tray/composition)
@@ -29,7 +29,7 @@ src/main/                 Composition root, IPC, tray, windows, process façades
   platform/               OS adapters; public entry platform/index.ts
   utils/                  broadcastToWindows, packageInfo guard
 src/preload/              sandboxed contextBridge API
-src/renderer/             popover UI + settings + about window entries
+src/renderer/             popover + settings + about (built HTML entries)
 src/shared/               IPC transport contracts; re-exports domain settings types
 src/assets/               checked-in generated PNGs consumed at runtime
 scripts/                  Bun tooling, icons, dev, benchmarks, sticky/layer guards
@@ -48,7 +48,9 @@ Dependency rule: **domain** and **application** must not import `electron` / `el
 | Add settings field | `src/domain/settings/app-settings.ts`, `src/domain/settings-validation/validators.ts` | Extend `AppSettings`, `DEFAULT_SETTINGS`, `VALIDATORS`; migrate legacy keys in `migrateRawSettingsRecord`; shared re-exports stay available |
 | Domain pure rules | `src/domain/` | `isEffectivelyActive`, duration validation, threshold, `PerfTimestamp` |
 | Application use cases | `src/application/` | Session engine, recompute/toggle sleep, settings reactions, low-battery, shortcut |
-| Port interfaces | `src/application/ports/` | Closed budget (~11): store, sleep, schedule, clock, notifier, etc. |
+| Port interfaces | `src/application/ports/` | Closed budget (~11): store, sleep, schedule, clock, notifier (`AppPushEvent`), etc. |
+| Process graph / windows | `src/main/app-shell.ts`, `src/main/process/` | AppShell ready/quit; WindowGraph owns all BrowserWindows |
+| Main→renderer push | `MainToRendererNotifierPort` + `broadcast-notifier` | Application publishes `AppPushEvent`; adapter maps to `PUSH_CHANNELS` |
 | Wire app / quit | `src/main/app-shell.ts`, `src/main/index.ts` | AppShell owns ready/quit graph; composition before IPC; quit: flush → tray → composition → destroy windows |
 | Settings persistence | `src/infrastructure/settings/`, façade `src/main/settings.ts` | Atomic write, mutex, save-failure dialog port |
 | Sleep blocker | `src/infrastructure/sleep/`, façade `src/main/sleep-prevention.ts` | Sole `powerSaveBlocker` owner |
@@ -84,6 +86,9 @@ Dependency rule: **domain** and **application** must not import `electron` / `el
 
 - Source is ESM TypeScript; main/preload output is CJS. Use `.js` extensions in TS imports.
 - Type-safe IPC: `typedHandle()` in main, typed `invoke<K>()` in preload, exhaustive `WiredChannels` check.
+- Main/infrastructure import Electron via `electron/main` (and `electron/common` for `shell`/`nativeImage`); preload uses `electron`.
+- Application never imports `IPC_CHANNELS`; publish `AppPushEvent` through `MainToRendererNotifierPort`.
+- Process graph: AppShell owns lifecycle; WindowGraph is the sole BrowserWindow factory (popover/settings/about).
 - Side effects isolated via ports and factory deps (`SessionTimerDeps`, `BatteryDeps`, `TrayDeps`, `IpcDeps`, port interfaces).
 - Settings validation uses domain `VALIDATORS` for disk load and partial merge.
 - Session **preference** is `defaultSessionDuration`; live session state is engine handle + `SESSION_STATUS*` pushes only.
@@ -111,6 +116,8 @@ Dependency rule: **domain** and **application** must not import `electron` / `el
 - Never import Electron in renderer; all Electron access goes through preload.
 - Never make runtime code import from `scripts/`.
 - Never import Electron into `domain` or `application` (layer guard).
+- Never import `IPC_CHANNELS` into `application` (use `AppPushEvent`).
+- Never create BrowserWindows outside `main/process/window-graph` (except tests).
 - Never dual-subscribe settings reactions (only `SettingsReactionService` via store `onChange`).
 - Never reintroduce module-level session delegators (`setActiveSessionTimer` and friends).
 - Never mirror runtime session state into settings.

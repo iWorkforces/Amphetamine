@@ -55,3 +55,10 @@ Zero-runtime-dependency contracts shared by main, preload, renderer, scripts, an
 - Never reintroduce domain type bodies into this package (re-export only).
 - Never add a settings field that doubles as live session state.
 - Never commit benchmark artifacts under `shared/`; use `artifacts/`.
+
+## Process-model note
+
+Channel names in `IPC_CHANNELS` / `PUSH_CHANNELS` are the **wire** surface (main/preload/renderer).
+Application code must not import channel literals; it publishes semantic `AppPushEvent` values via
+`MainToRendererNotifierPort`, and `infrastructure/notification/broadcast-notifier` maps events to channels.
+

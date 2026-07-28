@@ -21,7 +21,7 @@ Implements application ports with Electron/Node. May import domain types and app
 
 ## Rules
 
-- Prefer `import … from "electron/main"` in main-process adapters (process role at import site).
+- Prefer `import … from "electron/main"` in main-process adapters; use `electron/common` for `shell` / `nativeImage`.
 
 - Never call `powerSaveBlocker` outside `sleep/power-save-blocker.ts`.
 - Platform shell-outs stay under `main/platform` (not moved out of main).

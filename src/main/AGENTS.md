@@ -2,6 +2,8 @@
 
 Main process owns app lifecycle, BrowserWindows, tray, typed IPC registration, and the composition root. Business rules live under `application/` and `domain/`; OS/Electron I/O adapters under `infrastructure/` (with thin façades here for stable import paths).
 
+**Process graph:** `AppShell` is the topology root (ready/quit order). `process/window-graph` is the only production factory for popover, settings, and about `BrowserWindow`s. Renderers talk only through preload `window.api`.
+
 ## Files
 
 | File | Role |
