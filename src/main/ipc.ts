@@ -7,6 +7,7 @@ import {
   type IpcResponse,
 } from "../shared/types.js";
 import { MAIN_WINDOW_WIDTH, MIN_POPOVER_HEIGHT, MAX_POPOVER_HEIGHT } from "./constants.js";
+import { getPackageInfo } from "./utils/packageInfo.js";
 
 import type { AppSettings } from "../shared/types.js";
 import type { SessionTimerHandle } from "./session-timer.js";
@@ -70,6 +71,21 @@ function registerAppIpc(): void {
     (event): IpcResponse<typeof IPC_CHANNELS.APP_GET_VERSION> => {
       if (!validateSender(event)) return "";
       return app.getVersion();
+    },
+  );
+  typedHandle(
+    IPC_CHANNELS.APP_GET_ABOUT,
+    (event): IpcResponse<typeof IPC_CHANNELS.APP_GET_ABOUT> => {
+      if (!validateSender(event)) {
+        return { productName: "", version: "", description: "", repository: "" };
+      }
+      const pkg = getPackageInfo();
+      return {
+        productName: pkg.productName,
+        version: app.getVersion(),
+        description: pkg.description,
+        repository: pkg.repository,
+      };
     },
   );
   typedHandle(IPC_CHANNELS.APP_QUIT, (event) => {

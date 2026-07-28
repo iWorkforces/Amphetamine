@@ -19,7 +19,6 @@ import {
   SETTINGS_WINDOW_WIDTH,
 } from "../constants.js";
 import { hardenWebContents } from "../security.js";
-import { getPackageInfo } from "../utils/packageInfo.js";
 import { broadcastToWindows } from "../utils/broadcast.js";
 import { IPC_CHANNELS } from "../../shared/types.js";
 import {
@@ -59,15 +58,6 @@ function getDockIcon(): Electron.NativeImage {
     cachedDockIcon = nativeImage.createFromPath(getAppIconPath());
   }
   return cachedDockIcon;
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
 }
 
 // --- Registry ---
@@ -223,113 +213,17 @@ export function closeSettingsWindow(): void {
   settingsWindow = null;
 }
 
-// --- About (data: HTML for Wave 1; Wave 5 moves to built renderer) ---
-
-const aboutIconImage = nativeImage.createFromPath(getWindowIconPath());
-const ABOUT_ICON_DATA_URI = `data:image/png;base64,${aboutIconImage.toPNG().toString("base64")}`;
+// --- About (built renderer entry) ---
 
 /**
  * Creates or focuses the About window (singleton).
- * No preload yet — content is static data: HTML until Wave 5.
+ * Shared secure webPreferences + preload; content is the about renderer entry.
  */
 export function showAbout(_mainWindow?: BrowserWindow): void {
   if (aboutWindow !== null && !aboutWindow.isDestroyed()) {
     aboutWindow.focus();
     return;
   }
-
-  const pkg = getPackageInfo();
-  const productName = escapeHtml(pkg.productName);
-  const version = escapeHtml(pkg.version);
-  const description = escapeHtml(pkg.description);
-  const repository = escapeHtml(pkg.repository);
-
-  const html = `<!doctype html>
-<html lang="en">
-<head>
-<meta charset="UTF-8" />
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; script-src 'unsafe-inline';" />
-<title>About ${productName}</title>
-<style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body {
-    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI Variable", "Segoe UI", "Helvetica Neue", sans-serif;
-    -webkit-font-smoothing: antialiased;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    height: 100vh;
-    padding: 24px 24px 12px 24px;
-    -webkit-app-region: drag;
-    user-select: none;
-    -webkit-user-select: none;
-    cursor: default;
-  }
-    body { background: #0D1017; color: #f5f5f7; }
-    .version { color: #98989d; }
-    .description { color: #98989d; }
-    button {
-      border: 1px solid rgba(255, 255, 255, 0.12);
-      background: rgba(255, 255, 255, 0.08);
-      color: #f5f5f7;
-    }
-    button:hover { background: rgba(255, 255, 255, 0.12); }
-    button:active { background: rgba(255, 255, 255, 0.16); }
-    @media (prefers-color-scheme: light) {
-      body { background: #f5f5f7; color: #1d1d1f; }
-      .version, .description { color: #6e6e73; }
-      button {
-        border: 1px solid rgba(0, 0, 0, 0.12);
-        background: rgba(0, 0, 0, 0.06);
-        color: #1d1d1f;
-      }
-      button:hover { background: rgba(0, 0, 0, 0.1); }
-      button:active { background: rgba(0, 0, 0, 0.14); }
-    }
-  .app-icon {
-    width: 96px;
-    height: 96px;
-    margin-bottom: 16px;
-    border-radius: 22px;
-    box-shadow: 0 8px 32px rgba(0, 122, 255, 0.18);
-    -webkit-app-region: no-drag;
-  }
-  h1 {
-    font-size: 20px;
-    font-weight: 600;
-    margin-bottom: 6px;
-    letter-spacing: -0.25px;
-  }
-  .version {
-    font-size: 13px;
-    margin-bottom: 14px;
-  }
-  .description {
-    font-size: 13px;
-    max-width: 280px;
-    text-align: center;
-    line-height: 1.45;
-    margin-bottom: 22px;
-  }
-  button {
-    font-family: inherit;
-    font-size: 13px;
-    padding: 6px 24px;
-    border-radius: 6px;
-    cursor: pointer;
-    -webkit-app-region: no-drag;
-  }
-</style>
-</head>
-<body>
-  <img class="app-icon" src="${ABOUT_ICON_DATA_URI}" alt="${productName} icon" draggable="false" onclick="window.open('${repository}', '_blank')" style="cursor:pointer" title="View source on GitHub" />
-  <h1>${productName}</h1>
-  <div class="version">Version ${version}</div>
-  <div class="description">${description}</div>
-  <button onclick="window.close()">Close</button>
-</body>
-</html>`;
 
   const win = new BrowserWindow({
     width: ABOUT_WINDOW_WIDTH,
@@ -342,18 +236,29 @@ export function showAbout(_mainWindow?: BrowserWindow): void {
     show: false,
     icon: getWindowIconPath(),
     ...aboutWindowChrome(),
-    webPreferences: createSecureWebPreferences(),
+    webPreferences: createSecureWebPreferences({ preload: getPreloadScriptPath() }),
   });
 
   hardenWebContents(win);
 
-  // Override hardenWebContents deny-all: open repo in default browser.
+  // Allow only the package repository URL via window.open from the about renderer.
   win.webContents.setWindowOpenHandler(({ url }) => {
-    void shell.openExternal(url);
+    try {
+      const parsed = new URL(url);
+      if (parsed.protocol === "https:" && parsed.hostname === "github.com") {
+        void shell.openExternal(url);
+      }
+    } catch {
+      // ignore invalid URLs
+    }
     return { action: "deny" };
   });
 
-  void win.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
+  if (isDev) {
+    void win.loadURL(`${getDevServerUrl()}/about.html`);
+  } else {
+    void win.loadFile(path.join(__dirname, "..", "renderer", "about.html"));
+  }
 
   win.once("ready-to-show", () => {
     if (win.isDestroyed()) return;

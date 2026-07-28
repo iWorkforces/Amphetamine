@@ -12,6 +12,7 @@ function getAllowedFilePaths(): ReadonlySet<string> {
     _allowedFilePaths = new Set([
       path.join(_cachedAppPath, "lib", "renderer", "index.html").normalize("NFC"),
       path.join(_cachedAppPath, "lib", "renderer", "settings.html").normalize("NFC"),
+      path.join(_cachedAppPath, "lib", "renderer", "about.html").normalize("NFC"),
     ]);
   }
   return _allowedFilePaths;
