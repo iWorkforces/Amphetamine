@@ -35,6 +35,8 @@ const api = {
   app: {
     getVersion: (): Promise<IpcResponse<typeof IPC_CHANNELS.APP_GET_VERSION>> =>
       invoke(IPC_CHANNELS.APP_GET_VERSION),
+    getAbout: (): Promise<IpcResponse<typeof IPC_CHANNELS.APP_GET_ABOUT>> =>
+      invoke(IPC_CHANNELS.APP_GET_ABOUT),
     quit: (): Promise<IpcResponse<typeof IPC_CHANNELS.APP_QUIT>> => invoke(IPC_CHANNELS.APP_QUIT),
   },
 
@@ -148,7 +150,7 @@ export type Api = typeof api;
 
 /**
  * Compile-time exhaustiveness check: every channel in `IPC_CHANNELS` must be
- * wired through `window.api`. `WiredChannels` lists all 14 channel literals
+ * wired through `window.api`. `WiredChannels` lists all channel literals
  * explicitly — if a new channel is added to `IpcChannelMap` but not to this
  * union, `_ExhaustivenessCheck` resolves to a tuple that cannot be assigned
  * `true`, breaking the build.
@@ -165,6 +167,7 @@ type WiredChannels =
   | typeof IPC_CHANNELS.WINDOW_HIDE
   | typeof IPC_CHANNELS.WINDOW_SET_HEIGHT
   | typeof IPC_CHANNELS.APP_GET_VERSION
+  | typeof IPC_CHANNELS.APP_GET_ABOUT
   | typeof IPC_CHANNELS.APP_QUIT
   | typeof IPC_CHANNELS.SETTINGS_GET
   | typeof IPC_CHANNELS.SETTINGS_SET

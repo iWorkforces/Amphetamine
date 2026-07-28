@@ -13,12 +13,12 @@ Sandboxed Electron preload. Exposes the only renderer API through `contextBridge
 | Namespace | Methods | Pattern |
 |-----------|---------|---------|
 | `window` | `setHeight(n)` | validated fire-and-forget send |
-| `app` | `getVersion()`, `quit()` | `ipcRenderer.invoke` |
+| `app` | `getVersion()`, `getAbout()`, `quit()` | `ipcRenderer.invoke` |
 | `settings` | `get()`, `set(partial)`, `open()` | invoke |
 | `session` | `start`, `cancel`, `getStatus` | invoke |
 | `autoUpdater` | `checkForUpdates()`, `onStatus(cb)` | invoke + push |
 | `benchmark` | `isEnabled()` | env bridge read-only |
-| `platform` | `os` (and related) | host identity for UI labels |
+| `platform` | `os` | host identity for UI labels (`process.platform` in preload only) |
 | root | `onSettingsChanged`, `onWindowHide`, `onSessionStatusUpdate`, `onShortcutRegistrationFailed` | push subscriptions |
 
 ## Push subscription pattern
@@ -37,12 +37,13 @@ Always return unsubscribe. Payload types from `IpcChannelMap` / push responses.
 
 - Exported `Api` derived from concrete `api` object.
 - `invoke<K>()` parameterized by shared `IpcChannelMap`.
-- `WiredChannels` exhaustiveness fails typecheck if shared channels are not wired.
+- `WiredChannels` exhaustiveness fails typecheck if shared channels are not wired (includes `APP_GET_ABOUT`).
 - Imports: **shared** contracts only — never `application`, `infrastructure`, or `main`.
+- Use `from "electron"` (preload context); not `electron/main`.
 
 ## Anti-Patterns
 
-- Never expose `ipcRenderer`, `shell`, `fs`, `process`, or arbitrary channel names.
+- Never expose `ipcRenderer`, `shell`, `fs`, full `process`, or arbitrary channel names.
 - Never disable `contextIsolation` to simplify renderer code.
 - Never add a push listener without cleanup return.
 - Never make renderer import Electron; extend preload instead.

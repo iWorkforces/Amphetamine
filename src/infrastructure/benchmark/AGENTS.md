@@ -1,6 +1,6 @@
 # Infrastructure Benchmark Mode
 
-Production benchmark harness when `AMPHETAMINE_BENCHMARK=1`. Not a normal product path; `index.ts` skips auto-updater in this mode.
+Production benchmark harness when `AMPHETAMINE_BENCHMARK=1`. Not a normal product path; `AppShell` skips `composition.initUpdater()` when `isBenchmarkMode()`.
 
 ## Files
 

@@ -1,20 +1,22 @@
 # Main Tests — Node and Electron Mocks
 
-Main-process Vitest suites run in Node with Electron mocked. They cover lifecycle, composition, IPC/security, façades, timers, tray, updater, platform, and utilities.
+Main-process Vitest suites run in Node with Electron mocked (project aliases `electron/main` + `electron/common` → `electron`). They cover lifecycle, AppShell, composition, IPC/security, façades, timers, tray, updater, platform, and utilities.
 
 ## Test surface
 
 | Area | Typical files |
 |------|----------------|
-| Bootstrap / quit | `index.test.ts`, `settings-window*.test.ts` |
+| Bootstrap / quit | `index.test.ts`, `app-shell.test.ts` |
+| Window graph | `window-graph.test.ts`, `secure-web-preferences.test.ts`, `settings-window*.test.ts`, `about-window.test.ts` |
 | Composition | `composition-root.test.ts` (session IPC fail-closed before init) |
-| Coordinator façade | `coordinator.test.ts` (thin wrapper over composition; mock ports/deps) |
+| Composition wiring | `composition-wiring.test.ts` (settings reactions / tray effective-active matrix) |
 | IPC / security | `ipc.test.ts`, `ipc-handlers.test.ts`, `preload.test.ts` |
 | Session façade | `session-timer.test.ts` (handle from `createSessionTimer` only) |
 | Settings store | `settings.test.ts`, `settings.predicates.test.ts` |
 | OS integrations | `sleep-prevention.test.ts`, `battery-monitor.test.ts`, `auto-launch.test.ts`, `global-shortcut.test.ts`, `tray.test.ts` |
-| Platform | `platform.test.ts`, `battery-percent.test.ts` |
-| Updater / utils | `auto-updater.test.ts`, `broadcast.test.ts`, `packageInfo.test.ts`, `constants.test.ts` |
+| Platform | `platform.test.ts`, `battery-percent.test.ts`, `platform-shell-side-effects.test.ts` |
+| Updater | `auto-updater.test.ts` (hybrid infra), `auto-updater-utils.test.ts`; port: `tests/infrastructure/updater-port.test.ts` |
+| Utils | `broadcast.test.ts`, `packageInfo.test.ts`, `constants.test.ts` |
 
 Pure use-case / domain tests live under `tests/application` and `tests/domain` (not here).
 
@@ -22,27 +24,30 @@ Pure use-case / domain tests live under `tests/application` and `tests/domain` (
 
 - `tests/setup.main.ts`: baseline Electron mock (app, BrowserWindow, ipcMain, Tray, Menu, shell, dialog, nativeImage, nativeTheme, powerSaveBlocker, powerMonitor).
 - Use `vi.hoisted()` for values referenced by `vi.mock()` factories.
-- Local `vi.mock("electron")` only for narrower shapes.
+- Local `vi.mock("electron")` only for narrower shapes (alias covers `electron/main`).
 - Restore singletons with `vi.resetModules()` + dynamic import.
-- Mock `node:fs/promises`, `node:child_process`, updater modules, and logs — not real OS state.
+- Mock `node:fs/promises`, `node:child_process`, hybrid updater, and logs — not real OS state.
 - `createSessionTimer` deps: `broadcast` required; optional `onSessionActiveChange` / `powerMonitor`.
 - Battery handle mocks include `reconfigure`.
 - Tray deps include `checkForUpdates`.
-- Composition / coordinator tests often need: `getSettingsStore`, `getSleepBlockerPort`, `getAutoLaunchPort`, and `createSessionTimer` mocks.
+- Composition tests: mock `hybrid-auto-updater`, `packageInfo`, platform shell helpers, `isSettingsWindowOpen` when constructing the real composition root.
+- Hybrid updater tests: `configureHybridAutoUpdater` with `createBroadcastNotifier` wrapping `broadcastToWindows`.
 - Auto-launch: darwin expects `openAsHidden: true`; win32 only `openAtLogin`.
 
 ## Behavioral focus
 
 - `reconcileSessionState` must not kill sessions when `defaultSessionDuration` is null.
 - Battery threshold change while preventing sleep re-arms polling via `reconfigure`.
-- Quit: flush settings before tray → `composition.cleanup()` (orchestrator ownership).
+- Quit: AppShell flush → tray → `composition.cleanup()` → `destroyAllWindows()`.
 - Tray cleanup calls `destroy()`.
 - Sleep mode: `powerSaveBlocker.start` receives configured mode string.
 - Effective sleep OR matrix (4 rows) via tray effective active / recompute.
 - Composition: session IPC throws before `init()`; no `setActiveSessionTimer`.
 - SESSION_START goldens: `invalid-duration`, `Duration cannot exceed 24 hours` (>1440), 1440 inclusive, `null` indefinite.
-- SETTINGS_CHANGED only for `preventSleep` \| `batteryThreshold` \| `shortcut`.
+- SETTINGS_CHANGED only for `preventSleep` \| `batteryThreshold` \| `shortcut` (via AppPushEvent → channel).
 - `sleepBlockMode` recompute only when blocker active OR intent OR session; mode read from `getSettings()` (advance mock cache before subscriber).
+- About: shared secure prefs **with** preload; loads `/about.html`; github-only `window.open`.
+- AppShell: ready order tray-only → popover → composition → IPC → tray → `initUpdater` (skipped in benchmark).
 
 ## Timer and async
 
@@ -52,13 +57,14 @@ Pure use-case / domain tests live under `tests/application` and `tests/domain` (
 
 ## IPC / security
 
-- Cover valid packaged, valid dev, and rejected origins.
-- Assert registration + dependency routing for handlers.
-- Prefer `IPC_CHANNELS` names in tests.
+- Cover valid packaged (`index` / `settings` / `about.html`), valid dev, and rejected origins.
+- Assert registration + dependency routing for handlers (including `APP_GET_ABOUT`).
+- Prefer `IPC_CHANNELS` names in transport tests; application tests use `AppPushEvent`.
 
 ## Anti-Patterns
 
 - Never launch real Electron windows, `pmset`, or PowerShell battery queries.
 - Battery monitor tests mock `platform/index` (`getBatteryPercent`); parser/exec coverage in `battery-percent.test.ts`.
 - Never reintroduce expectations that the session timer writes `defaultSessionDuration` into settings.
-- Never assume module-level `startSession` exports still exist.
+- Never assume module-level `startSession` exports or `coordinator` still exist.
+- Never assert About loads `data:text/html`.

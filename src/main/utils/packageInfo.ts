@@ -4,7 +4,7 @@
  * Eliminates duplicate file reads and provides type safety
  */
 
-import { app } from "electron";
+import { app } from "electron/main";
 import path from "node:path";
 import { readFileSync } from "fs";
 import log from "electron-log";

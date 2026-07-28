@@ -23,6 +23,7 @@ const mockGetTrayDeps = vi.hoisted(() => vi.fn().mockReturnValue({}));
 const mockCreateAppComposition = vi.hoisted(() =>
   vi.fn(() => ({
     init: mockCompositionInit,
+    initUpdater: vi.fn(),
     cleanup: mockCompositionCleanup,
     getIpcDeps: mockGetIpcDeps,
     getTrayDeps: mockGetTrayDeps,
@@ -145,7 +146,7 @@ vi.stubGlobal("process", {
   on: mockProcessOn,
 });
 
-describe("main index - createWindow", () => {
+describe("main index - AppShell bootstrap", () => {
   let BrowserWindow: ReturnType<typeof vi.fn> & { mock: { calls: unknown[][] } };
 
   beforeEach(async () => {

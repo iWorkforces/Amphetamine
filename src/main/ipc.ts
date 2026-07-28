@@ -1,4 +1,4 @@
-import { ipcMain, app, type BrowserWindow } from "electron";
+import { ipcMain, app, type BrowserWindow } from "electron/main";
 import log from "electron-log";
 import {
   IPC_CHANNELS,
@@ -7,6 +7,7 @@ import {
   type IpcResponse,
 } from "../shared/types.js";
 import { MAIN_WINDOW_WIDTH, MIN_POPOVER_HEIGHT, MAX_POPOVER_HEIGHT } from "./constants.js";
+import { getPackageInfo } from "./utils/packageInfo.js";
 
 import type { AppSettings } from "../shared/types.js";
 import type { SessionTimerHandle } from "./session-timer.js";
@@ -21,8 +22,7 @@ export { validateSender } from "./ipc-utils.js";
  * edges to settings, settings-window, auto-updater, or session-timer.
  *
  * `sessionTimer` is the subset of `SessionTimerHandle` actually consumed by
- * IPC handlers. The coordinator owns the live handle; ipc receives it (or an
- * equivalent namespace import) here.
+ * IPC handlers. Composition owns the live handle; ipc receives it here.
  */
 export interface IpcDeps {
   getSettings: () => AppSettings;
@@ -71,6 +71,21 @@ function registerAppIpc(): void {
     (event): IpcResponse<typeof IPC_CHANNELS.APP_GET_VERSION> => {
       if (!validateSender(event)) return "";
       return app.getVersion();
+    },
+  );
+  typedHandle(
+    IPC_CHANNELS.APP_GET_ABOUT,
+    (event): IpcResponse<typeof IPC_CHANNELS.APP_GET_ABOUT> => {
+      if (!validateSender(event)) {
+        return { productName: "", version: "", description: "", repository: "" };
+      }
+      const pkg = getPackageInfo();
+      return {
+        productName: pkg.productName,
+        version: app.getVersion(),
+        description: pkg.description,
+        repository: pkg.repository,
+      };
     },
   );
   typedHandle(IPC_CHANNELS.APP_QUIT, (event) => {

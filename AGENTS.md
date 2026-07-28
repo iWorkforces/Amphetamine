@@ -7,7 +7,7 @@ Tray-only Electron app for **macOS and Windows**. Prevents system sleep through 
 | Layer | Tech |
 |------|------|
 | Runtime | Bun 1.3.14+ / Node `>=26 <27` |
-| Electron | `^43.0.0` |
+| Electron | `^43.2.0` (package pin; do not downgrade below patched 43.x) |
 | Build | Rslib main/preload to CJS + Rsbuild renderer |
 | Test | Vitest 4 workspace: domain + application + main (Node) + renderer (jsdom) |
 | Lint | ESLint 10 flat; sticky type-safety rules as errors for `src/` |
@@ -20,15 +20,16 @@ Product platforms: **darwin** and **win32**. OS differences go through thin main
 ```text
 src/domain/               Pure types and rules (no Electron, no Node I/O)
 src/application/          Use cases + port interfaces (no Electron)
-src/infrastructure/       Electron/Node adapters implementing ports + benchmark harness
+src/infrastructure/       Electron/Node adapters + hybrid updater + benchmark harness
 src/main/                 Composition root, IPC, tray, windows, process façades
-  index.ts                bootstrap, quit orchestrator, benchmark entry
+  index.ts                app lifecycle events; delegates graph to AppShell
+  app-shell.ts            createAppShell — process-graph root (windows/IPC/tray/composition)
+  process/                WindowGraph + shared secure webPreferences
   composition-root.ts     createAppComposition — wire ports, use cases, reactions
-  coordinator.ts          thin compatibility façade over composition
   platform/               OS adapters; public entry platform/index.ts
   utils/                  broadcastToWindows, packageInfo guard
 src/preload/              sandboxed contextBridge API
-src/renderer/             popover UI + settings window entry
+src/renderer/             popover + settings + about (built HTML entries)
 src/shared/               IPC transport contracts; re-exports domain settings types
 src/assets/               checked-in generated PNGs consumed at runtime
 scripts/                  Bun tooling, icons, dev, benchmarks, sticky/layer guards
@@ -47,8 +48,10 @@ Dependency rule: **domain** and **application** must not import `electron` / `el
 | Add settings field | `src/domain/settings/app-settings.ts`, `src/domain/settings-validation/validators.ts` | Extend `AppSettings`, `DEFAULT_SETTINGS`, `VALIDATORS`; migrate legacy keys in `migrateRawSettingsRecord`; shared re-exports stay available |
 | Domain pure rules | `src/domain/` | `isEffectivelyActive`, duration validation, threshold, `PerfTimestamp` |
 | Application use cases | `src/application/` | Session engine, recompute/toggle sleep, settings reactions, low-battery, shortcut |
-| Port interfaces | `src/application/ports/` | Closed budget (~11): store, sleep, schedule, clock, notifier, etc. |
-| Wire app / quit | `src/main/composition-root.ts`, `src/main/index.ts` | Composition before IPC; quit: flush → tray → `composition.cleanup()` → destroy window |
+| Port interfaces | `src/application/ports/` | Closed budget (~11): store, sleep, schedule, clock, notifier (`AppPushEvent`), etc. |
+| Process graph / windows | `src/main/app-shell.ts`, `src/main/process/` | AppShell ready/quit; WindowGraph owns all BrowserWindows |
+| Main→renderer push | `MainToRendererNotifierPort` + `broadcast-notifier` | Application publishes `AppPushEvent`; adapter maps to `PUSH_CHANNELS` |
+| Wire app / quit | `src/main/app-shell.ts`, `src/main/index.ts` | AppShell owns ready/quit graph; composition before IPC; quit: flush → tray → composition → destroy windows |
 | Settings persistence | `src/infrastructure/settings/`, façade `src/main/settings.ts` | Atomic write, mutex, save-failure dialog port |
 | Sleep blocker | `src/infrastructure/sleep/`, façade `src/main/sleep-prevention.ts` | Sole `powerSaveBlocker` owner |
 | Session runtime | `src/application/session/`, façade `src/main/session-timer.ts` | Handle injection only; no module-level session globals |
@@ -56,6 +59,8 @@ Dependency rule: **domain** and **application** must not import `electron` / `el
 | Tray/menu | `src/main/tray.ts`, `src/assets/AGENTS.md` | Icon = effective active; checkbox = user intent |
 | Renderer popover | `src/renderer/index.ts` | Domain `isEffectivelyActive`; chips start session only |
 | Settings UI | `src/renderer/settings/AGENTS.md` | Debounced saves, shortcut recorder, sleep mode |
+| About window | `src/renderer/about/`, WindowGraph `showAbout` | Built `about.html`; `app:get-about` for metadata |
+| Hybrid auto-updater | `src/infrastructure/updater/` (+ main IPC façade) | Policy in hybrid-auto-updater; `composition.initUpdater()` |
 | Benchmark mode | `src/infrastructure/benchmark/`, `src/renderer/benchmark-countdown.ts`, `scripts/benchmark-performance.ts` | Requires built `lib/` |
 | Platform OS gates | `src/main/platform/` | Prefer `isDarwin` / `isWin32` |
 | Test mocking | `tests/AGENTS.md` (+ main/renderer) | Domain/application pure; main mocks Electron |
@@ -66,6 +71,7 @@ Dependency rule: **domain** and **application** must not import `electron` / `el
 | Tag | Owner |
 | --- | --- |
 | `[main]` | Bootstrap / quit (`index.ts`) |
+| `[app-shell]` | Process-graph shell init and quit cleanup |
 | `[composition]` | Composition root wiring and lifecycle |
 | `[settings-reactions]` | `SettingsReactionService` field reactions |
 | `[session]` | Session engine; SESSION_START validation in IPC |
@@ -82,6 +88,9 @@ Dependency rule: **domain** and **application** must not import `electron` / `el
 
 - Source is ESM TypeScript; main/preload output is CJS. Use `.js` extensions in TS imports.
 - Type-safe IPC: `typedHandle()` in main, typed `invoke<K>()` in preload, exhaustive `WiredChannels` check.
+- Main/infrastructure import Electron via `electron/main` (and `electron/common` for `shell`/`nativeImage`); preload uses `electron`.
+- Application never imports `IPC_CHANNELS`; publish `AppPushEvent` through `MainToRendererNotifierPort`.
+- Process graph: AppShell owns lifecycle; WindowGraph is the sole BrowserWindow factory (popover/settings/about).
 - Side effects isolated via ports and factory deps (`SessionTimerDeps`, `BatteryDeps`, `TrayDeps`, `IpcDeps`, port interfaces).
 - Settings validation uses domain `VALIDATORS` for disk load and partial merge.
 - Session **preference** is `defaultSessionDuration`; live session state is engine handle + `SESSION_STATUS*` pushes only.
@@ -109,6 +118,8 @@ Dependency rule: **domain** and **application** must not import `electron` / `el
 - Never import Electron in renderer; all Electron access goes through preload.
 - Never make runtime code import from `scripts/`.
 - Never import Electron into `domain` or `application` (layer guard).
+- Never import `IPC_CHANNELS` into `application` (use `AppPushEvent`).
+- Never create BrowserWindows outside `main/process/window-graph` (except tests).
 - Never dual-subscribe settings reactions (only `SettingsReactionService` via store `onChange`).
 - Never reintroduce module-level session delegators (`setActiveSessionTimer` and friends).
 - Never mirror runtime session state into settings.
@@ -146,8 +157,9 @@ bun run clean                  # remove lib/dist outputs
 - Login items: macOS uses `openAsHidden: true`; Windows uses `openAtLogin` without that flag.
 - Settings window: macOS temporarily shows the Dock icon; Windows shows a taskbar button while open. Tray-only mode returns on close.
 - Popover hide on blur uses typed `window:hide`, not DOM `CustomEvent`.
+- About is a third built renderer (`about.html`) with shared preload; not inline `data:` HTML.
 - Auto-updater is hybrid: **Check for Updates** tries in-app download/install when possible; falls back to the GitHub release page. Background checks do not auto-download or open the browser.
-- Electron pin is `^43.0.0`; do not downgrade below the patched line referenced by security comments.
+- Electron pin is `^43.2.0` in package.json; do not downgrade below the patched 43.x line referenced by security comments.
 - Runtime deps are only `electron-log` and `electron-updater`; externalized in Rslib. Renderer must not import `electron-log`.
 - Production Rslib/Rsbuild builds drop console output.
 - Develop pushes/merges: CI lint/test; **Beta** workflow packages `*-beta-{N}.*` and publishes prerelease tag `vX.Y.Z-beta.N`.

@@ -20,6 +20,15 @@ export default defineConfig({
         template: './src/renderer/settings/index.html',
       },
     },
+    about: {
+      source: {
+        entry: { about: './src/renderer/about/index.ts' },
+        tsconfigPath: './src/renderer/tsconfig.json',
+      },
+      html: {
+        template: './src/renderer/about/index.html',
+      },
+    },
   },
   output: {
     distPath: { root: './lib/renderer' },

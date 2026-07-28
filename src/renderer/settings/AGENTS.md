@@ -10,6 +10,7 @@ Separate Rsbuild renderer entry for the settings BrowserWindow. Vanilla TypeScri
 | `index.html` | CSP-protected shell |
 | `constants.ts` | Save indicator, shortcut strings, failure prefix |
 | `styles.css` | Settings-specific layout and controls |
+| `env.d.ts` | Local ambient types if needed |
 
 ## Form flow
 

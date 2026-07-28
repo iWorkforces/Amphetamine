@@ -6,17 +6,23 @@ Zero-runtime-dependency contracts shared by main, preload, renderer, scripts, an
 
 | File | Role |
 |------|------|
-| `types.ts` | `IPC_CHANNELS`, `PUSH_CHANNELS`, `IpcChannelMap`, session/updater wire DTOs; re-exports domain `AppSettings` / `DEFAULT_SETTINGS` / `PerfTimestamp` / `SleepBlockMode` / `asPerf` |
+| `types.ts` | `IPC_CHANNELS`, `PUSH_CHANNELS`, `IpcChannelMap`, session/updater/about wire DTOs; re-exports domain `AppSettings` / `DEFAULT_SETTINGS` / `PerfTimestamp` / `SleepBlockMode` / `asPerf` |
 | `settings-validators.ts` | Re-export of domain settings validation |
 | `benchmark-types.ts` | Benchmark env name, renderer counter types/defaults, runtime guard |
 
 ## IPC Contract
 
-- `IPC_CHANNELS` holds the channel name literals.
-- `PUSH_CHANNELS` is the main→renderer push subset (includes `SHORTCUT_REGISTRATION_FAILED`).
+- `IPC_CHANNELS` holds the channel name literals (includes `app:get-about`).
+- `PUSH_CHANNELS` is the main→renderer push subset (`settings:changed`, `session:status-update`, `auto-updater:status`, `window:hide`, `shortcut:registration-failed`).
 - `IpcChannelMap` maps every channel to request/response types.
-- Adding a channel requires updates in: shared types, preload `api` + `WiredChannels`, main `registerIpcHandlers()`, and tests.
+- Adding a channel requires updates in: shared types, preload `api` + `WiredChannels`, main `registerIpcHandlers()` (or updater IPC), and tests.
 - Push-only channels still need response payload types (typed listeners/broadcasts).
+
+## Process-model note
+
+Channel names in `IPC_CHANNELS` / `PUSH_CHANNELS` are the **wire** surface (main/preload/renderer).
+Application code must not import channel literals; it publishes semantic `AppPushEvent` values via
+`MainToRendererNotifierPort`, and `infrastructure/notification/broadcast-notifier` maps events to channels.
 
 ## Settings Contract (domain-owned)
 
@@ -35,11 +41,12 @@ Zero-runtime-dependency contracts shared by main, preload, renderer, scripts, an
 - Legacy disk key: `sessionDuration` → `defaultSessionDuration` via `migrateRawSettingsRecord`.
 - Shortcut reserved combos and win32 Cmd→CommandOrControl normalization live in domain validators.
 
-## Session / updater wire DTOs
+## Session / updater / about wire DTOs
 
 - `SessionStatusResponse`: 3-arm union (stopped / timed / indefinite).
 - `SessionStartResponse`: ok/fail (`invalid-duration`, `Duration cannot exceed 24 hours`, `rejected`).
 - `AutoUpdaterStatus`: checking / available / not-available / downloaded / downloading / errors.
+- `AboutInfo`: `productName`, `version`, `description`, `repository` (`app:get-about`).
 - `PerfTimestamp` is branded via domain `asPerf(n)`.
 
 ## Benchmark Contract

@@ -5,7 +5,8 @@
  * visibility via BrowserWindow `skipTaskbar` (see window-chrome / call sites).
  */
 
-import { app, type NativeImage } from "electron";
+import { app } from "electron/main";
+import type { NativeImage } from "electron/common";
 import { isDarwin, type ProcessPlatform } from "./os.js";
 
 /** Electron `app.setLoginItemSettings` payload (subset we set). */

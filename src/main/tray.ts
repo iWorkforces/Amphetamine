@@ -1,11 +1,11 @@
 import {
   Tray,
-  nativeImage,
   nativeTheme,
   Menu,
   app,
   type MenuItemConstructorOptions,
-} from "electron";
+} from "electron/main";
+import { nativeImage } from "electron/common";
 import log from "electron-log";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -60,7 +60,7 @@ export interface TrayDeps {
   getPreventSleep: () => boolean;
   /**
    * Effective sleep-prevention active state used to drive the tray icon.
-   * Computed by the coordinator as (settings.preventSleep || sessionActive).
+   * Computed by composition as (settings.preventSleep || sessionActive).
    * The menu checkbox still mirrors user intent via getPreventSleep().
    */
   getEffectiveActive: () => boolean;
