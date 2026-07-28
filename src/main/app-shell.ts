@@ -10,7 +10,6 @@ import { createAppComposition, type AppComposition } from "./composition-root.js
 import { registerIpcHandlers } from "./ipc.js";
 import { setupTray } from "./tray.js";
 import { flushSettingsWriteChain } from "./settings.js";
-import { initAutoUpdater } from "./auto-updater.js";
 import { isBenchmarkMode } from "../infrastructure/benchmark/benchmark-env.js";
 import { enterTrayOnlyMode } from "./platform/index.js";
 import {
@@ -66,8 +65,7 @@ export function createAppShell(): AppShell {
     cleanupTray = setupTray(composition.getTrayDeps());
 
     if (!isBenchmarkMode()) {
-      // Wave 4 will route this solely through UpdaterPort.init() from composition.
-      initAutoUpdater();
+      composition.initUpdater();
     }
 
     ready = true;

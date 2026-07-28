@@ -4,7 +4,7 @@
  * No Partial overrides — tests use lower-level factories (KD-21).
  */
 import log from "electron-log";
-import { powerMonitor } from "electron";
+import { app, powerMonitor } from "electron";
 import type { AppSettings } from "../shared/types.js";
 import {
   initSettings,
@@ -29,9 +29,11 @@ import {
   type SessionTimerHandle,
 } from "./session-timer.js";
 import type { TrayDeps } from "./tray.js";
-import { createSettingsWindow, closeSettingsWindow } from "./settings-window.js";
+import { createSettingsWindow, closeSettingsWindow, isSettingsWindowOpen } from "./settings-window.js";
 import { closeAboutWindow } from "./about-window.js";
 import { registerAutoUpdaterIpc } from "./auto-updater.js";
+import { enterForegroundMode, enterTrayOnlyMode } from "./platform/index.js";
+import { getPackageInfo } from "./utils/packageInfo.js";
 import { createRecomputeSleepPrevention } from "../application/sleep/recompute-sleep-prevention.js";
 import { createTogglePreventSleep } from "../application/sleep/toggle-prevent-sleep.js";
 import { createHandleLowBatteryAutoStop } from "../application/battery/handle-low-battery-auto-stop.js";
@@ -45,6 +47,8 @@ import type { IpcDeps } from "./ipc.js";
 export interface AppComposition {
   /** Initialize settings, session, battery, reactions, shortcut. Call before IPC/tray. */
   init(): Promise<void>;
+  /** Start hybrid auto-updater (packaged builds only; no-op in benchmark via AppShell). */
+  initUpdater(): void;
   /** Ordered cleanup (settings/about windows → reactions → battery → session → sleep → shortcut → updater). */
   cleanup(): void;
   getIpcDeps(): IpcDeps;
@@ -69,7 +73,18 @@ export function createAppComposition(): AppComposition {
 
   const logger = createElectronLogger();
   const notifier = createBroadcastNotifier(broadcastToWindows);
-  const updaterPort = createElectronUpdaterPort(notifier);
+  const updaterPort = createElectronUpdaterPort(notifier, {
+    getRepositoryUrl: () => getPackageInfo().repository,
+    prepareDialogPresentation: () => {
+      enterForegroundMode();
+      app.focus({ steal: true });
+    },
+    restoreTrayPresentation: () => {
+      if (!isSettingsWindowOpen()) {
+        enterTrayOnlyMode();
+      }
+    },
+  });
 
   const notifyEffectiveActiveChange = (next: boolean): void => {
     if (next === effectiveActive) return;
@@ -237,8 +252,13 @@ export function createAppComposition(): AppComposition {
     checkForUpdates: () => updaterPort.checkNow(),
   });
 
+  const initUpdater = (): void => {
+    updaterPort.init();
+  };
+
   return {
     init,
+    initUpdater,
     cleanup,
     getIpcDeps,
     getTrayDeps,
