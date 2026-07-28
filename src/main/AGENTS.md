@@ -20,8 +20,8 @@ Main process owns app lifecycle, BrowserWindows, tray, typed IPC registration, a
 | `global-shortcut.ts` | Façade over RegisterAppShortcut + GlobalShortcutPort |
 | `auto-launch.ts` | Login items + `AutoLaunchPort` view |
 | `battery-monitor.ts` | Threshold **detector** only; percent via `platform/battery-percent` |
-| `auto-updater.ts` | Hybrid download/install policy; `UpdaterPort` wraps broadcast inject |
-| `auto-updater-utils.ts` | Pure updater helpers |
+| `auto-updater.ts` | IPC registration + re-exports of hybrid policy |
+| `auto-updater-utils.ts` | Façade over infrastructure pure helpers + package repo URL |
 | `settings-window.ts` | Façade re-export of WindowGraph settings APIs |
 | `about-window.ts` | Façade re-export of WindowGraph about APIs |
 | `security.ts` | WebContents hardening / navigation allowlist |
@@ -38,7 +38,7 @@ Main process owns app lifecycle, BrowserWindows, tray, typed IPC registration, a
 2. `createAppComposition()` + `await composition.init()` (settings, session, battery, shortcut, reactions)
 3. `registerIpcHandlers(window, composition.getIpcDeps())`
 4. `setupTray(composition.getTrayDeps())`
-5. `initAutoUpdater()` unless benchmark mode
+5. `composition.initUpdater()` unless benchmark mode
 
 **Quit (`index.ts` sole `before-quit` owner → `AppShell.cleanup()`):**
 

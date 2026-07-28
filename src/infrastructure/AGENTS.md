@@ -14,7 +14,9 @@ Implements application ports with Electron/Node. May import domain types and app
 | `settings/dialog-save-failure.ts` | `SettingsSaveFailurePort` | `dialog.showErrorBox` |
 | `sleep/power-save-blocker.ts` | `SleepBlockerPort` | **sole** `powerSaveBlocker` owner |
 | `shortcut/electron-global-shortcut.ts` | `GlobalShortcutPort` | register / unregisterAll |
-| `updater/electron-updater-port.ts` | `UpdaterPort` | injects notifier; hybrid policy in `main/auto-updater` |
+| `updater/hybrid-auto-updater.ts` | hybrid policy | electron-updater events; injected UI/repo deps |
+| `updater/auto-updater-utils.ts` | pure helpers | deriveReleaseUrlBase, categorizeUpdaterError |
+| `updater/electron-updater-port.ts` | `UpdaterPort` | configures hybrid; no main imports |
 | `benchmark/` | harness | production benchmark mode; see local `AGENTS.md` |
 
 ## Rules
@@ -22,7 +24,7 @@ Implements application ports with Electron/Node. May import domain types and app
 - Never call `powerSaveBlocker` outside `sleep/power-save-blocker.ts`.
 - Platform shell-outs stay under `main/platform` (not moved out of main).
 - Main façades (`settings.ts`, `sleep-prevention.ts`, …) may re-export or wrap these adapters for stable paths.
-- Prefer construction-time injection of ports over module-level mutable globals (updater still bridges via `setBroadcastFn` until further extraction).
+- Prefer construction-time injection of ports over module-level mutable globals (updater notifier + UI hooks via `configureHybridAutoUpdater`).
 
 ## Log tags
 
