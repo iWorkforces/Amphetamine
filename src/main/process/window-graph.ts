@@ -66,6 +66,38 @@ function getDockIcon(): Electron.NativeImage {
 let popoverWindow: BrowserWindow | null = null;
 let settingsWindow: BrowserWindow | null = null;
 let aboutWindow: BrowserWindow | null = null;
+/** Single pending delayed hide for the popover (blur/minimize coalesced). */
+let popoverHideTimeoutId: ReturnType<typeof setTimeout> | null = null;
+
+/**
+ * Schedule one delayed popover hide + one WINDOW_HIDE broadcast.
+ * Additional blur/minimize events while pending are no-ops.
+ */
+function schedulePopoverHide(win: BrowserWindow): void {
+  if (popoverHideTimeoutId !== null) {
+    return;
+  }
+  broadcastToWindows(IPC_CHANNELS.WINDOW_HIDE, undefined);
+  popoverHideTimeoutId = setTimeout(() => {
+    popoverHideTimeoutId = null;
+    if (!win.isDestroyed()) {
+      win.hide();
+    }
+  }, HIDE_DELAY_MS);
+  popoverHideTimeoutId.unref();
+}
+
+/** Cancel a pending delayed hide (e.g. popover shown again before expiry). */
+function cancelPendingPopoverHide(): void {
+  if (popoverHideTimeoutId === null) return;
+  clearTimeout(popoverHideTimeoutId);
+  popoverHideTimeoutId = null;
+}
+
+/** Test/observability seam: true while a delayed hide is scheduled. */
+export function hasPendingPopoverHide(): boolean {
+  return popoverHideTimeoutId !== null;
+}
 
 export function getPopoverWindow(): BrowserWindow | null {
   if (popoverWindow !== null && popoverWindow.isDestroyed()) {
@@ -113,34 +145,29 @@ export function createPopoverWindow(options: PopoverWindowOptions): BrowserWindo
   win.on("close", (event) => {
     if (options.isQuitting()) return;
     event.preventDefault();
+    cancelPendingPopoverHide();
     win.hide();
+  });
+
+  win.on("show", () => {
+    // Becoming visible invalidates any stale delayed hide.
+    cancelPendingPopoverHide();
   });
 
   win.on("minimize", () => {
     if (!win.isDestroyed()) {
-      broadcastToWindows(IPC_CHANNELS.WINDOW_HIDE, undefined);
-      setTimeout(() => {
-        if (!win.isDestroyed()) {
-          win.hide();
-        }
-      }, HIDE_DELAY_MS);
+      schedulePopoverHide(win);
     }
   });
 
   win.on("blur", () => {
-    if (!isDev && !options.isQuitting()) {
-      if (!win.isDestroyed()) {
-        broadcastToWindows(IPC_CHANNELS.WINDOW_HIDE, undefined);
-        setTimeout(() => {
-          if (!win.isDestroyed()) {
-            win.hide();
-          }
-        }, HIDE_DELAY_MS);
-      }
+    if (!isDev && !options.isQuitting() && !win.isDestroyed()) {
+      schedulePopoverHide(win);
     }
   });
 
   win.on("closed", () => {
+    cancelPendingPopoverHide();
     if (popoverWindow === win) {
       popoverWindow = null;
     }
@@ -287,6 +314,7 @@ export function closeAboutWindow(): void {
  * Popover uses destroy() so hide-on-close cannot prevent teardown.
  */
 export function destroyAllWindows(): void {
+  cancelPendingPopoverHide();
   closeSettingsWindow();
   closeAboutWindow();
   if (popoverWindow !== null && !popoverWindow.isDestroyed()) {
