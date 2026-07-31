@@ -17,6 +17,8 @@ let saveTimer: ReturnType<typeof setTimeout> | null = null;
 let errorMessage: string | null = null;
 let isSaving = false;
 let pendingSaveIndicatorId: string | null = null;
+/** Accumulated partial for debounced / coalesced disk writes (not full snapshot). */
+let pendingPartial: Partial<AppSettings> = {};
 const saveIndicatorTimers = new Map<string, ReturnType<typeof setTimeout>>();
 let isRecordingShortcut = false;
 let shortcutKeydownHandler: ((e: KeyboardEvent) => void) | null = null;
@@ -421,12 +423,18 @@ function showSaveIndicator(id: string, text: string): void {
 
 async function flushSave(indicatorId: string): Promise<void> {
   isSaving = true;
+  const toSend = { ...pendingPartial };
+  pendingPartial = {};
   try {
-    const snapshot: AppSettings = { ...settings };
-    await window.api.settings.set(snapshot);
+    if (Object.keys(toSend).length > 0) {
+      const res = await window.api.settings.set(toSend);
+      settings = res.settings;
+    }
     setErrorMessage(null);
     showSaveIndicator(indicatorId, SAVED_INDICATOR);
   } catch (err) {
+    // Re-queue failed keys so a later save can retry.
+    pendingPartial = { ...toSend, ...pendingPartial };
     const message = err instanceof Error ? err.message : "Failed to save settings";
     setErrorMessage(message);
   } finally {
@@ -445,9 +453,10 @@ async function saveSettings(
 ): Promise<void> {
   // Merge partial into settings immediately for UI responsiveness
   settings = { ...settings, ...partial };
+  pendingPartial = { ...pendingPartial, ...partial };
 
   // Debounce the actual persistence. If a save is already in flight when the
-  // debounce fires, queue the latest snapshot to be persisted once it settles
+  // debounce fires, queue the latest partial to be persisted once it settles
   // so user changes are never silently dropped.
   if (saveTimer) clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {

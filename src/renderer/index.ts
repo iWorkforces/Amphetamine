@@ -115,6 +115,7 @@ function startCountdownTicker(): void {
     recordCountdownCallback();
     // Only refresh display when a timed session is active locally.
     if (sessionExpiresAtPerf === null) return;
+    // Pure tick: timer text only (no full controls repaint).
     updateStatusUI();
   }, COUNTDOWN_TICK_MS);
   recordCountdownSchedule();
@@ -205,22 +206,23 @@ function ensureSessionActionsDelegation(container: HTMLElement): void {
     const btn = target.closest<HTMLButtonElement>("button.session-chip");
     if (btn === null || !container.contains(btn)) return;
     if (btn.id === "cancel-session-action") {
-      void window.api.session.cancel().then(() => refreshSessionStatus());
+      // Status arrives via SESSION_STATUS_UPDATE push; no redundant getStatus.
+      void window.api.session.cancel();
       return;
     }
     const raw = btn.dataset["duration"] ?? "";
     const duration: number | null = raw === "" ? null : parseInt(raw, 10);
     if (raw !== "" && Number.isNaN(duration)) return;
-    void window.api.session.start(duration).then(() => refreshSessionStatus());
+    void window.api.session.start(duration);
   });
 }
 
-function updateStatusUI(): void {
+function updateStatusUI(options?: { fullControls?: boolean }): void {
   if (isLoading) return;
-  // Skip rAF when timer text unchanged (59/60 ticks produce identical display)
+  const fullControls = options?.fullControls === true;
+  // Skip work when timer text unchanged and this is a pure countdown tick.
   const currentTimerText = formatTimerValue();
-  if (currentTimerText === lastRenderedTimerText) {
-    paintControls();
+  if (currentTimerText === lastRenderedTimerText && !fullControls) {
     return;
   }
   if (rafId !== null) {
@@ -229,7 +231,9 @@ function updateStatusUI(): void {
   rafId = requestAnimationFrame(() => {
     rafId = null;
     lastRenderedTimerText = currentTimerText;
-    paintControls();
+    if (fullControls || timerValueEl === null) {
+      paintControls();
+    }
     if (timerValueEl) {
       timerValueEl.textContent = currentTimerText;
     }
@@ -248,7 +252,7 @@ async function refreshSessionStatus(): Promise<void> {
     statusError = "Status unavailable";
   }
 
-  updateStatusUI();
+  updateStatusUI({ fullControls: true });
 }
 
 function bindEvents(): void {
@@ -274,7 +278,7 @@ function bindEvents(): void {
     settings = { ...settings, preventSleep: next };
     void window.api.settings.set({ preventSleep: next }).then((res) => {
       settings = res.settings;
-      updateStatusUI();
+      updateStatusUI({ fullControls: true });
     });
   });
 
@@ -409,14 +413,14 @@ async function loadInitialData(): Promise<{ settings: AppSettings; version: stri
 function setupPushSubscriptions(): void {
   unsubscribeSettings = window.api.onSettingsChanged((next) => {
     settings = next;
-    updateStatusUI();
+    updateStatusUI({ fullControls: true });
   });
 
   unsubscribeSessionStatus = window.api.onSessionStatusUpdate((status) => {
     sessionStatus = status;
     updateSessionAnchors(status);
     syncCountdownTicker();
-    updateStatusUI();
+    updateStatusUI({ fullControls: true });
   });
 }
 

@@ -13,6 +13,7 @@ import type { AppSettings } from "../shared/types.js";
 import type { SessionTimerHandle } from "./session-timer.js";
 
 import { validateSender, typedHandle } from "./ipc-utils.js";
+import { validateDurationMinutes } from "../domain/session/duration.js";
 export { validateSender } from "./ipc-utils.js";
 
 /**
@@ -123,19 +124,20 @@ function registerSessionIpc(deps: IpcDeps): void {
     if (!validateSender(event)) {
       return { ok: false, reason: "rejected" };
     }
-    if (request.durationMinutes !== null) {
-      if (
-        !Number.isFinite(request.durationMinutes) ||
-        request.durationMinutes <= 0 ||
-        !Number.isInteger(request.durationMinutes)
-      ) {
-        log.warn("[session] SESSION_START rejected invalid durationMinutes:", request.durationMinutes);
-        return { ok: false, reason: "invalid-duration" };
-      }
-    }
-    if (request.durationMinutes !== null && request.durationMinutes > 1440) {
-      log.warn("[session] SESSION_START rejected: duration exceeds 24h:", request.durationMinutes);
-      return { ok: false, reason: "Duration cannot exceed 24 hours" };
+    const durationCheck = validateDurationMinutes(request.durationMinutes);
+    if (!durationCheck.ok) {
+      log.warn(
+        "[session] SESSION_START rejected durationMinutes:",
+        request.durationMinutes,
+        durationCheck.reason,
+      );
+      return {
+        ok: false,
+        reason:
+          durationCheck.reason === "Duration cannot exceed 24 hours"
+            ? "Duration cannot exceed 24 hours"
+            : "invalid-duration",
+      };
     }
     const result = deps.sessionTimer.startSession(request.durationMinutes);
     // startSession() guarantees non-null startedAt; SessionState type is widened for getStatus() reuse.
