@@ -35,6 +35,14 @@ import {
 } from "./shell.js";
 
 import {
+  acquireUtilityForeground,
+  releaseUtilityForeground,
+  isUtilityForegroundHeld,
+  setUtilityDockIcon,
+  resetUtilityForegroundForTests,
+} from "./utility-presentation.js";
+
+import {
   type WindowChromeOptions,
   popoverWindowChrome,
   settingsWindowChrome,
@@ -60,6 +68,11 @@ export {
   enterForegroundMode,
   setDockIcon,
   buildLoginItemSettings,
+  acquireUtilityForeground,
+  releaseUtilityForeground,
+  isUtilityForegroundHeld,
+  setUtilityDockIcon,
+  resetUtilityForegroundForTests,
   popoverWindowChrome,
   settingsWindowChrome,
   aboutWindowChrome,

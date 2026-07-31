@@ -14,11 +14,13 @@ import {
 } from "../infrastructure/benchmark/index.js";
 import { isDev } from "./constants.js";
 import { createAppShell, type AppShell } from "./app-shell.js";
+import { installGlobalWebContentsHardening } from "./security.js";
 
 const mainProcessStartMs = performance.now();
 
 configureBenchmarkEnvironment();
 installBenchmarkTimerCounters();
+installGlobalWebContentsHardening();
 
 process.on("uncaughtException", (error: Error) => {
   log.error("[main] Uncaught exception:", error);

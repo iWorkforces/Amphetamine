@@ -13,7 +13,10 @@ const mockHarden = vi.fn();
 const mockOpenExternal = vi.fn();
 
 vi.mock("electron", () => ({
-  app: { isPackaged: false },
+  app: {
+    isPackaged: false,
+    getAppPath: () => "/tmp/app",
+  },
   BrowserWindow: vi.fn(function (this: Record<string, unknown>) {
     this.focus = mockFocus;
     this.show = mockShow;
@@ -52,6 +55,20 @@ vi.mock("../../src/main/platform/index.js", () => ({
   enterForegroundMode: vi.fn(),
   enterTrayOnlyMode: vi.fn(),
   setDockIcon: vi.fn(),
+  acquireUtilityForeground: vi.fn(),
+  releaseUtilityForeground: vi.fn(),
+  setUtilityDockIcon: vi.fn(),
+  isUtilityForegroundHeld: () => false,
+}));
+
+vi.mock("../../src/main/utils/packageInfo.js", () => ({
+  getPackageInfo: () => ({
+    productName: "Amphetamine",
+    version: "1.0.0",
+    description: "Keep awake",
+    repository: "https://github.com/iWorkforces/Amphetamine",
+    author: "Test",
+  }),
 }));
 
 describe("about-window", () => {
@@ -110,16 +127,19 @@ describe("about-window", () => {
     expect(mockShow).toHaveBeenCalled();
   });
 
-  it("window open handler opens https github URLs only", async () => {
+  it("window open handler opens package repository github URLs only", async () => {
     let openHandler: ((arg: { url: string }) => { action: string }) | undefined;
     mockSetWindowOpenHandler.mockImplementation((cb: typeof openHandler) => {
       openHandler = cb;
     });
     const { showAbout } = await import("../../src/main/about-window.js");
     showAbout();
-    expect(openHandler?.({ url: "https://github.com/org/repo" })).toEqual({ action: "deny" });
-    expect(mockOpenExternal).toHaveBeenCalledWith("https://github.com/org/repo");
+    const repo = "https://github.com/iWorkforces/Amphetamine";
+    expect(openHandler?.({ url: repo })).toEqual({ action: "deny" });
+    expect(mockOpenExternal).toHaveBeenCalledWith(repo);
     mockOpenExternal.mockClear();
+    expect(openHandler?.({ url: "https://github.com/evil/phish" })).toEqual({ action: "deny" });
+    expect(mockOpenExternal).not.toHaveBeenCalled();
     expect(openHandler?.({ url: "https://evil.example/x" })).toEqual({ action: "deny" });
     expect(mockOpenExternal).not.toHaveBeenCalled();
   });

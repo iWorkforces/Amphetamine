@@ -315,7 +315,9 @@ describe("renderer settings", () => {
         (c): c is Record<string, unknown> =>
           typeof c === "object" && c !== null && "defaultSessionDuration" in c,
       );
-      expect(durationCall).toEqual(expect.objectContaining({ defaultSessionDuration: 60, preventSleep: false }));
+      // Debounced save sends only the changed preference keys (partial), not a full snapshot.
+      expect(durationCall).toEqual(expect.objectContaining({ defaultSessionDuration: 60 }));
+      expect(durationCall).not.toHaveProperty("preventSleep");
     });
 
     it("sends null duration when Indefinitely selected", async () => {
@@ -341,7 +343,6 @@ describe("renderer settings", () => {
       expect(mockApi.settings.set).toHaveBeenCalledWith(
         expect.objectContaining({
           defaultSessionDuration: null,
-          preventSleep: true,
         }),
       );
     });
@@ -502,10 +503,10 @@ describe("renderer settings", () => {
       resolvers[0]!({ ...defaultSettings, launchAtLogin: true });
       await vi.advanceTimersByTimeAsync(0);
 
-      // Exactly one follow-up save with the LATEST snapshot is issued.
+      // Exactly one follow-up save with the LATEST partial batch is issued.
       expect(mockApi.settings.set).toHaveBeenCalledTimes(2);
       expect(mockApi.settings.set.mock.calls[1]![0].batteryThreshold).toBe(20);
-      expect(mockApi.settings.set.mock.calls[1]![0].launchAtLogin).toBe(true);
+      // launchAtLogin already flushed in the first save; second batch may only carry battery.
 
       resolvers[1]!({ ...defaultSettings, launchAtLogin: true, batteryThreshold: 20 });
       await vi.advanceTimersByTimeAsync(0);

@@ -12,8 +12,24 @@ Zero-runtime-dependency contracts shared by main, preload, renderer, scripts, an
 
 ## IPC Contract
 
-- `IPC_CHANNELS` holds the channel name literals (includes `app:get-about`).
-- `PUSH_CHANNELS` is the main→renderer push subset (`settings:changed`, `session:status-update`, `auto-updater:status`, `window:hide`, `shortcut:registration-failed`).
+`IPC_CHANNELS` holds **16** channel name literals:
+
+| Key | Wire name | Kind |
+|-----|-----------|------|
+| `WINDOW_SET_HEIGHT` | `window:set-height` | invoke / send |
+| `WINDOW_HIDE` | `window:hide` | push |
+| `APP_GET_VERSION` | `app:get-version` | invoke |
+| `APP_GET_ABOUT` | `app:get-about` | invoke |
+| `SETTINGS_GET` / `SETTINGS_SET` / `SETTINGS_OPEN` | `settings:*` | invoke |
+| `SETTINGS_CHANGED` | `settings:changed` | push |
+| `SESSION_START` / `SESSION_CANCEL` / `SESSION_STATUS` | `session:*` | invoke |
+| `SESSION_STATUS_UPDATE` | `session:status-update` | push |
+| `APP_QUIT` | `app:quit` | invoke |
+| `AUTO_UPDATER_CHECK` | `auto-updater:check` | invoke |
+| `AUTO_UPDATER_STATUS` | `auto-updater:status` | push |
+| `SHORTCUT_REGISTRATION_FAILED` | `shortcut:registration-failed` | push |
+
+- `PUSH_CHANNELS` is the main→renderer push subset (5 channels).
 - `IpcChannelMap` maps every channel to request/response types.
 - Adding a channel requires updates in: shared types, preload `api` + `WiredChannels`, main `registerIpcHandlers()` (or updater IPC), and tests.
 - Push-only channels still need response payload types (typed listeners/broadcasts).
@@ -23,6 +39,8 @@ Zero-runtime-dependency contracts shared by main, preload, renderer, scripts, an
 Channel names in `IPC_CHANNELS` / `PUSH_CHANNELS` are the **wire** surface (main/preload/renderer).
 Application code must not import channel literals; it publishes semantic `AppPushEvent` values via
 `MainToRendererNotifierPort`, and `infrastructure/notification/broadcast-notifier` maps events to channels.
+
+`settings-changed` is only published when a renderer-visible key changes (`preventSleep` \| `batteryThreshold` \| `shortcut`); payload is still a full `AppSettings` snapshot.
 
 ## Settings Contract (domain-owned)
 
@@ -52,8 +70,10 @@ Application code must not import channel literals; it publishes semantic `AppPus
 ## Benchmark Contract
 
 - `BENCHMARK_ENV_NAME` is `AMPHETAMINE_BENCHMARK`.
-- Renderer counters: `benchmark-countdown.ts`; main harness under `infrastructure/benchmark`.
-- Guard with `isRendererCountdownTimerCounters()` before trusting executeJavaScript results.
+- Scenarios: `BenchmarkScenario` = `idle` \| `active-session` (`isBenchmarkScenario`); harness CLI `--scenario`.
+- Renderer counters: `benchmark-countdown.ts`; battery counters: `BatteryBenchmarkCounters` (benchmark-gated in main).
+- Main harness under `infrastructure/benchmark`; artifact includes `scenario` / `scenarioMeta` and `timerCounters.battery`.
+- Guard with `isRendererCountdownTimerCounters()` / `isBatteryBenchmarkCounters()` before trusting results.
 
 ## Anti-Patterns
 

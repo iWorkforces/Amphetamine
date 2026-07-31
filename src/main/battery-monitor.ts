@@ -2,9 +2,46 @@ import { powerMonitor } from "electron/main";
 import log from "electron-log";
 import { getBatteryPercent } from "./platform/index.js";
 import { isThresholdEnabled } from "../domain/battery/threshold.js";
+import { isBenchmarkMode } from "../infrastructure/benchmark/benchmark-env.js";
+import type { BatteryBenchmarkCounters } from "../shared/benchmark-types.js";
+import { DEFAULT_BATTERY_BENCHMARK_COUNTERS } from "../shared/benchmark-types.js";
 
 /** Interval (ms) between periodic battery polls while on battery and preventing sleep. */
 const PERIODIC_BATTERY_CHECK_MS = 60_000;
+
+/** Module-level semantic counters; only incremented when `isBenchmarkMode()`. */
+const batteryCounters = {
+  scheduled: 0,
+  callbackAttempted: 0,
+  guardedSkipped: 0,
+  completedRead: 0,
+};
+
+function recordBattery(metric: keyof typeof batteryCounters): void {
+  if (!isBenchmarkMode()) return;
+  batteryCounters[metric] += 1;
+}
+
+/** Snapshot for benchmark artifacts (zeros outside benchmark mode). */
+export function getBatteryBenchmarkCounters(): BatteryBenchmarkCounters {
+  if (!isBenchmarkMode()) {
+    return { ...DEFAULT_BATTERY_BENCHMARK_COUNTERS };
+  }
+  return {
+    scheduled: batteryCounters.scheduled,
+    callbackAttempted: batteryCounters.callbackAttempted,
+    guardedSkipped: batteryCounters.guardedSkipped,
+    completedRead: batteryCounters.completedRead,
+  };
+}
+
+/** Test seam: reset counters between suites. */
+export function resetBatteryBenchmarkCounters(): void {
+  batteryCounters.scheduled = 0;
+  batteryCounters.callbackAttempted = 0;
+  batteryCounters.guardedSkipped = 0;
+  batteryCounters.completedRead = 0;
+}
 
 /**
  * Dependencies for the battery monitor.
@@ -27,6 +64,8 @@ export interface BatteryDeps {
   onAutoStop: () => void;
   /** Returns true if sleep prevention is currently active (used to gate polling). */
   isPreventingSleep: () => boolean;
+  /** Optional: report last successful charge percent for user feedback. */
+  onPercentSample?: (percent: number | null) => void;
 }
 
 /** Public handle returned by `createBatteryMonitor`. */
@@ -64,6 +103,7 @@ export function createBatteryMonitor(deps: BatteryDeps): BatteryMonitorHandle {
   }
 
   const { getThreshold, onAutoStop, isPreventingSleep } = deps;
+  const onPercentSample = deps.onPercentSample;
 
   let isCheckingBattery = false;
   let onBatteryListener: (() => void) | null = null;
@@ -73,11 +113,19 @@ export function createBatteryMonitor(deps: BatteryDeps): BatteryMonitorHandle {
 
   const checkBatteryAndStop = async (): Promise<void> => {
     const threshold = getThreshold();
-    if (!isThresholdEnabled(threshold)) return;
-    if (!isPreventingSleep()) return;
+    if (!isThresholdEnabled(threshold)) {
+      recordBattery("guardedSkipped");
+      return;
+    }
+    if (!isPreventingSleep()) {
+      recordBattery("guardedSkipped");
+      return;
+    }
 
     try {
       const percent = await getBatteryPercent();
+      recordBattery("completedRead");
+      onPercentSample?.(percent);
       if (percent !== null && percent <= threshold) {
         log.info(
           `[battery] Auto-stop triggered: battery at ${percent}% (threshold: ${threshold}%)`,
@@ -85,12 +133,18 @@ export function createBatteryMonitor(deps: BatteryDeps): BatteryMonitorHandle {
         onAutoStop();
       }
     } catch (err) {
+      // Still a completed attempt past the gate (I/O failed after entry).
+      recordBattery("completedRead");
       log.warn("[battery] Failed to check battery level:", err);
     }
   };
 
   const runGuardedBatteryCheck = (errorMessage: string): void => {
-    if (isCheckingBattery) return;
+    recordBattery("callbackAttempted");
+    if (isCheckingBattery) {
+      recordBattery("guardedSkipped");
+      return;
+    }
     isCheckingBattery = true;
     void checkBatteryAndStop()
       .catch((err) => log.error(errorMessage, err))
@@ -114,6 +168,7 @@ export function createBatteryMonitor(deps: BatteryDeps): BatteryMonitorHandle {
     }, PERIODIC_BATTERY_CHECK_MS);
     // unref so the interval doesn't pin the event loop (test/cleanup safety)
     batteryCheckInterval.unref();
+    recordBattery("scheduled");
   };
 
   /** Stop the periodic battery polling loop, if running. */

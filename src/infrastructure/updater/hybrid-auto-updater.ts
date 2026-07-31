@@ -10,7 +10,11 @@ import { shell } from "electron/common";
 import log from "electron-log";
 import type { AutoUpdaterStatus, UpdateMeta } from "../../shared/types.js";
 import type { AppPushEvent } from "../../application/ports/main-to-renderer-notifier.port.js";
-import { categorizeUpdaterError, deriveReleaseUrlBase } from "./auto-updater-utils.js";
+import {
+  categorizeUpdaterError,
+  deriveReleaseUrlBase,
+  parseGitHubRepoIdentity,
+} from "./auto-updater-utils.js";
 
 /** Timing constants (keep in sync with main/constants.ts updater values). */
 const INITIAL_UPDATE_CHECK_DELAY_MS = 3000;
@@ -22,6 +26,13 @@ let initialCheckTimerId: ReturnType<typeof setTimeout> | null = null;
 
 /** True while a tray/IPC-initiated check is in progress (download/install path). */
 let userInitiatedCheck = false;
+
+/**
+ * Shared in-flight `autoUpdater.checkForUpdates()` promise.
+ * Background, tray, and IPC callers join this single request.
+ */
+let inFlightCheck: Promise<Awaited<ReturnType<typeof autoUpdater.checkForUpdates>>> | null =
+  null;
 
 /** Last version seen as available (for browser fallback if download/install fails). */
 let lastAvailableVersion: string | null = null;
@@ -137,19 +148,45 @@ function clearUserInitiated(): void {
 }
 
 /**
+ * Single-flight check: concurrent callers share one `checkForUpdates()`.
+ * Manual (user-initiated) joiners upgrade `userInitiatedCheck` before awaiting.
+ */
+function runSharedCheckForUpdates(): Promise<
+  Awaited<ReturnType<typeof autoUpdater.checkForUpdates>>
+> {
+  if (inFlightCheck !== null) {
+    return inFlightCheck;
+  }
+  const pending = autoUpdater
+    .checkForUpdates()
+    .then((result) => result)
+    .finally(() => {
+      if (inFlightCheck === pending) {
+        inFlightCheck = null;
+      }
+    });
+  inFlightCheck = pending;
+  return pending;
+}
+
+/**
  * Finish a failed user-initiated check with browser fallback or a dialog.
  * No-ops if event handlers already consumed the user-initiated flag.
  */
+let lastCheckErrorCategory: "network" | "feed-missing" | "signature" | "io" | "unknown" =
+  "unknown";
+
 function finishUserInitiatedFailure(): void {
   if (!userInitiatedCheck) {
     return;
   }
   const version = lastAvailableVersion;
+  const category = lastCheckErrorCategory;
   clearUserInitiated();
   if (version !== null) {
     openReleasePageInBrowser(version);
   } else {
-    showCheckFailedDialog();
+    showCheckFailedDialog(category);
   }
 }
 
@@ -168,7 +205,23 @@ function showUpToDateDialog(version: string): void {
 }
 
 /** User-facing dialog when a manual check fails and we have no update payload. */
-function showCheckFailedDialog(): void {
+function showCheckFailedDialog(
+  category: "network" | "feed-missing" | "signature" | "io" | "unknown" = "unknown",
+): void {
+  const detailByCategory: Record<typeof category, string> = {
+    network:
+      "Amphetamine could not reach the update server. Check your network connection and try again, " +
+      "or open the GitHub releases page to download manually.",
+    "feed-missing":
+      "Update metadata is missing for this release (for example latest-mac.yml or latest.yml on GitHub). " +
+      "Open the Releases page to download manually, or try again after a new release is published.",
+    signature:
+      "An update was found but could not be verified. Open the GitHub releases page to download manually.",
+    io: "Amphetamine could not save or read update files. Check disk space and try again, " +
+      "or open the GitHub releases page to download manually.",
+    unknown:
+      "Amphetamine could not complete the update check. Open the GitHub releases page to download manually.",
+  };
   void presentUserDialog({
     type: "warning",
     buttons: ["OK", "Open Releases"],
@@ -176,9 +229,7 @@ function showCheckFailedDialog(): void {
     cancelId: 0,
     title: "Amphetamine",
     message: "Could not check for updates",
-    detail:
-      "Amphetamine could not reach the update server. Check your network connection and try again, " +
-      "or open the GitHub releases page to download manually.",
+    detail: detailByCategory[category],
   })
     .then((result) => {
       if (result.response === 1) {
@@ -335,9 +386,11 @@ function onError(err: Error): void {
   log.error("[auto-updater] Error:", err.message);
   consecutiveFailures += 1;
   rescheduleCheckLoop();
+  const category = categorizeUpdaterError(err);
+  lastCheckErrorCategory = category;
   publishStatus({
     status: "error",
-    category: categorizeUpdaterError(err),
+    category,
   });
 
   // User-initiated path failed (check/download/signature): open release page when we know a version;
@@ -350,7 +403,7 @@ function onError(err: Error): void {
       openReleasePageInBrowser(version);
     } else {
       log.info("[auto-updater] Error during user-initiated check with no known version");
-      showCheckFailedDialog();
+      showCheckFailedDialog(category);
     }
   }
 }
@@ -388,7 +441,7 @@ function rescheduleCheckLoop(): void {
   );
   checkIntervalId = setInterval(() => {
     log.info("[auto-updater] Running periodic update check...");
-    void autoUpdater.checkForUpdates();
+    void runSharedCheckForUpdates();
   }, nextInterval);
   checkIntervalId.unref();
 }
@@ -399,14 +452,14 @@ function startUpdateCheckLoop(): void {
   initialCheckTimerId = setTimeout(() => {
     initialCheckTimerId = null;
     log.info("[auto-updater] Running initial update check...");
-    void autoUpdater.checkForUpdates();
+    void runSharedCheckForUpdates();
   }, INITIAL_UPDATE_CHECK_DELAY_MS);
   initialCheckTimerId.unref();
 
   // Periodic check (base 4 hours, exponential backoff on failures up to 24 hours)
   checkIntervalId = setInterval(() => {
     log.info("[auto-updater] Running periodic update check...");
-    void autoUpdater.checkForUpdates();
+    void runSharedCheckForUpdates();
   }, PERIODIC_UPDATE_CHECK_INTERVAL_MS);
   checkIntervalId.unref();
 }
@@ -441,6 +494,25 @@ export function initAutoUpdater(): void {
   autoUpdater.autoDownload = false;
   autoUpdater.autoInstallOnAppQuit = false;
 
+  // Prefer package.json repository over a possibly stale app-update.yml baked at
+  // package time (e.g. after org rename). electron-updater GitHub provider needs
+  // owner/repo; feed files (latest-mac.yml / latest.yml) must still be on the release.
+  const identity = parseGitHubRepoIdentity(requireDeps().getRepositoryUrl());
+  if (identity !== null) {
+    autoUpdater.setFeedURL({
+      provider: "github",
+      owner: identity.owner,
+      repo: identity.repo,
+    });
+    log.info(
+      `[auto-updater] GitHub feed configured: ${identity.owner}/${identity.repo}`,
+    );
+  } else {
+    log.warn(
+      "[auto-updater] Could not parse GitHub owner/repo from package repository; using packaged app-update.yml",
+    );
+  }
+
   registerUpdateEventHandlers();
   startUpdateCheckLoop();
 
@@ -464,6 +536,8 @@ export function stopAutoUpdater(): void {
   lastAvailableVersion = null;
   clearUserInitiated();
   consecutiveFailures = 0;
+  // Clear shared in-flight seam so a later check is not stuck on a dead promise.
+  inFlightCheck = null;
   log.info("[auto-updater] Stopped");
 }
 
@@ -471,6 +545,7 @@ export function stopAutoUpdater(): void {
  * Manually trigger an update check (tray menu / IPC).
  * Marks the check as user-initiated so an available update will attempt download/install
  * with browser fallback. Always gives user-visible feedback (dialog or browser fallback).
+ * Joins any in-flight background check (upgrading user intent) rather than starting a second.
  */
 export function checkForUpdatesNow(): void {
   if (!app.isPackaged) {
@@ -479,9 +554,13 @@ export function checkForUpdatesNow(): void {
     return;
   }
   log.info("[auto-updater] Manual update check requested (hybrid path)");
+  // Upgrade intent before awaiting so a joined background check becomes user-visible.
   userInitiatedCheck = true;
-  void autoUpdater.checkForUpdates().catch((err: unknown) => {
+  void runSharedCheckForUpdates().catch((err: unknown) => {
     log.warn("[auto-updater] Manual update check failed:", err);
+    if (err instanceof Error) {
+      lastCheckErrorCategory = categorizeUpdaterError(err);
+    }
     // Prefer event-handler path (onError / onUpdateNotAvailable) when it already ran.
     finishUserInitiatedFailure();
   });
@@ -490,6 +569,7 @@ export function checkForUpdatesNow(): void {
 /**
  * User-initiated check for IPC handlers (same hybrid path as tray).
  * Returns update metadata when electron-updater resolves with updateInfo.
+ * Shares the single in-flight `checkForUpdates()` with tray/background callers.
  */
 export async function checkForUpdatesForIpc(): Promise<{
   version: string;
@@ -502,7 +582,7 @@ export async function checkForUpdatesForIpc(): Promise<{
   }
   userInitiatedCheck = true;
   try {
-    const result = await autoUpdater.checkForUpdates();
+    const result = await runSharedCheckForUpdates();
     if (result?.updateInfo) {
       return {
         version: result.updateInfo.version,
@@ -513,6 +593,9 @@ export async function checkForUpdatesForIpc(): Promise<{
     return null;
   } catch (err) {
     log.warn("[auto-updater] Failed to check for updates:", err);
+    if (err instanceof Error) {
+      lastCheckErrorCategory = categorizeUpdaterError(err);
+    }
     finishUserInitiatedFailure();
     return null;
   }

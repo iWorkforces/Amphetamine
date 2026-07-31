@@ -1,27 +1,75 @@
 /**
- * after-pack.cjs — ARM64-only binary optimizations
+ * after-pack.cjs — post-package hooks (runs on unpacked app before DMG/ZIP/NSIS)
  *
- * This hook runs after Electron packages the app but before DMG creation.
- * It strips debug symbols and removes unused locale files to reduce app size.
- *
- * Only runs for macOS ARM64 builds (single-architecture target).
+ * Order is intentional:
+ * 1. ARM64 macOS strip / locale cleanup (mutates binaries first)
+ * 2. Electron fuse flip last, fail-closed (CI's only fuse path for archived outputs)
  */
 const { execSync } = require("node:child_process");
 const { join } = require("node:path");
+const fs = require("node:fs");
 const { rm, readdir } = require("node:fs/promises");
 
 // Arch enum from electron-builder: ia32=0, x64=1, armv7l=2, arm64=3, universal=4
 const ARCH_ARM64 = 3;
+const ARCH_X64 = 1;
+const ARCH_UNIVERSAL = 4;
 
-module.exports = async function (context) {
-  // Only optimize for macOS ARM64
-  // Note: context.arch is an enum value, not a string
+function archLabel(arch) {
+  if (arch === ARCH_ARM64 || arch === "arm64") return "arm64";
+  if (arch === ARCH_X64 || arch === "x64") return "x64";
+  if (arch === ARCH_UNIVERSAL || arch === "universal") return "universal";
+  return String(arch);
+}
+
+/**
+ * Flip Electron fuses on the unpacked app. Fail-closed: missing target or flip
+ * failure aborts packaging so CI cannot ship unfused archives.
+ */
+function flipFusesForContext(context) {
+  const platform = context.electronPlatformName;
+  if (platform !== "darwin" && platform !== "win32") {
+    console.log(`[after-pack] Fuse flip skipped for platform ${platform}`);
+    return;
+  }
+  const flipScript = join(__dirname, "flip-fuses.cjs");
+  const appOutDir = context.appOutDir;
+  const product = context.packager.appInfo.productFilename;
+  let targetPath;
+  if (platform === "darwin") {
+    targetPath = join(appOutDir, `${product}.app`);
+  } else {
+    targetPath = join(appOutDir, `${product}.exe`);
+  }
+  if (!fs.existsSync(targetPath)) {
+    throw new Error(`[after-pack] Fuse target missing: ${targetPath}`);
+  }
+  const platformArg = platform === "darwin" ? "mac" : "win";
+  const arch = archLabel(context.arch);
+  console.log(`[after-pack] Flipping fuses: ${platformArg} ${arch} → ${targetPath}`);
+  try {
+    execSync(`node "${flipScript}" ${platformArg} ${arch}`, {
+      stdio: "inherit",
+      env: {
+        ...process.env,
+        AMPHETAMINE_FUSE_APP_PATH: targetPath,
+      },
+      cwd: join(__dirname, ".."),
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    throw new Error(`[after-pack] Fuse flip failed (fail-closed): ${message}`);
+  }
+}
+
+/** Strip debug symbols / locales on macOS ARM64 only (best-effort; non-fatal). */
+async function stripDarwinArm64(context) {
   const isDarwinArm64 =
     context.electronPlatformName === "darwin" &&
     (context.arch === ARCH_ARM64 || context.arch === "arm64");
 
   if (!isDarwinArm64) {
-    console.log("[after-pack] Skipping non-ARM64 macOS build");
+    console.log("[after-pack] Skipping non-ARM64 macOS strip/locale optimizations");
     return;
   }
 
@@ -159,4 +207,11 @@ module.exports = async function (context) {
   }
 
   console.log("[after-pack] ARM64 optimizations complete\n");
+}
+
+module.exports = async function (context) {
+  // Strip/locale first so fuse flip is the last binary mutation on the unpacked app.
+  await stripDarwinArm64(context);
+  // Fail-closed fuse path — archives built after this must contain fused binaries.
+  flipFusesForContext(context);
 };

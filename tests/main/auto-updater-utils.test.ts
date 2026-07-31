@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const mockGetPackageInfo = vi.hoisted(() =>
   vi.fn().mockReturnValue({
-    repository: "https://github.com/OCWorkforces/Amphetamine",
+    repository: "https://github.com/iWorkforces/Amphetamine",
   }),
 );
 
@@ -19,14 +19,14 @@ describe("auto-updater-utils", () => {
     vi.clearAllMocks();
     vi.resetModules();
     mockGetPackageInfo.mockReturnValue({
-      repository: "https://github.com/OCWorkforces/Amphetamine",
+      repository: "https://github.com/iWorkforces/Amphetamine",
     });
   });
 
   it("getReleaseUrlBase derives github releases tag base", async () => {
     const { getReleaseUrlBase } = await import("../../src/main/auto-updater-utils.js");
     expect(getReleaseUrlBase()).toBe(
-      "https://github.com/OCWorkforces/Amphetamine/releases/tag/v",
+      "https://github.com/iWorkforces/Amphetamine/releases/tag/v",
     );
   });
 
@@ -45,11 +45,31 @@ describe("auto-updater-utils", () => {
     );
   });
 
+  it("parseGitHubRepoIdentity extracts owner/repo", async () => {
+    const { parseGitHubRepoIdentity } = await import(
+      "../../src/infrastructure/updater/auto-updater-utils.js"
+    );
+    expect(parseGitHubRepoIdentity("https://github.com/iWorkforces/Amphetamine.git")).toEqual({
+      owner: "iWorkforces",
+      repo: "Amphetamine",
+    });
+    expect(parseGitHubRepoIdentity("https://gitlab.com/org/repo")).toBeNull();
+  });
+
   it("categorizeUpdaterError classifies network errors", async () => {
     const { categorizeUpdaterError } = await import(
       "../../src/infrastructure/updater/auto-updater-utils.js"
     );
     expect(categorizeUpdaterError(new Error("ENOTFOUND host"))).toBe("network");
+    expect(categorizeUpdaterError(new Error("HttpError: 404 Not Found"))).toBe("feed-missing");
+    expect(categorizeUpdaterError(new Error("network timeout"))).toBe("network");
+    expect(categorizeUpdaterError(new Error("connect ENETUNREACH"))).toBe("network");
+    expect(categorizeUpdaterError(new Error("EHOSTUNREACH 1.2.3.4"))).toBe("network");
+    expect(categorizeUpdaterError(new Error("read ECONNRESET"))).toBe("network");
+    expect(categorizeUpdaterError(new Error("getaddrinfo EAI_AGAIN api.github.com"))).toBe(
+      "network",
+    );
+    expect(categorizeUpdaterError(new Error("net::ERR_INTERNET_DISCONNECTED"))).toBe("network");
     expect(categorizeUpdaterError(new Error("code-signing failed"))).toBe("signature");
     expect(categorizeUpdaterError(new Error("ENOSPC"))).toBe("io");
     expect(categorizeUpdaterError(new Error("mystery"))).toBe("unknown");

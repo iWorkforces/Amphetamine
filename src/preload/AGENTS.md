@@ -17,7 +17,7 @@ Sandboxed Electron preload. Exposes the only renderer API through `contextBridge
 | `settings` | `get()`, `set(partial)`, `open()` | invoke |
 | `session` | `start`, `cancel`, `getStatus` | invoke |
 | `autoUpdater` | `checkForUpdates()`, `onStatus(cb)` | invoke + push |
-| `benchmark` | `isEnabled()` | env bridge read-only |
+| `benchmark` | `isEnabled()` | env bridge read-only (`AMPHETAMINE_BENCHMARK`) |
 | `platform` | `os` | host identity for UI labels (`process.platform` in preload only) |
 | root | `onSettingsChanged`, `onWindowHide`, `onSessionStatusUpdate`, `onShortcutRegistrationFailed` | push subscriptions |
 
@@ -37,7 +37,7 @@ Always return unsubscribe. Payload types from `IpcChannelMap` / push responses.
 
 - Exported `Api` derived from concrete `api` object.
 - `invoke<K>()` parameterized by shared `IpcChannelMap`.
-- `WiredChannels` exhaustiveness fails typecheck if shared channels are not wired (includes `APP_GET_ABOUT`).
+- `WiredChannels` exhaustiveness fails typecheck if shared channels are not wired (all 16 `IPC_CHANNELS` names, including `APP_GET_ABOUT`).
 - Imports: **shared** contracts only — never `application`, `infrastructure`, or `main`.
 - Use `from "electron"` (preload context); not `electron/main`.
 

@@ -10,11 +10,11 @@ Source-controlled packaging resources for electron-builder. Product targets: **m
 | `icon.ico` | Windows app icon consumed by electron-builder |
 | `entitlements.mac.plist` | App entitlements: JIT + unsigned executable memory |
 | `entitlements.mac.inherit.plist` | Child-process entitlements matching app needs |
-| `after-pack.cjs` | ARM64 strip/locales optimization hook (macOS only) |
-| `flip-fuses.cjs` | Post-package Electron fuse hardening (mac + win paths) |
+| `after-pack.cjs` | Pre-archive: ARM64 strip/locales then **fail-closed** fuse flip (darwin/win32); CI’s fuse path for DMG/ZIP/NSIS |
+| `flip-fuses.cjs` | Electron fuse hardening (mac + win; also called from after-pack via `AMPHETAMINE_FUSE_APP_PATH`) |
 | `notarize.cjs` | Optional notarization hook; currently disabled by config |
 
-Generate icons: `bun scripts/generate-app-icon.mjs` (writes `icon.icns` on macOS via iconutil, always writes `icon.ico`).
+Generate icons: `bun scripts/generate-app-icon.mjs` (writes `icon.icns` on macOS via iconutil, always writes `icon.ico` + hero PNG).
 
 ## Packaging Flow
 
@@ -44,14 +44,17 @@ Unsigned by default (`CSC_IDENTITY_AUTO_DISCOVERY: false` in CI). No native Node
 
 **Release assets (Windows):** publish both arch EXEs (and blockmaps) plus `latest.yml` so electron-updater can pick the matching asset for `process.arch`.
 
+**Release assets (macOS):** publish ZIP (required for electron-updater) plus DMG, **`latest-mac.yml`**, and blockmaps. CI must upload `dist/*.yml` / `dist/*.blockmap` with mac packages; CD merges dual-arch feeds. Missing `latest-mac.yml` makes "Check for Updates" fail with a false network-error dialog.
+
 ## CI Packaging Paths
 
 | Pipeline | Branch | Artifact names | Fuses flipped in workflow? |
 |----------|--------|----------------|----------------------------|
-| CI `build` job | `main` push | `dist-mac-{arch}` (`*.dmg`, `*.zip`) | No (raw electron-builder) |
-| CI `build-windows` matrix | `main` push | `dist-win-x64`, `dist-win-arm64` | No (raw electron-builder) |
-| Beta workflow | push to `develop` | mac/win beta artifacts renamed `*-beta-{N}.*` | No (raw electron-builder + rename) |
-| Local `bun run package*` | developer machine | `dist/*` then flip-fuses | Yes |
+| CI `build` job | `main` push | `dist-mac-{arch}` (dmg/zip/**yml**/blockmap) | Yes via `afterPack` (fail-closed) |
+| CI `build-windows` matrix | `main` push | `dist-win-x64`, `dist-win-arm64` (exe/yml/blockmap) | Yes via `afterPack` (fail-closed) |
+| CD release | after main CI | merges multi-arch `latest-mac.yml` / `latest.yml` then publishes | N/A |
+| Beta workflow | push to `develop` | mac/win beta artifacts renamed `*-beta-{N}.*` | Yes via `afterPack` (fail-closed) |
+| Local `bun run package*` | developer machine | afterPack + post `flip-fuses` on leftover unpacked | Yes |
 
 Windows matrix runners: `windows-latest` (x64), `windows-11-arm` (arm64 native). If arm runners are unavailable for the repo, fall back to cross-compile `--arm64` on `windows-latest` (document in PR).
 
@@ -61,12 +64,13 @@ If changing release packaging, keep CI/CD/Beta and local package scripts intenti
 
 - `hardenedRuntime: false` is intentional. Re-enable only with notarization and JIT entitlements.
 - `notarize: false` by default. `notarize.cjs` requires `APPLE_ID`, `APPLE_TEAM_ID`, `APPLE_APP_PASSWORD`.
-- `LSUIElement: true` keeps the app tray-only; settings window temporarily shows Dock icon at runtime.
+- `LSUIElement: true` keeps the app tray-only; the settings window temporarily shows the Dock icon at runtime (About uses taskbar-visible chrome without Dock policy flip).
 - `dmg.sign: false`; local wrapper owns ad-hoc DMG signing for quarantine compatibility.
 - Windows signing is off by default; add Authenticode later via cert env vars.
 - Windows `win.target` includes **x64 and arm64** for NSIS + portable; CI packages one arch per job.
 - `electronLanguages: [en]` and after-pack locale stripping keep bundles small.
-- `after-pack.cjs` must handle electron-builder ARM64 arch enum `3` as well as string `arm64`; it no-ops on Windows.
+- `after-pack.cjs`: strip/locales first (arm64 mac only), then fuse flip last for darwin/win32. Fuse miss/failure **throws** (fail-closed).
+- Packaged files include `src/assets/!(*Template).png` (template tray icons excluded).
 
 ## Flip Fuses
 
@@ -87,7 +91,7 @@ node build/flip-fuses.cjs arm64       # legacy mac alias
 - Never sign DMG by default in `electron-builder.yml`; keep local ad-hoc behavior in `build-macOS-dmg.sh`.
 - Never write generated package output under `build/`; use `dist/`.
 - Never mark develop beta prereleases as latest production; tags must stay `vX.Y.Z-beta.N` with `prerelease: true`.
-- Beta **filenames** use `-beta-N` (hyphen), e.g. `Amphetamine-1.10.1-arm64-beta-1.dmg`, matching tag sequence N.
+- Beta **filenames** use `-beta-N` (hyphen), e.g. `Amphetamine-1.10.2-arm64-beta-1.dmg`, matching tag sequence N.
 - Never assume Windows artifacts are x64-only; release notes and CD must include arm64 when packaging both.
 
 ## Commands

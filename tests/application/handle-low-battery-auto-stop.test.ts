@@ -42,4 +42,26 @@ describe("createHandleLowBatteryAutoStop", () => {
     expect(store.update).not.toHaveBeenCalled();
     expect(cancelSession).toHaveBeenCalledTimes(1);
   });
+
+  it("notifies the user with battery percent when provided", () => {
+    const store = mockStore(true);
+    const cancelSession = vi.fn();
+    const notify = vi.fn();
+    const handle = createHandleLowBatteryAutoStop({
+      store,
+      cancelSession,
+      logger,
+      userNotifier: { notify },
+      getLastKnownPercent: () => 12,
+    });
+
+    handle();
+
+    expect(notify).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: expect.stringContaining("Low battery"),
+        body: expect.stringContaining("12%"),
+      }),
+    );
+  });
 });

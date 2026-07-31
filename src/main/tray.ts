@@ -10,6 +10,7 @@ import log from "electron-log";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { showAbout as openAboutWindow } from "./about-window.js";
+import { showPopoverNearTray } from "./process/window-graph.js";
 
 import {
   ACCELERATOR_QUIT,
@@ -27,6 +28,17 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 let tray: Tray | null = null;
 let cachedMenu: Menu | null = null;
 let themeDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+function tooltipForState(effectiveActive: boolean, sessionActive: boolean): string {
+  if (sessionActive) {
+    return effectiveActive
+      ? "Amphetamine — Session active (preventing sleep)"
+      : "Amphetamine — Session active";
+  }
+  return effectiveActive
+    ? "Amphetamine — Preventing sleep"
+    : "Amphetamine — Sleep prevention off";
+}
 
 /**
  * Module-scope SVG fallback icon — built once, reused on every cache miss.
@@ -64,6 +76,8 @@ export interface TrayDeps {
    * The menu checkbox still mirrors user intent via getPreventSleep().
    */
   getEffectiveActive: () => boolean;
+  /** Live session running (for tooltip / optional menu). */
+  getSessionActive: () => boolean;
   togglePreventSleep: () => void;
   onSettingsChanged: (callback: () => void) => () => void;
   /**
@@ -74,6 +88,7 @@ export interface TrayDeps {
   onActiveStateChanged: (callback: () => void) => () => void;
   openSettings: () => void;
   checkForUpdates: () => void;
+  cancelSession?: () => void;
 }
 
 export function setupTray(deps: TrayDeps): () => void {
@@ -113,13 +128,17 @@ export function setupTray(deps: TrayDeps): () => void {
 
   function refreshTrayIcon(): void {
     if (!tray) return;
-    tray.setImage(buildIcon(nativeTheme.shouldUseDarkColors, deps.getEffectiveActive()));
+    const effective = deps.getEffectiveActive();
+    tray.setImage(buildIcon(nativeTheme.shouldUseDarkColors, effective));
+    tray.setToolTip(tooltipForState(effective, deps.getSessionActive()));
   }
 
   const initialPreventSleep = deps.getPreventSleep();
   const initialEffectiveActive = deps.getEffectiveActive();
   tray = new Tray(buildIcon(nativeTheme.shouldUseDarkColors, initialEffectiveActive));
-  tray.setToolTip("Amphetamine");
+  tray.setToolTip(tooltipForState(initialEffectiveActive, deps.getSessionActive()));
+  // Windows fires click twice on double-click by default; ignore so popover toggle stays stable.
+  tray.setIgnoreDoubleClickEvents(true);
 
   // Update icon whenever the system theme changes or settings change (debounced)
   const onThemeUpdated = (): void => {
@@ -136,6 +155,7 @@ export function setupTray(deps: TrayDeps): () => void {
   // active state (drives icon) so each updates only when its own input changes.
   let lastPreventSleep = initialPreventSleep;
   let lastEffectiveActive = initialEffectiveActive;
+  let lastSessionActive = deps.getSessionActive();
   const unsubscribeSettings = deps.onSettingsChanged(() => {
     const currentPreventSleep = deps.getPreventSleep();
     const currentEffectiveActive = deps.getEffectiveActive();
@@ -147,7 +167,6 @@ export function setupTray(deps: TrayDeps): () => void {
     if (currentPreventSleep !== lastPreventSleep) {
       lastPreventSleep = currentPreventSleep;
       cachedMenu = buildMenu();
-      tray?.setContextMenu(cachedMenu);
       iconNeedsRefresh = true;
     }
     if (iconNeedsRefresh) {
@@ -155,13 +174,20 @@ export function setupTray(deps: TrayDeps): () => void {
     }
   });
   const unsubscribeActiveState = deps.onActiveStateChanged(() => {
-    // Effective active state can change without any settings change (e.g.,
-    // session start/expire while user intent stays false). Refresh icon only —
-    // menu checkbox is bound to user intent, not effective state.
+    // Effective active / session can change without settings change.
+    // Refresh icon + tooltip; rebuild menu only when session presence flips
+    // (Cancel session item).
     const currentEffectiveActive = deps.getEffectiveActive();
+    const sessionActive = deps.getSessionActive();
     if (currentEffectiveActive !== lastEffectiveActive) {
       lastEffectiveActive = currentEffectiveActive;
       refreshTrayIcon();
+    } else {
+      tray?.setToolTip(tooltipForState(currentEffectiveActive, sessionActive));
+    }
+    if (sessionActive !== lastSessionActive) {
+      lastSessionActive = sessionActive;
+      cachedMenu = buildMenu();
     }
   });
 
@@ -169,6 +195,7 @@ export function setupTray(deps: TrayDeps): () => void {
 
   function buildMenu(): Menu {
     const preventSleep = deps.getPreventSleep();
+    const sessionActive = deps.getSessionActive();
 
     const template: MenuItemConstructorOptions[] = [
       {
@@ -180,22 +207,46 @@ export function setupTray(deps: TrayDeps): () => void {
         },
       },
       { type: "separator" },
+    ];
+    if (sessionActive && deps.cancelSession !== undefined) {
+      template.push({
+        label: "Cancel session",
+        click: () => {
+          deps.cancelSession?.();
+        },
+      });
+      template.push({ type: "separator" });
+    }
+    template.push(
       { label: MENU_SETTINGS, click: () => deps.openSettings() },
       { label: MENU_ABOUT, click: () => showAbout() },
       { label: MENU_CHECK_UPDATES, click: () => deps.checkForUpdates() },
       { label: MENU_QUIT, accelerator: ACCELERATOR_QUIT, click: () => app.quit() },
-    ];
+    );
     return Menu.buildFromTemplate(template);
   }
 
   cachedMenu = buildMenu();
-  tray.setContextMenu(cachedMenu);
+  // Do not setContextMenu permanently — left-click opens popover; right-click shows menu.
+  tray.setContextMenu(null);
 
-  tray.on("click", () => {
-    if (tray && cachedMenu) {
-      tray.popUpContextMenu(cachedMenu);
-    }
+  // Primary click: toggle popover near tray.
+  tray.on("click", (_event, bounds) => {
+    if (!tray) return;
+    const b =
+      bounds.width > 0 && bounds.height > 0
+        ? bounds
+        : tray.getBounds();
+    showPopoverNearTray(b);
   });
+
+  // Secondary click: classic context menu.
+  tray.on("right-click", (_event, bounds) => {
+    if (!tray) return;
+    cachedMenu = buildMenu();
+    tray.popUpContextMenu(cachedMenu, bounds);
+  });
+
   return () => {
     unsubscribeSettings();
     unsubscribeActiveState();

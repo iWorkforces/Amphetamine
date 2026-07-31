@@ -104,9 +104,14 @@ jobs:
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: dist-mac-${{ matrix.arch }}
+          # Include latest-mac.yml + blockmaps so electron-updater can resolve the GitHub feed.
+          # Without latest-mac.yml, packaged apps fail "Check for Updates" with a false network error.
           path: |
             dist/*.dmg
             dist/*.zip
+            dist/*.yml
+            dist/*.blockmap
+          if-no-files-found: error
           compression-level: 0
           retention-days: 14
 
