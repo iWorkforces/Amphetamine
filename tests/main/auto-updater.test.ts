@@ -34,8 +34,8 @@ const mockGetPackageInfo = vi.hoisted(() =>
     productName: "Amphetamine",
     version: "1.6.2",
     description: "",
-    repository: "https://github.com/OCWorkforces/Amphetamine",
-    homepage: "https://github.com/OCWorkforces/Amphetamine",
+    repository: "https://github.com/iWorkforces/Amphetamine",
+    homepage: "https://github.com/iWorkforces/Amphetamine",
     author: "OCWorkforces Engineers",
   }),
 );
@@ -154,7 +154,7 @@ describe("auto-updater (hybrid infrastructure)", () => {
           publish: (event) => {
             n.publish(event);
           },
-          getRepositoryUrl: () => "https://github.com/OCWorkforces/Amphetamine",
+          getRepositoryUrl: () => "https://github.com/iWorkforces/Amphetamine",
           prepareDialogPresentation: () => {},
           restoreTrayPresentation: () => {},
         });
@@ -264,7 +264,7 @@ describe("auto-updater (hybrid infrastructure)", () => {
 
       await vi.waitFor(() => {
         expect(mockShellOpenExternal).toHaveBeenCalledWith(
-          "https://github.com/OCWorkforces/Amphetamine/releases/tag/v2.0.0",
+          "https://github.com/iWorkforces/Amphetamine/releases/tag/v2.0.0",
         );
       });
     });
@@ -311,7 +311,7 @@ describe("auto-updater (hybrid infrastructure)", () => {
 
       await vi.waitFor(() => {
         expect(mockShellOpenExternal).toHaveBeenCalledWith(
-          "https://github.com/OCWorkforces/Amphetamine/releases/tag/v2.2.0",
+          "https://github.com/iWorkforces/Amphetamine/releases/tag/v2.2.0",
         );
       });
     });
@@ -339,7 +339,7 @@ describe("auto-updater (hybrid infrastructure)", () => {
       getHandler("error")(new Error("certificate error"));
 
       expect(mockShellOpenExternal).toHaveBeenCalledWith(
-        "https://github.com/OCWorkforces/Amphetamine/releases/tag/v3.0.0",
+        "https://github.com/iWorkforces/Amphetamine/releases/tag/v3.0.0",
       );
     });
 
@@ -400,7 +400,7 @@ describe("auto-updater (hybrid infrastructure)", () => {
 
       await vi.waitFor(() => {
         expect(mockShellOpenExternal).toHaveBeenCalledWith(
-          "https://github.com/OCWorkforces/Amphetamine/releases",
+          "https://github.com/iWorkforces/Amphetamine/releases",
         );
       });
     });
@@ -451,14 +451,14 @@ describe("auto-updater (hybrid infrastructure)", () => {
     it("accepts valid semver with pre-release tag (e.g. 1.0.0-alpha)", async () => {
       await triggerFallback("1.0.0-alpha");
       expect(mockShellOpenExternal).toHaveBeenCalledWith(
-        "https://github.com/OCWorkforces/Amphetamine/releases/tag/v1.0.0-alpha",
+        "https://github.com/iWorkforces/Amphetamine/releases/tag/v1.0.0-alpha",
       );
     });
 
     it("accepts valid semver with build metadata (e.g. 1.0.0+build.123)", async () => {
       await triggerFallback("1.0.0+build.123");
       expect(mockShellOpenExternal).toHaveBeenCalledWith(
-        "https://github.com/OCWorkforces/Amphetamine/releases/tag/v1.0.0%2Bbuild.123",
+        "https://github.com/iWorkforces/Amphetamine/releases/tag/v1.0.0%2Bbuild.123",
       );
     });
 
@@ -481,28 +481,28 @@ describe("auto-updater (hybrid infrastructure)", () => {
     it("accepts plain semver 1.2.3", async () => {
       await triggerFallback("1.2.3");
       expect(mockShellOpenExternal).toHaveBeenCalledWith(
-        "https://github.com/OCWorkforces/Amphetamine/releases/tag/v1.2.3",
+        "https://github.com/iWorkforces/Amphetamine/releases/tag/v1.2.3",
       );
     });
 
     it("accepts pre-release tag 1.2.3-beta.1", async () => {
       await triggerFallback("1.2.3-beta.1");
       expect(mockShellOpenExternal).toHaveBeenCalledWith(
-        "https://github.com/OCWorkforces/Amphetamine/releases/tag/v1.2.3-beta.1",
+        "https://github.com/iWorkforces/Amphetamine/releases/tag/v1.2.3-beta.1",
       );
     });
 
     it("URL-encodes the version when constructing the release URL", async () => {
       await triggerFallback("1.0.0+build.1");
       expect(mockShellOpenExternal).toHaveBeenCalledWith(
-        "https://github.com/OCWorkforces/Amphetamine/releases/tag/v1.0.0%2Bbuild.1",
+        "https://github.com/iWorkforces/Amphetamine/releases/tag/v1.0.0%2Bbuild.1",
       );
     });
 
     it("derives release URL from package.json repository field (no hardcoded org)", async () => {
       await triggerFallback("3.0.0");
       const url = mockShellOpenExternal.mock.calls[0]![0] as string;
-      expect(url).toContain("https://github.com/OCWorkforces/Amphetamine/releases/tag/");
+      expect(url).toContain("https://github.com/iWorkforces/Amphetamine/releases/tag/");
       expect(url).not.toContain("CCWorkforce");
     });
   });
@@ -666,6 +666,45 @@ describe("auto-updater (hybrid infrastructure)", () => {
       expect(mockCheckForUpdates).toHaveBeenCalled();
     });
 
+    it("joins concurrent tray/IPC checks into one autoUpdater.checkForUpdates call", async () => {
+      let resolveCheck: ((value: unknown) => void) | undefined;
+      mockCheckForUpdates.mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            resolveCheck = resolve;
+          }),
+      );
+      initAutoUpdater();
+      mockCheckForUpdates.mockClear();
+
+      const hybrid = await import("../../src/infrastructure/updater/hybrid-auto-updater.js");
+      const p1 = hybrid.checkForUpdatesForIpc();
+      hybrid.checkForUpdatesNow();
+      const p2 = hybrid.checkForUpdatesForIpc();
+
+      expect(mockCheckForUpdates).toHaveBeenCalledTimes(1);
+      resolveCheck?.({
+        updateInfo: { version: "9.9.9", releaseDate: "2026-01-01" },
+      });
+      const [r1, r2] = await Promise.all([p1, p2]);
+      expect(r1?.version).toBe("9.9.9");
+      expect(r2?.version).toBe("9.9.9");
+    });
+
+    it("clears in-flight state after rejection so a later check runs again", async () => {
+      mockCheckForUpdates.mockRejectedValueOnce(new Error("network"));
+      initAutoUpdater();
+      mockCheckForUpdates.mockClear();
+
+      const hybrid = await import("../../src/infrastructure/updater/hybrid-auto-updater.js");
+      await hybrid.checkForUpdatesForIpc();
+      expect(mockCheckForUpdates).toHaveBeenCalledTimes(1);
+
+      mockCheckForUpdates.mockResolvedValueOnce(null);
+      await hybrid.checkForUpdatesForIpc();
+      expect(mockCheckForUpdates).toHaveBeenCalledTimes(2);
+    });
+
     it("shows updates-unavailable dialog when not packaged", async () => {
       const { app } = await import("electron");
       const originalDescriptor = Object.getOwnPropertyDescriptor(app, "isPackaged");
@@ -687,7 +726,7 @@ describe("auto-updater (hybrid infrastructure)", () => {
           publish: (event) => {
             n2.publish(event);
           },
-          getRepositoryUrl: () => "https://github.com/OCWorkforces/Amphetamine",
+          getRepositoryUrl: () => "https://github.com/iWorkforces/Amphetamine",
           prepareDialogPresentation: () => {
             mockEnterForegroundMode();
           },

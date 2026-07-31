@@ -23,6 +23,13 @@ let initialCheckTimerId: ReturnType<typeof setTimeout> | null = null;
 /** True while a tray/IPC-initiated check is in progress (download/install path). */
 let userInitiatedCheck = false;
 
+/**
+ * Shared in-flight `autoUpdater.checkForUpdates()` promise.
+ * Background, tray, and IPC callers join this single request.
+ */
+let inFlightCheck: Promise<Awaited<ReturnType<typeof autoUpdater.checkForUpdates>>> | null =
+  null;
+
 /** Last version seen as available (for browser fallback if download/install fails). */
 let lastAvailableVersion: string | null = null;
 
@@ -134,6 +141,28 @@ function openReleasesListInBrowser(): void {
 
 function clearUserInitiated(): void {
   userInitiatedCheck = false;
+}
+
+/**
+ * Single-flight check: concurrent callers share one `checkForUpdates()`.
+ * Manual (user-initiated) joiners upgrade `userInitiatedCheck` before awaiting.
+ */
+function runSharedCheckForUpdates(): Promise<
+  Awaited<ReturnType<typeof autoUpdater.checkForUpdates>>
+> {
+  if (inFlightCheck !== null) {
+    return inFlightCheck;
+  }
+  const pending = autoUpdater
+    .checkForUpdates()
+    .then((result) => result)
+    .finally(() => {
+      if (inFlightCheck === pending) {
+        inFlightCheck = null;
+      }
+    });
+  inFlightCheck = pending;
+  return pending;
 }
 
 /**
@@ -388,7 +417,7 @@ function rescheduleCheckLoop(): void {
   );
   checkIntervalId = setInterval(() => {
     log.info("[auto-updater] Running periodic update check...");
-    void autoUpdater.checkForUpdates();
+    void runSharedCheckForUpdates();
   }, nextInterval);
   checkIntervalId.unref();
 }
@@ -399,14 +428,14 @@ function startUpdateCheckLoop(): void {
   initialCheckTimerId = setTimeout(() => {
     initialCheckTimerId = null;
     log.info("[auto-updater] Running initial update check...");
-    void autoUpdater.checkForUpdates();
+    void runSharedCheckForUpdates();
   }, INITIAL_UPDATE_CHECK_DELAY_MS);
   initialCheckTimerId.unref();
 
   // Periodic check (base 4 hours, exponential backoff on failures up to 24 hours)
   checkIntervalId = setInterval(() => {
     log.info("[auto-updater] Running periodic update check...");
-    void autoUpdater.checkForUpdates();
+    void runSharedCheckForUpdates();
   }, PERIODIC_UPDATE_CHECK_INTERVAL_MS);
   checkIntervalId.unref();
 }
@@ -464,6 +493,8 @@ export function stopAutoUpdater(): void {
   lastAvailableVersion = null;
   clearUserInitiated();
   consecutiveFailures = 0;
+  // Clear shared in-flight seam so a later check is not stuck on a dead promise.
+  inFlightCheck = null;
   log.info("[auto-updater] Stopped");
 }
 
@@ -471,6 +502,7 @@ export function stopAutoUpdater(): void {
  * Manually trigger an update check (tray menu / IPC).
  * Marks the check as user-initiated so an available update will attempt download/install
  * with browser fallback. Always gives user-visible feedback (dialog or browser fallback).
+ * Joins any in-flight background check (upgrading user intent) rather than starting a second.
  */
 export function checkForUpdatesNow(): void {
   if (!app.isPackaged) {
@@ -479,8 +511,9 @@ export function checkForUpdatesNow(): void {
     return;
   }
   log.info("[auto-updater] Manual update check requested (hybrid path)");
+  // Upgrade intent before awaiting so a joined background check becomes user-visible.
   userInitiatedCheck = true;
-  void autoUpdater.checkForUpdates().catch((err: unknown) => {
+  void runSharedCheckForUpdates().catch((err: unknown) => {
     log.warn("[auto-updater] Manual update check failed:", err);
     // Prefer event-handler path (onError / onUpdateNotAvailable) when it already ran.
     finishUserInitiatedFailure();
@@ -490,6 +523,7 @@ export function checkForUpdatesNow(): void {
 /**
  * User-initiated check for IPC handlers (same hybrid path as tray).
  * Returns update metadata when electron-updater resolves with updateInfo.
+ * Shares the single in-flight `checkForUpdates()` with tray/background callers.
  */
 export async function checkForUpdatesForIpc(): Promise<{
   version: string;
@@ -502,7 +536,7 @@ export async function checkForUpdatesForIpc(): Promise<{
   }
   userInitiatedCheck = true;
   try {
-    const result = await autoUpdater.checkForUpdates();
+    const result = await runSharedCheckForUpdates();
     if (result?.updateInfo) {
       return {
         version: result.updateInfo.version,
