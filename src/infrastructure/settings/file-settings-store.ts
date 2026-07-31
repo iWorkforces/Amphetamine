@@ -29,9 +29,22 @@ export interface FileSettingsStore extends SettingsStorePort {
 
 const MAX_CONSECUTIVE_SAVE_FAILURES = 3;
 
+type UpdateResult = { settings: AppSettings; rejectedKeys: string[] };
+
+type PendingCaller = {
+  partial: Partial<AppSettings>;
+  rejectedKeys: string[];
+  resolve: (result: UpdateResult) => void;
+  reject: (err: unknown) => void;
+};
+
 /**
- * JSON file settings store: atomic write, write mutex, corrupt backup, onChange.
+ * JSON file settings store: atomic write, coalesced write batching, corrupt backup, onChange.
  * Implements SettingsStorePort; dialog/logging injected via ports.
+ *
+ * Coalescing model: at most one physical write in flight and one merged pending
+ * batch of callers. Different-field updates merge; each caller keeps its own
+ * rejectedKeys; successful batch emits one change with the final snapshot.
  */
 export function createFileSettingsStore(deps: FileSettingsStoreDeps): FileSettingsStore {
   const { getUserDataPath, onSaveFailure, logger } = deps;
@@ -39,8 +52,16 @@ export function createFileSettingsStore(deps: FileSettingsStoreDeps): FileSettin
 
   let initialized = false;
   let settingsCache: AppSettings = { ...DEFAULT_SETTINGS };
-  let writeChain: Promise<unknown> = Promise.resolve();
+  /** Resolves when the active write (and chained pending drain) is idle. */
+  let writeIdle: Promise<void> = Promise.resolve();
+  let writeIdleResolve: (() => void) | null = null;
   let consecutiveSaveFailures = 0;
+
+  /** Callers currently being persisted. */
+  let activeCallers: PendingCaller[] | null = null;
+  /** Next batch: merged while a write is in flight (or waiting to start). */
+  let pendingCallers: PendingCaller[] = [];
+  let drainScheduled = false;
 
   const getSettingsPath = (): string => join(getUserDataPath(), "settings.json");
 
@@ -64,6 +85,20 @@ export function createFileSettingsStore(deps: FileSettingsStoreDeps): FileSettin
       );
     }
     return { ...settingsCache };
+  };
+
+  const markBusy = (): void => {
+    if (writeIdleResolve !== null) return;
+    writeIdle = new Promise<void>((resolve) => {
+      writeIdleResolve = resolve;
+    });
+  };
+
+  const markIdle = (): void => {
+    const resolve = writeIdleResolve;
+    writeIdleResolve = null;
+    writeIdle = Promise.resolve();
+    resolve?.();
   };
 
   const init = async (): Promise<void> => {
@@ -107,36 +142,100 @@ export function createFileSettingsStore(deps: FileSettingsStoreDeps): FileSettin
     initialized = true;
   };
 
-  const update = async (
-    partial: Partial<AppSettings>,
-  ): Promise<{ settings: AppSettings; rejectedKeys: string[] }> => {
-    const result = writeChain.then(async () => {
-      const { merged, rejectedKeys } = mergeValidatedPartial(settingsCache, partial);
+  /**
+   * Merge caller partials onto a base snapshot (validation per partial).
+   * Order is enqueue order so later fields win within the batch.
+   */
+  const mergeCallersOnto = (
+    base: AppSettings,
+    callers: readonly PendingCaller[],
+  ): AppSettings => {
+    let working = base;
+    for (const caller of callers) {
+      const { merged } = mergeValidatedPartial(working, caller.partial);
+      working = merged;
+    }
+    return working;
+  };
 
+  const runPhysicalBatch = async (callers: PendingCaller[]): Promise<void> => {
+    activeCallers = callers;
+    try {
+      const merged = mergeCallersOnto(settingsCache, callers);
       const changed = (Object.keys(merged) as (keyof AppSettings)[]).some(
         (key) => merged[key] !== settingsCache[key],
       );
       if (!changed) {
-        return { settings: get(), rejectedKeys };
+        const snapshot = get();
+        for (const caller of callers) {
+          caller.resolve({ settings: snapshot, rejectedKeys: caller.rejectedKeys });
+        }
+        return;
       }
 
       await save(merged);
       consecutiveSaveFailures = 0;
+      // Cache + emit only after successful rename (atomic write).
       settingsCache = { ...merged };
       const snapshot = get();
       settingsEmitter.emit("change", snapshot);
-
-      return { settings: snapshot, rejectedKeys };
-    });
-
-    writeChain = result.catch((err: unknown) => {
+      for (const caller of callers) {
+        caller.resolve({ settings: snapshot, rejectedKeys: caller.rejectedKeys });
+      }
+    } catch (err) {
       consecutiveSaveFailures++;
       logger.error("[settings] Failed to save settings:", err);
       if (consecutiveSaveFailures >= MAX_CONSECUTIVE_SAVE_FAILURES) {
         onSaveFailure.notifyPersistenceBroken();
       }
+      for (const caller of callers) {
+        caller.reject(err);
+      }
+    } finally {
+      activeCallers = null;
+    }
+  };
+
+  const drainBatches = async (): Promise<void> => {
+    markBusy();
+    try {
+      while (pendingCallers.length > 0) {
+        const batch = pendingCallers;
+        pendingCallers = [];
+        await runPhysicalBatch(batch);
+      }
+    } finally {
+      drainScheduled = false;
+      if (pendingCallers.length > 0) {
+        // Arrived after last batch emptied pending but before we released the drain flag.
+        drainScheduled = true;
+        void drainBatches();
+      } else {
+        markIdle();
+      }
+    }
+  };
+
+  const scheduleDrain = (): void => {
+    if (drainScheduled || activeCallers !== null) return;
+    drainScheduled = true;
+    void drainBatches();
+  };
+
+  const update = async (
+    partial: Partial<AppSettings>,
+  ): Promise<{ settings: AppSettings; rejectedKeys: string[] }> => {
+    // rejectedKeys for this caller from validation against current cache (+ in-flight/pending).
+    const baseForValidation = mergeCallersOnto(settingsCache, [
+      ...(activeCallers ?? []),
+      ...pendingCallers,
+    ]);
+    const { rejectedKeys } = mergeValidatedPartial(baseForValidation, partial);
+
+    return new Promise<UpdateResult>((resolve, reject) => {
+      pendingCallers.push({ partial, rejectedKeys, resolve, reject });
+      scheduleDrain();
     });
-    return result;
   };
 
   const onChange = (cb: (settings: AppSettings) => void): (() => void) => {
@@ -147,9 +246,20 @@ export function createFileSettingsStore(deps: FileSettingsStoreDeps): FileSettin
   };
 
   const flush = async (): Promise<void> => {
-    await writeChain.catch(() => {
-      /* errors already logged inside update */
-    });
+    // Never return early while work is queued or in flight.
+    for (;;) {
+      if (pendingCallers.length > 0 && !drainScheduled && activeCallers === null) {
+        scheduleDrain();
+      }
+      if (
+        pendingCallers.length === 0 &&
+        activeCallers === null &&
+        writeIdleResolve === null
+      ) {
+        return;
+      }
+      await writeIdle;
+    }
   };
 
   return {

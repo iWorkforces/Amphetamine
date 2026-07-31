@@ -270,6 +270,56 @@ describe("settings", () => {
       expect(results[2].settings.defaultSessionDuration).toBe(90);
       expect(getSettings().defaultSessionDuration).toBe(90);
     });
+
+    it("coalesces rapid same- and different-field updates into fewer physical writes", async () => {
+      const fsPromises = await import("node:fs/promises");
+      const writeFileMock = fsPromises.writeFile as unknown as ReturnType<typeof vi.fn>;
+      const renameMock = fsPromises.rename as unknown as ReturnType<typeof vi.fn>;
+      // rename may not be mocked — spy if available
+      const renameSpy =
+        typeof renameMock?.mockClear === "function"
+          ? renameMock
+          : vi.spyOn(fsPromises, "rename");
+      writeFileMock.mockClear();
+      renameSpy.mockClear();
+
+      const changeListener = vi.fn();
+      const { onSettingsChanged } = await import("../../src/main/settings.js");
+      const unsub = onSettingsChanged(changeListener);
+
+      const results = await Promise.all([
+        updateSettings({ preventSleep: true }),
+        updateSettings({ launchAtLogin: true }),
+        updateSettings({ batteryThreshold: 20 }),
+        updateSettings({ preventSleep: false }),
+      ]);
+
+      // After all callers settle, disk/cache hold the merged final fields.
+      expect(getSettings().preventSleep).toBe(false);
+      expect(getSettings().launchAtLogin).toBe(true);
+      expect(getSettings().batteryThreshold).toBe(20);
+      for (const r of results) {
+        expect(r.rejectedKeys).toEqual([]);
+      }
+
+      // Fewer physical write/rename pairs than 4 logical updates.
+      expect(writeFileMock.mock.calls.length).toBeLessThan(4);
+      expect(writeFileMock.mock.calls.length).toBeGreaterThanOrEqual(1);
+      // Change emissions are per successful physical batch, not per logical update.
+      expect(changeListener.mock.calls.length).toBeLessThan(4);
+      expect(changeListener.mock.calls.length).toBeGreaterThanOrEqual(1);
+
+      unsub();
+    });
+
+    it("flushSettingsWriteChain awaits queued coalesced work", async () => {
+      const { flushSettingsWriteChain } = await import("../../src/main/settings.js");
+      void updateSettings({ launchAtLogin: true });
+      void updateSettings({ batteryThreshold: 15 });
+      await flushSettingsWriteChain();
+      expect(getSettings().launchAtLogin).toBe(true);
+      expect(getSettings().batteryThreshold).toBe(15);
+    });
   });
 
   describe("no-change dedup", () => {
