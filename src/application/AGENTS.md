@@ -1,36 +1,36 @@
 # Application — Use Cases and Ports
 
-Electron-free application services. Depends on **domain** and **port interfaces** only (may import domain types + shared **types** for wire DTOs such as `SessionStatusResponse`, never channel name literals). Implementations live in `infrastructure/` and are wired in `main/composition-root.ts`.
+Electron-free application services. Depends on **domain** and **port interfaces** only (may import domain types + shared **types** for wire DTOs such as `SessionStatusResponse`, never channel name literals). Implementations live in `infrastructure/` (and a few main façades) and are wired in `main/composition-root.ts`.
 
 ## Layout
 
 | Path | Role |
 |------|------|
-| `ports/` | Port interfaces (closed budget; see barrel `ports/index.ts`) |
+| `ports/` | Port interfaces (closed budget of 11; see barrel `ports/index.ts`) |
 | `session/session-engine.ts` | Timed/indefinite session machine (`ClockPort` + `SchedulePort` + notifier + logger) |
 | `sleep/recompute-sleep-prevention.ts` | Effective sleep OR policy → `SleepBlockerPort` |
 | `sleep/toggle-prevent-sleep.ts` | Flip `preventSleep` via store (persist-only) |
 | `settings/update-settings.ts` | Persist-only partial update |
 | `settings/get-settings.ts` | Snapshot read |
-| `settings/settings-reaction-service.ts` | **Sole** settings field-diff reaction owner (KD-15) |
+| `settings/settings-reaction-service.ts` | **Sole** settings field-diff reaction owner |
 | `battery/handle-low-battery-auto-stop.ts` | Clear intent + cancel session |
-| `shortcut/register-app-shortcut.ts` | Register shortcut; publish failure via notifier |
+| `shortcut/register-app-shortcut.ts` | Register shortcut; `DEFAULT_SHORTCUT`; publish failure via notifier |
 
-## Ports (budget)
+## Ports (budget: 11)
 
-| Port | Purpose |
-|------|---------|
-| `SettingsStorePort` | Load/get/update/onChange/flush |
-| `SettingsSaveFailurePort` | Persist failure UX |
-| `SleepBlockerPort` | Sync/stop power-save blocker |
-| `MainToRendererNotifierPort` | Publish **`AppPushEvent`** only (no IPC channel strings) |
-| `ClockPort` | `perfNow` / `wallNow` |
-| `SchedulePort` | Delay + cancel |
-| `AutoLaunchPort` | Login-item sync |
-| `GlobalShortcutPort` | Register / unregister |
-| `BatterySensorPort` | (reserved / detector wiring) |
-| `LoggerPort` | Structured logs |
-| `UpdaterPort` | `init` / `stop` / `checkNow` |
+| Port | Purpose | Implementation home |
+|------|---------|---------------------|
+| `SettingsStorePort` | Load/get/update/onChange/flush | `infrastructure/settings` |
+| `SettingsSaveFailurePort` | Persist failure UX | `infrastructure/settings` |
+| `SleepBlockerPort` | Start/stop power-save blocker | `infrastructure/sleep` |
+| `MainToRendererNotifierPort` | Publish **`AppPushEvent`** only | `infrastructure/notification` |
+| `ClockPort` | `perfNow` / `wallNow` | `infrastructure/clock` |
+| `SchedulePort` | Delay + cancel | `infrastructure/schedule` |
+| `AutoLaunchPort` | Login-item sync | **`main/auto-launch.ts`** (not infrastructure) |
+| `GlobalShortcutPort` | Register / unregister | `infrastructure/shortcut` |
+| `BatterySensorPort` | Percent + power-source events | **Reserved** — battery monitor still uses main platform shell-outs |
+| `LoggerPort` | Structured logs | `infrastructure/logging` |
+| `UpdaterPort` | `init` / `stop` / `checkNow` | `infrastructure/updater` |
 
 Do not add ports for Tray/Menu/BrowserWindow chrome.
 
@@ -45,15 +45,31 @@ Do not add ports for Tray/Menu/BrowserWindow chrome.
 
 Infrastructure `broadcast-notifier` maps these to `PUSH_CHANNELS`.
 
+### Settings reactions
+
+`SettingsReactionService` is the **only** store `onChange` subscriber for field side effects:
+
+| Field change | Reaction |
+|--------------|----------|
+| any change | `reconcileSession` (no-op for preference; must not kill live sessions) |
+| `preventSleep` | `recomputeSleepPrevention` |
+| `launchAtLogin` | `autoLaunch.sync` |
+| `batteryThreshold` | `reconfigureBattery` |
+| `sleepBlockMode` | recompute only if blocker active OR intent OR session |
+| `shortcut` | re-register global shortcut |
+| `preventSleep` \| `batteryThreshold` \| `shortcut` | publish `settings-changed` (`RENDERER_VISIBLE_SETTINGS_KEYS`) |
+
+`UpdateSettings` validates + persists only — never runs reactions inline.
+
 ## Rules
 
 - No `electron`, `electron-log`, `setTimeout` (use `SchedulePort`), or main/infrastructure imports.
 - No `IPC_CHANNELS` / push channel string literals; use `AppPushEvent` on the notifier port.
-- `UpdateSettings` must not run field reactions; only `SettingsReactionService` on store `onChange`.
 - Session engine cancels outstanding schedule handles on cancel/cleanup/expiry.
+- `reconcileSessionState` must remain a no-op regarding preference null (must not cancel live sessions).
 - Prefer factories (`createX(deps)`) matching existing style; no DI container.
 - Log tags: prefer `[session]`, `[settings-reactions]`, `[shortcut]` (see root AGENTS.md).
 
 ## Tests
 
-Pure unit tests under `tests/application/` with fake ports (especially fake `SchedulePort` for expiry). Notifier mocks expect `publish({ type: "…", … })`.
+Pure unit tests under `tests/application/` with fake ports (especially fake `SchedulePort` for expiry). Notifier mocks expect `publish({ type: "…", … })`. `ports-compile.test.ts` guards the port barrel surface.

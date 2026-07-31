@@ -19,14 +19,23 @@ Implements application ports with Electron/Node. May import domain types and app
 | `updater/electron-updater-port.ts` | `UpdaterPort` | `configureHybridAutoUpdater` + lifecycle; **no main imports** |
 | `benchmark/` | harness | production benchmark mode; see local `AGENTS.md` |
 
+## Not here (intentional)
+
+| Port / concern | Where it lives | Why |
+|----------------|----------------|-----|
+| `AutoLaunchPort` | `main/auto-launch.ts` | Login items are a main-process OS façade |
+| `BatterySensorPort` | reserved | Battery monitor uses `main/platform/battery-percent` shell-outs |
+| Tray / BrowserWindow | `main/tray.ts`, `main/process/` | Presentation chrome, not application ports |
+
 ## Rules
 
 - Prefer `import … from "electron/main"`; use `electron/common` for `shell` / `nativeImage`.
 - Never call `powerSaveBlocker` outside `sleep/power-save-blocker.ts`.
 - Platform shell-outs stay under `main/platform` (not moved out of main).
-- Main façades (`settings.ts`, `sleep-prevention.ts`, `auto-updater.ts`, …) may re-export or wrap these adapters for stable paths.
+- Main façades (`settings.ts`, `sleep-prevention.ts`, `auto-updater.ts`, `global-shortcut.ts`, …) may re-export or wrap these adapters for stable paths.
 - Prefer construction-time injection of ports over module-level mutable globals (updater notifier + UI hooks via `configureHybridAutoUpdater`).
 - Updater must not import `src/main/*` (layer inversion fixed on `refactoring-appgraph`).
+- Background updater checks keep `autoDownload = false`; user-initiated path may download/install or open GitHub.
 
 ## Log tags
 
