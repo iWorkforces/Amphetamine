@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const mockGetPackageInfo = vi.hoisted(() =>
   vi.fn().mockReturnValue({
-    repository: "https://github.com/OCWorkforces/Amphetamine",
+    repository: "https://github.com/iWorkforces/Amphetamine",
   }),
 );
 
@@ -19,14 +19,14 @@ describe("auto-updater-utils", () => {
     vi.clearAllMocks();
     vi.resetModules();
     mockGetPackageInfo.mockReturnValue({
-      repository: "https://github.com/OCWorkforces/Amphetamine",
+      repository: "https://github.com/iWorkforces/Amphetamine",
     });
   });
 
   it("getReleaseUrlBase derives github releases tag base", async () => {
     const { getReleaseUrlBase } = await import("../../src/main/auto-updater-utils.js");
     expect(getReleaseUrlBase()).toBe(
-      "https://github.com/OCWorkforces/Amphetamine/releases/tag/v",
+      "https://github.com/iWorkforces/Amphetamine/releases/tag/v",
     );
   });
 

@@ -92,6 +92,6 @@ afterPack: build/after-pack.cjs
 
 publish:
   - provider: github
-    owner: OCWorkforces
+    owner: iWorkforces
     repo: Amphetamine
     releaseType: release

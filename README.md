@@ -126,7 +126,7 @@ Installs deps, builds, packages, Developer ID-signs when available (else ad-hoc)
 | Fuses | `build/flip-fuses.cjs` disables RunAsNode / inspect / `NODE_OPTIONS`; enables ASAR integrity + cookie encryption |
 | macOS targets | DMG (`ULFO`) + ZIP; minimum macOS 11; arm64 and x64 |
 | Windows targets | NSIS (custom install dir) + portable; **x64 and arm64**; Start Menu shortcut, no desktop shortcut by default |
-| Updates | GitHub Releases (`OCWorkforces/Amphetamine`); feeds `latest-mac.yml` / `latest.yml` (multi-arch Windows assets) when published |
+| Updates | GitHub Releases (`iWorkforces/Amphetamine`); feeds `latest-mac.yml` / `latest.yml` (multi-arch Windows assets) when published |
 
 ### CI / CD / Beta
 
