@@ -1,0 +1,26 @@
+import { describe, it, expect } from "vitest";
+import { IPC_CHANNELS, PUSH_CHANNELS, type IpcChannelMap } from "../../src/shared/types.js";
+
+describe("IPC channel budget contract", () => {
+  it("has exactly 16 named channels", () => {
+    expect(Object.keys(IPC_CHANNELS)).toHaveLength(16);
+  });
+
+  it("maps every channel in IpcChannelMap", () => {
+    const mapKeys = Object.keys(IPC_CHANNELS) as (keyof typeof IPC_CHANNELS)[];
+    for (const key of mapKeys) {
+      const channel = IPC_CHANNELS[key];
+      // Type-level map access: ensure each channel is a key of IpcChannelMap via assignability
+      const _assert: keyof IpcChannelMap = channel;
+      expect(typeof _assert).toBe("string");
+    }
+  });
+
+  it("push channels are a subset of IPC_CHANNELS values", () => {
+    const all = new Set(Object.values(IPC_CHANNELS));
+    for (const push of PUSH_CHANNELS) {
+      expect(all.has(push)).toBe(true);
+    }
+    expect(PUSH_CHANNELS).toHaveLength(5);
+  });
+});
