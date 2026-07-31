@@ -169,6 +169,46 @@ jobs:
             exit 1
           fi
 
+      # electron-updater needs a single latest-mac.yml / latest.yml on the release.
+      # Arch-matrix jobs each emit their own feed file with the same basename; merge
+      # them before publish so GitHub assets stay unique and every arch is listed.
+      - name: Merge multi-arch update feeds
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/update-feed
+
+          mac_feeds=()
+          [ -f artifacts/arm64/latest-mac.yml ] && mac_feeds+=(artifacts/arm64/latest-mac.yml)
+          [ -f artifacts/x64/latest-mac.yml ] && mac_feeds+=(artifacts/x64/latest-mac.yml)
+          if [ "${#mac_feeds[@]}" -eq 0 ]; then
+            echo "ERROR: No latest-mac.yml in mac CI artifacts (Check for Updates will fail on macOS)"
+            find artifacts -name '*.yml' -print || true
+            exit 1
+          elif [ "${#mac_feeds[@]}" -eq 1 ]; then
+            cp "${mac_feeds[0]}" artifacts/update-feed/latest-mac.yml
+          else
+            bun run scripts/merge-latest-yml.ts "${mac_feeds[@]}" --out artifacts/update-feed/latest-mac.yml
+          fi
+          rm -f artifacts/arm64/latest-mac.yml artifacts/x64/latest-mac.yml
+
+          win_feeds=()
+          [ -f artifacts/win-x64/latest.yml ] && win_feeds+=(artifacts/win-x64/latest.yml)
+          [ -f artifacts/win-arm64/latest.yml ] && win_feeds+=(artifacts/win-arm64/latest.yml)
+          if [ "${#win_feeds[@]}" -eq 1 ]; then
+            cp "${win_feeds[0]}" artifacts/update-feed/latest.yml
+            rm -f artifacts/win-x64/latest.yml artifacts/win-arm64/latest.yml
+          elif [ "${#win_feeds[@]}" -gt 1 ]; then
+            bun run scripts/merge-latest-yml.ts "${win_feeds[@]}" --out artifacts/update-feed/latest.yml
+            rm -f artifacts/win-x64/latest.yml artifacts/win-arm64/latest.yml
+          fi
+
+          # Drop builder-debug.yml noise from release assets
+          find artifacts -name 'builder-debug.yml' -delete || true
+
+          echo "Staged update feeds:"
+          ls -la artifacts/update-feed/ || true
+          find artifacts -name '*.yml' | sort
+
       - name: Publish GitHub release
         uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3.0.0
         with:

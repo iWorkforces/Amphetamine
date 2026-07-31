@@ -44,6 +44,8 @@ Unsigned by default (`CSC_IDENTITY_AUTO_DISCOVERY: false` in CI). No native Node
 
 **Release assets (Windows):** publish both arch EXEs (and blockmaps) plus `latest.yml` so electron-updater can pick the matching asset for `process.arch`.
 
+**Release assets (macOS):** publish ZIP (required for electron-updater) plus DMG, **`latest-mac.yml`**, and blockmaps. CI must upload `dist/*.yml` / `dist/*.blockmap` with mac packages; CD merges dual-arch feeds. Missing `latest-mac.yml` makes "Check for Updates" fail with a false network-error dialog.
+
 ## CI Packaging Paths
 
 | Pipeline | Branch | Artifact names | Fuses flipped in workflow? |
