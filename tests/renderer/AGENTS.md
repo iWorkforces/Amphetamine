@@ -6,7 +6,7 @@ Renderer Vitest suites run in jsdom and assert DOM behavior for vanilla TypeScri
 
 | File | Role |
 |------|------|
-| `index.test.ts` | Popover render, status/timer, controls, pushes, effective-active OR matrix, benchmark API mock |
+| `index.test.ts` | Popover render, status/timer, controls, pushes, effective-active OR matrix, session-action identity, hide dedupe, benchmark API mock |
 | `settings.test.ts` | Settings form, debounced save, shortcut-failure subscription |
 | `delegation.test.ts` | Event delegation on `#app` |
 | *(none yet)* | About entry covered via main WindowGraph / IPC tests; add jsdom suite if UI grows |
@@ -26,6 +26,8 @@ Renderer Vitest suites run in jsdom and assert DOM behavior for vanilla TypeScri
 - Prefer visible DOM and user-event paths over private helpers.
 - Popover: prevent-sleep and session chips call `settings.set` / `session.start` / `session.cancel` as designed.
 - Popover chips need not persist `defaultSessionDuration`.
+- Session actions: cancel-button node identity stable across same-mode pushes/ticks; mode flip replaces chips↔cancel once.
+- Duplicate hide signals clear countdown interval only once.
 - Effective active: status stays on when session running even if `preventSleep` is false (domain OR rule).
 - Settings: duration select starts session + saves preference; sleep mode saves `sleepBlockMode`.
 - Settings save path handles `{ settings, rejectedKeys }` responses.

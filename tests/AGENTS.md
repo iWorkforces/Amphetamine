@@ -42,10 +42,11 @@ tests/
 - Settings fixtures: spread `DEFAULT_SETTINGS` (includes `defaultSessionDuration`, `sleepBlockMode`).
 - `createSessionTimer` deps: `{ broadcast, onSessionActiveChange?, powerMonitor? }` — no settings writers; **no** module-level session globals.
 - `TrayDeps` must include `checkForUpdates` and `getEffectiveActive`.
-- Battery monitor mocks must include `reconfigure`.
+- Battery monitor mocks must include `reconfigure`; benchmark counter tests mock `isBenchmarkMode`.
 - Composition: session IPC deps throw before `init()`; mock hybrid updater / packageInfo / platform when constructing `createAppComposition`.
 - Application notifier mocks expect `publish({ type: "…", … })` (`AppPushEvent`), not channel strings.
 - `SETTINGS_CHANGED` / `settings-changed` only for `preventSleep` \| `batteryThreshold` \| `shortcut`.
+- Updater tests mock `autoUpdater.setFeedURL` and assert single-flight `checkForUpdates`.
 - No real filesystem, Electron windows, network, or OS battery queries in unit tests.
 
 ## Commands
@@ -65,5 +66,7 @@ bun run typecheck:layers
 ## Notes
 
 - Preload unit tests live under `tests/main/preload.test.ts`.
-- Process-graph suites: `app-shell.test.ts`, `window-graph.test.ts`, `secure-web-preferences.test.ts`, `composition-wiring.test.ts`, `composition-root.test.ts`.
+- Process-graph suites: `app-shell.test.ts`, `window-graph.test.ts` (incl. hide coalesce), `secure-web-preferences.test.ts`, `composition-wiring.test.ts`, `composition-root.test.ts`.
 - Application suites cover session engine, sleep recompute/toggle, settings reactions/update/get, low-battery auto-stop, and port barrel compile.
+- Perf/coalesce suites: settings write batching, updater single-flight, renderer session-action identity, `merge-latest-yml.test.ts`, `build-production.test.ts`.
+- ~52 test files / 600+ tests (Vitest workspace).

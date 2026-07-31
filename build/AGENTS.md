@@ -50,8 +50,9 @@ Unsigned by default (`CSC_IDENTITY_AUTO_DISCOVERY: false` in CI). No native Node
 
 | Pipeline | Branch | Artifact names | Fuses flipped in workflow? |
 |----------|--------|----------------|----------------------------|
-| CI `build` job | `main` push | `dist-mac-{arch}` (`*.dmg`, `*.zip`) | No (raw electron-builder) |
-| CI `build-windows` matrix | `main` push | `dist-win-x64`, `dist-win-arm64` | No (raw electron-builder) |
+| CI `build` job | `main` push | `dist-mac-{arch}` (dmg/zip/**yml**/blockmap) | No (raw electron-builder) |
+| CI `build-windows` matrix | `main` push | `dist-win-x64`, `dist-win-arm64` (exe/yml/blockmap) | No (raw electron-builder) |
+| CD release | after main CI | merges multi-arch `latest-mac.yml` / `latest.yml` then publishes | N/A |
 | Beta workflow | push to `develop` | mac/win beta artifacts renamed `*-beta-{N}.*` | No (raw electron-builder + rename) |
 | Local `bun run package*` | developer machine | `dist/*` then flip-fuses | Yes |
 

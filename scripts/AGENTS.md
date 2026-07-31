@@ -1,13 +1,15 @@
 # Scripts - Local Tooling
 
-Developer-only Bun/Node scripts. Runtime app code must not import from here. Scripts own dev orchestration, generated assets, benchmark harness execution, and sticky typecheck guards.
+Developer-only Bun/Node scripts. Runtime app code must not import from here. Scripts own dev orchestration, production build parallelism, generated assets, benchmark harness execution, update-feed merge, and sticky typecheck guards.
 
 ## Files
 
 | File | Role |
 |------|------|
 | `dev.ts` | Starts Rslib main/preload watchers, Rsbuild dev server, waits for readiness, launches Electron |
-| `benchmark-performance.ts` | Runs built app in benchmark mode and writes harness JSON artifact |
+| `build-production.ts` | Parallel production compile: main + preload + renderer; labels output; kills siblings on failure |
+| `benchmark-performance.ts` | Runs built app in benchmark mode; writes harness JSON; supports `--scenario idle\|active-session` |
+| `merge-latest-yml.ts` | Merge dual-arch electron-builder `latest*.yml` feeds for GitHub Releases (CD) |
 | `check-sticky-ts.mjs` | Asserts sticky TypeScript compiler flags via `tsc --showConfig` |
 | `check-layer-imports.mjs` | Asserts domain/application import boundaries (no Electron / outer layers) |
 | `generate-app-icon.mjs` | Generates `build/icon.icns`, `build/icon.ico`, and `src/assets/settings-hero-icon.png` |
@@ -24,6 +26,16 @@ Developer-only Bun/Node scripts. Runtime app code must not import from here. Scr
 5. TCP-connect to `localhost:5173` before Electron launch.
 6. Launch `bun x electron . --disable-gpu-sandbox --log-level=3` with `DEV_SERVER_URL`.
 7. Kill child processes on Electron exit or signals.
+
+## Production build (parallel)
+
+`bun run build` → `scripts/build-production.ts`:
+
+- Spawns main (rslib), preload (rslib), and renderer (rsbuild) **concurrently** with `NODE_ENV=production`.
+- Prefixes child stdout/stderr with `[main]` / `[preload]` / `[renderer]`.
+- On first nonzero exit: SIGTERM remaining siblings, then exit nonzero.
+- Verifies outputs: `lib/main/index.cjs`, `lib/preload/index.cjs`, `lib/renderer/{index,settings,about}.html`.
+- Windows-safe (no POSIX job-control syntax). Focused scripts `build:main` / `build:preload` / `build:renderer` remain for single-target builds.
 
 ## Sticky Typecheck Guard
 
@@ -42,11 +54,16 @@ Developer-only Bun/Node scripts. Runtime app code must not import from here. Scr
 
 ## Benchmark Harness
 
-- Run `bun run build` before `bun run benchmark:performance`; the script requires built `lib/main/index.cjs` and `lib/renderer/index.html` (settings/about HTML also produced by Rsbuild multi-env).
-- It launches Electron with `NODE_ENV=production`, `AMPHETAMINE_BENCHMARK=1`, a temp user-data dir, and GPU sandbox disabled.
-- It waits for stdout line prefix `AMPHETAMINE_BENCHMARK_RESULT:` and wraps it with harness metadata.
-- It writes JSON to `--out`, supports optional `--baseline`, and removes temp user-data in cleanup.
-- Benchmark artifacts belong under `artifacts/`, not source directories.
+- Run `bun run build` before `bun run benchmark:performance`; requires built `lib/main/index.cjs` and `lib/renderer/index.html`.
+- Launches Electron with `NODE_ENV=production`, `AMPHETAMINE_BENCHMARK=1`, optional `AMPHETAMINE_BENCHMARK_SCENARIO`, temp user-data, GPU sandbox disabled.
+- CLI: `--label`, `--out` (required), optional `--baseline`, optional `--scenario idle|active-session` (default idle).
+- Waits for stdout line prefix `AMPHETAMINE_BENCHMARK_RESULT:`; writes JSON under `artifacts/` (or `--out` path).
+
+## Update feed merge (CD)
+
+- `merge-latest-yml.ts` combines per-arch `latest-mac.yml` / `latest.yml` from CI matrix jobs into one release asset.
+- Usage: `bun run scripts/merge-latest-yml.ts a.yml b.yml --out out.yml`.
+- Unit tests: `tests/main/merge-latest-yml.test.ts`.
 
 ## Conventions
 
@@ -63,14 +80,17 @@ Developer-only Bun/Node scripts. Runtime app code must not import from here. Scr
 - Never rename tray icon outputs without updating generator scripts, `src/assets/AGENTS.md`, and `src/main/tray.ts`.
 - Never treat benchmark output as source; it is generated evidence.
 - Never remove sticky flags from `check-sticky-ts.mjs` to greenwash a failing build.
+- Never ship a production release without merged `latest-mac.yml` / `latest.yml` on the GitHub release.
 
 ## Commands
 
 ```bash
 bun run dev
-bun run build && bun run benchmark:performance
+bun run build
+bun run build && bun run benchmark:performance -- --scenario idle --out artifacts/perf/idle.json
 bun run typecheck:sticky
 bun run typecheck:layers
 bun scripts/generate-app-icon.mjs
 bun scripts/generate-coffee-tray-icons.mjs
+bun run scripts/merge-latest-yml.ts arm64/latest-mac.yml x64/latest-mac.yml --out latest-mac.yml
 ```

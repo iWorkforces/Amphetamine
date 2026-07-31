@@ -40,3 +40,4 @@ Default shortcut string (`CommandOrControl+Shift+A`) lives in **application** (`
 - Never depend on `process` for product logic except carefully in accelerator platform detection (uses optional `globalThis.process`).
 - Legacy disk key `sessionDuration` migrates to `defaultSessionDuration` via `migrateRawSettingsRecord`.
 - Never mutate `DEFAULT_SETTINGS`.
+- Product repository/author metadata live in root `package.json` (not domain).

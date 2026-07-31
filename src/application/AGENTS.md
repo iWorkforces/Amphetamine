@@ -73,3 +73,5 @@ Infrastructure `broadcast-notifier` maps these to `PUSH_CHANNELS`.
 ## Tests
 
 Pure unit tests under `tests/application/` with fake ports (especially fake `SchedulePort` for expiry). Notifier mocks expect `publish({ type: "…", … })`. `ports-compile.test.ts` guards the port barrel surface.
+
+Persistence coalescing and updater single-flight live in infrastructure/main tests, not here.

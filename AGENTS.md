@@ -52,20 +52,20 @@ Dependency rule: **domain** and **application** must not import `electron` / `el
 | Process graph / windows | `src/main/app-shell.ts`, `src/main/process/` | AppShell ready/quit; WindowGraph owns all BrowserWindows |
 | Main→renderer push | `MainToRendererNotifierPort` + `broadcast-notifier` | Application publishes `AppPushEvent`; adapter maps to `PUSH_CHANNELS` |
 | Wire app / quit | `src/main/app-shell.ts`, `src/main/index.ts` | AppShell owns ready/quit graph; composition before IPC; quit: flush → tray → composition → destroy windows |
-| Settings persistence | `src/infrastructure/settings/`, façade `src/main/settings.ts` | Atomic write, mutex, save-failure dialog port |
+| Settings persistence | `src/infrastructure/settings/`, façade `src/main/settings.ts` | Atomic write; coalesced one-in-flight + one pending batch; save-failure dialog |
 | Sleep blocker | `src/infrastructure/sleep/`, façade `src/main/sleep-prevention.ts` | Sole `powerSaveBlocker` owner |
 | Session runtime | `src/application/session/`, façade `src/main/session-timer.ts` | Handle injection only; no module-level session globals |
 | Settings → system side effects | `SettingsReactionService` (application), wired in composition | Single `onChange` subscriber; UpdateSettings is persist-only |
 | Login items | `src/main/auto-launch.ts` (`AutoLaunchPort` view) | Implemented in main (not infrastructure) |
 | Tray/menu | `src/main/tray.ts`, `src/assets/AGENTS.md` | Icon = effective active; checkbox = user intent |
-| Renderer popover | `src/renderer/index.ts` | Domain `isEffectivelyActive`; chips start session only |
+| Renderer popover | `src/renderer/index.ts` | Domain `isEffectivelyActive`; mode-stable session actions; chips start session only |
 | Settings UI | `src/renderer/settings/AGENTS.md` | Debounced saves, shortcut recorder, sleep mode |
 | About window | `src/renderer/about/`, WindowGraph `showAbout` | Built `about.html`; `app:get-about`; github.com `window.open` allowlist |
-| Hybrid auto-updater | `src/infrastructure/updater/` (+ main IPC façade) | Policy in hybrid-auto-updater; `composition.initUpdater()` |
-| Benchmark mode | `src/infrastructure/benchmark/`, `src/renderer/benchmark-countdown.ts`, `scripts/benchmark-performance.ts` | Requires built `lib/` |
+| Hybrid auto-updater | `src/infrastructure/updater/` (+ main IPC façade) | `setFeedURL` from package repo; single-flight checks; needs `latest-mac.yml` / `latest.yml` on release |
+| Benchmark mode | `src/infrastructure/benchmark/`, `src/renderer/benchmark-countdown.ts`, `scripts/benchmark-performance.ts` | Scenarios `idle` \| `active-session`; requires built `lib/` |
 | Platform OS gates | `src/main/platform/` | Prefer `isDarwin` / `isWin32` |
 | Test mocking | `tests/AGENTS.md` (+ main/renderer) | Domain/application pure; main mocks Electron |
-| Dev/build/CI | `scripts/`, `build/`, `.github/workflows/` | Local AGENTS.md in each |
+| Dev/build/CI | `scripts/`, `build/`, `.github/workflows/` | Parallel prod build; CI must publish mac update feeds |
 
 ## Log tags (production)
 
@@ -98,8 +98,9 @@ Dependency rule: **domain** and **application** must not import `electron` / `el
 - Session **preference** is `defaultSessionDuration`; live session state is engine handle + `SESSION_STATUS*` pushes only.
 - `PerfTimestamp` values come from `asPerf(n)`. Do not raw-cast timestamps.
 - `SessionStatusResponse`, `SessionStartResponse`, updater status, and benchmark guards are discriminated/runtime-checked contracts.
-- Settings init is async; writes use UUID temp file + rename and a write-chain mutex; quit flushes via `flushSettingsWriteChain()`.
+- Settings init is async; writes use UUID temp file + rename with **coalesced batching** (one active write + one pending merge); quit flushes via `flushSettingsWriteChain()`.
 - Settings→renderer pushes (`settings-changed`) only when a renderer-visible key changes (`preventSleep` \| `batteryThreshold` \| `shortcut`).
+- Popover `#session-actions` rebuilds only on running/idle **mode** change (stable cancel-button identity); hide transitions are coalesced in WindowGraph.
 - Push broadcasts use `broadcastToWindows<K>()`; renderer subscribes with `window.api.on*()` and cleanup functions.
 - UI strings live in constants files. Styling lives in CSS. No inline renderer styles.
 - Format: double quotes, semicolons, 2-space indent, Prettier print width 100.
@@ -136,8 +137,8 @@ Dependency rule: **domain** and **application** must not import `electron` / `el
 bun run dev                    # rslib watch x2 + rsbuild dev + Electron
 bun run test                   # Vitest workspace
 bun run test:coverage          # v8 coverage
-bun run build                  # main + preload + renderer builds
-bun run benchmark:performance  # requires bun run build first
+bun run build                  # parallel main + preload + renderer (scripts/build-production.ts)
+bun run benchmark:performance  # requires build; optional --scenario idle|active-session
 bun run package                # arm64 DMG/ZIP + flip-fuses; also :x64, :universal, :dir
 bun run package:win            # Windows x64 NSIS + portable + flip-fuses; also :win:dir
 bun run package:win:arm64      # Windows arm64 NSIS + portable + flip-fuses; also :win:dir:arm64
@@ -163,8 +164,9 @@ bun run clean                  # remove lib/dist outputs
 - Popover hide on blur uses typed `window:hide`, not DOM `CustomEvent`.
 - About is a third built renderer (`about.html`) with shared preload; not inline `data:` HTML.
 - `hardenWebContents` denies all `window.open`; About overrides with a github.com-only allowlist that opens via `shell.openExternal`.
-- Auto-updater is hybrid: **Check for Updates** tries in-app download/install when possible; falls back to the GitHub release page. Background checks do not auto-download or open the browser.
+- Auto-updater is hybrid: feed from package.json `repository` via `setFeedURL`; concurrent checks single-flight. **Check for Updates** tries in-app download/install when possible; falls back to the GitHub release page. Background checks do not auto-download.
+- GitHub Releases must publish **`latest-mac.yml`** (mac) and **`latest.yml`** (win) or macOS Check for Updates fails with a false network-error dialog. Repo: `iWorkforces/Amphetamine`.
 - Electron pin is `^43.2.0` in package.json; do not downgrade below the patched 43.x line referenced by security comments.
 - Runtime deps are only `electron-log` and `electron-updater`; externalized in Rslib. Renderer must not import `electron-log`.
-- Production Rslib/Rsbuild builds drop console output.
+- Production Rslib/Rsbuild builds drop console output. `bun run build` runs targets in parallel.
 - Develop pushes/merges: CI lint/test; **Beta** workflow packages `*-beta-{N}.*` and publishes prerelease tag `vX.Y.Z-beta.N`.

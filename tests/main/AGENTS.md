@@ -7,15 +7,16 @@ Main-process Vitest suites run in Node with Electron mocked (project aliases `el
 | Area | Typical files |
 |------|----------------|
 | Bootstrap / quit | `index.test.ts`, `app-shell.test.ts` |
-| Window graph | `window-graph.test.ts`, `secure-web-preferences.test.ts`, `settings-window*.test.ts`, `about-window.test.ts` |
+| Window graph | `window-graph.test.ts` (hide coalesce), `secure-web-preferences.test.ts`, `settings-window*.test.ts`, `about-window.test.ts` |
 | Composition | `composition-root.test.ts` (session IPC fail-closed before init) |
 | Composition wiring | `composition-wiring.test.ts` (settings reactions / tray effective-active matrix) |
 | IPC / security | `ipc.test.ts`, `ipc-handlers.test.ts`, `security.test.ts`, `preload.test.ts` |
 | Session façade | `session-timer.test.ts` (handle from `createSessionTimer` only) |
-| Settings store | `settings.test.ts`, `settings.predicates.test.ts` |
-| OS integrations | `sleep-prevention.test.ts`, `battery-monitor.test.ts`, `auto-launch.test.ts`, `global-shortcut.test.ts`, `shortcut.test.ts`, `tray.test.ts` |
+| Settings store | `settings.test.ts` (write coalesce), `settings.predicates.test.ts` |
+| OS integrations | `sleep-prevention.test.ts`, `battery-monitor.test.ts` (incl. benchmark counters), `auto-launch.test.ts`, `global-shortcut.test.ts`, `shortcut.test.ts`, `tray.test.ts` |
 | Platform | `platform.test.ts`, `battery-percent.test.ts`, `platform-shell-side-effects.test.ts` |
-| Updater | `auto-updater.test.ts` (hybrid infra), `auto-updater-utils.test.ts`; port: `tests/infrastructure/updater-port.test.ts` |
+| Updater | `auto-updater.test.ts` (hybrid + setFeedURL + single-flight), `auto-updater-utils.test.ts`; port: `tests/infrastructure/updater-port.test.ts` |
+| Tooling contracts | `merge-latest-yml.test.ts`, `build-production.test.ts` |
 | Utils | `broadcast.test.ts`, `packageInfo.test.ts`, `constants.test.ts` |
 
 Infrastructure adapter tests under `tests/infrastructure/` also run in the main Vitest project (`electron-logger`, `dialog-save-failure`, `benchmark-metrics`, `updater-port`).
@@ -33,7 +34,7 @@ Pure use-case / domain tests live under `tests/application` and `tests/domain` (
 - Battery handle mocks include `reconfigure`.
 - Tray deps include `checkForUpdates` and `getEffectiveActive`.
 - Composition tests: mock `hybrid-auto-updater`, `packageInfo`, platform shell helpers, `isSettingsWindowOpen` when constructing the real composition root.
-- Hybrid updater tests: `configureHybridAutoUpdater` with `createBroadcastNotifier` wrapping `broadcastToWindows`.
+- Hybrid updater tests: `configureHybridAutoUpdater` with `createBroadcastNotifier` wrapping `broadcastToWindows`; mock `setFeedURL`.
 - Auto-launch: darwin expects `openAsHidden: true`; win32 only `openAtLogin`.
 
 ## Behavioral focus
@@ -50,6 +51,9 @@ Pure use-case / domain tests live under `tests/application` and `tests/domain` (
 - `sleepBlockMode` recompute only when blocker active OR intent OR session; mode read from `getSettings()` (advance mock cache before subscriber).
 - About: shared secure prefs **with** preload; loads `/about.html`; github-only `window.open` via override after `hardenWebContents`.
 - AppShell: ready order tray-only → popover → composition → IPC → tray → `initUpdater` (skipped in benchmark).
+- Popover hide: blur/minimize bursts → one pending hide; show before expiry cancels hide.
+- Settings coalesce: rapid multi-field updates → fewer write/rename pairs than logical updates; flush awaits queue.
+- Updater: concurrent checks call `checkForUpdates` once; `setFeedURL` from package repository.
 
 ## Timer and async
 

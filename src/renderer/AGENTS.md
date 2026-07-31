@@ -30,6 +30,17 @@ Electron renderer web context. Vanilla TypeScript only. Three built entries (Rsb
   - Cancel → `session.cancel()`
 - Footer: Settings… / Quit.
 
+## Session actions stability
+
+- `#session-actions` rebuilds **only** when running/idle **mode** changes (not on every timer tick or same-mode status push).
+- Click handling uses **one delegated** listener on the container (stable cancel-button DOM identity across ticks).
+- Idle → chips; running → single cancel button; mode flip replaces the subtree once.
+
+## Hide transitions
+
+- `window:hide` and `visibilitychange` (hidden) share a transition path: ignore if already hidden so countdown stop/clear runs once.
+- Becoming visible again re-arms the countdown only when a timed session is anchored.
+
 ## About flow
 
 - Built entry `about.html` (Rsbuild env `about`); loaded by WindowGraph with shared preload.
@@ -44,7 +55,7 @@ Electron renderer web context. Vanilla TypeScript only. Three built entries (Rsb
 - Anchors map main remaining seconds into renderer `performance.now()`.
 - Local remaining derivation; no per-second IPC polling.
 - Ticker only when popover visible **and** timed session anchored.
-- Status/control paints through `paintControls` / `updateStatusUI` (RAF for timer text).
+- Status/control paints through `paintControls` / `updateStatusUI` (RAF for timer text; timer text skip when unchanged).
 - Benchmark counters only when `window.api.benchmark.isEnabled()`.
 
 ## IPC boundary
@@ -57,6 +68,7 @@ Electron renderer web context. Vanilla TypeScript only. Three built entries (Rsb
 
 ## Anti-Patterns
 
+- Never rebuild `#session-actions` on every countdown tick or same-mode push.
 - Never read `status.remainingSeconds` for display after anchoring without local recompute.
 - Never hardcode UI strings; use `constants.ts` (or about static copy in HTML carefully).
 - Never update `defaultSessionDuration` from popover chips (settings window owns preference).

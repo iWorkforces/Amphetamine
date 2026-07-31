@@ -70,8 +70,10 @@ Application code must not import channel literals; it publishes semantic `AppPus
 ## Benchmark Contract
 
 - `BENCHMARK_ENV_NAME` is `AMPHETAMINE_BENCHMARK`.
-- Renderer counters: `benchmark-countdown.ts`; main harness under `infrastructure/benchmark`.
-- Guard with `isRendererCountdownTimerCounters()` before trusting executeJavaScript results.
+- Scenarios: `BenchmarkScenario` = `idle` \| `active-session` (`isBenchmarkScenario`); harness CLI `--scenario`.
+- Renderer counters: `benchmark-countdown.ts`; battery counters: `BatteryBenchmarkCounters` (benchmark-gated in main).
+- Main harness under `infrastructure/benchmark`; artifact includes `scenario` / `scenarioMeta` and `timerCounters.battery`.
+- Guard with `isRendererCountdownTimerCounters()` / `isBatteryBenchmarkCounters()` before trusting results.
 
 ## Anti-Patterns
 

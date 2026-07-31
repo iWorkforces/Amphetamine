@@ -11,7 +11,7 @@ Main process owns app lifecycle, BrowserWindows, tray, typed IPC registration, a
 | `index.ts` | App lifecycle events only (ready, quit, single-instance, errors, benchmark entry) |
 | `app-shell.ts` | `createAppShell()` — process-graph root: windows + composition + IPC + tray + updater + quit cleanup |
 | `process/secure-web-preferences.ts` | Single `createSecureWebPreferences()` for all BrowserWindows (sandbox / contextIsolation / no nodeIntegration) |
-| `process/window-graph.ts` | Owns popover / settings / about BrowserWindows + registry + `destroyAllWindows()` |
+| `process/window-graph.ts` | Owns popover / settings / about BrowserWindows + registry + coalesced hide + `destroyAllWindows()` |
 | `composition-root.ts` | `createAppComposition()` — ports, session handle, reactions, `getIpcDeps` / `getTrayDeps` / `initUpdater`, ordered `cleanup()` |
 | `ipc.ts` | Typed handler registration; session handlers use injected `IpcDeps.sessionTimer` |
 | `ipc-utils.ts` | `validateSender`, `typedHandle`; allowlisted `index.html` / `settings.html` / `about.html` |
@@ -21,7 +21,7 @@ Main process owns app lifecycle, BrowserWindows, tray, typed IPC registration, a
 | `session-timer.ts` | Façade over `application/session` engine; **handle injection only** |
 | `global-shortcut.ts` | Façade over RegisterAppShortcut + GlobalShortcutPort |
 | `auto-launch.ts` | Login items + `AutoLaunchPort` view (port lives here, not infrastructure) |
-| `battery-monitor.ts` | Threshold **detector** only; percent via `platform/battery-percent` |
+| `battery-monitor.ts` | Threshold **detector** only; percent via `platform/battery-percent`; benchmark counters |
 | `auto-updater.ts` | IPC registration + re-exports of hybrid policy (`infrastructure/updater`) |
 | `auto-updater-utils.ts` | Façade over pure release-URL helpers + package repo lookup |
 | `settings-window.ts` | Thin re-export of WindowGraph settings APIs |
@@ -60,8 +60,14 @@ Do not register a second `before-quit` handler on settings or other modules.
 - Session IPC before `init` **fails closed** (throws); no module-level session globals.
 - Application → renderer pushes use `AppPushEvent` via `MainToRendererNotifierPort` (not raw `IPC_CHANNELS`).
 - `getTrayDeps().checkForUpdates` → `UpdaterPort.checkNow()`.
-- Updater port is configured with UI hooks (foreground/tray restore) and `getRepositoryUrl` at composition construct time.
+- Updater port is configured with UI hooks (foreground/tray restore) and `getRepositoryUrl` at composition construct time (`setFeedURL` uses that repo).
 - `cleanup()` order: settings/about windows → unsubscribe reactions → battery → session → sleep stop → shortcut unregister → updater stop.
+
+## Popover hide coalescing
+
+- Blur/minimize schedule **one** pending delayed hide + **one** `WINDOW_HIDE` broadcast (`HIDE_DELAY_MS`).
+- Further blur/minimize while pending is a no-op; `show` / destroy / quit cancel the timer (`hasPendingPopoverHide` test seam).
+- Renderer hide handlers are transition-based (ignore duplicate hide while already hidden).
 
 ## IPC and security
 
@@ -101,6 +107,8 @@ Do not register a second `before-quit` handler on settings or other modules.
 
 - Early (in `index.ts`): `configureBenchmarkEnvironment()` + `installBenchmarkTimerCounters()` from `infrastructure/benchmark`.
 - AppShell skips `initUpdater` when `isBenchmarkMode()`.
+- Scenarios via env: idle (default) or active-session (starts timed session before samples).
+- Battery semantic counters are benchmark-gated only (`getBatteryBenchmarkCounters`).
 - Measures then prints `AMPHETAMINE_BENCHMARK_RESULT:` and quits.
 - Harness may dynamically import tray/settings from main for measurement.
 
