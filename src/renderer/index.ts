@@ -50,6 +50,10 @@ let statusErrorEl: HTMLElement | null = null;
 let preventSleepToggleEl: HTMLInputElement | null = null;
 let sessionActionsEl: HTMLElement | null = null;
 let rafId: number | null = null;
+/** Last painted session-actions mode; skip rebuild when unchanged. */
+let sessionActionsMode: "running" | "idle" | null = null;
+/** True once click delegation is bound on `#session-actions`. */
+let sessionActionsDelegated = false;
 
 function getApp(): HTMLElement | null {
   return document.getElementById("app");
@@ -167,15 +171,22 @@ function paintControls(): void {
   paintSessionActions();
 }
 
+/**
+ * Rebuild `#session-actions` only when the running/idle mode changes.
+ * Click handling uses one delegated listener so same-mode status pushes do not
+ * rebind or replace the action subtree (stable cancel-button identity).
+ */
 function paintSessionActions(): void {
   if (!sessionActionsEl) return;
   const running = Boolean(sessionStatus?.isRunning);
+  const mode: "running" | "idle" = running ? "running" : "idle";
+  ensureSessionActionsDelegation(sessionActionsEl);
+  if (mode === sessionActionsMode) {
+    return;
+  }
+  sessionActionsMode = mode;
   if (running) {
     sessionActionsEl.innerHTML = `<button type="button" id="cancel-session-action" class="session-chip session-chip--cancel">${LABEL_CANCEL_SESSION}</button>`;
-    const cancelBtn = sessionActionsEl.querySelector<HTMLButtonElement>("#cancel-session-action");
-    cancelBtn?.addEventListener("click", () => {
-      void window.api.session.cancel().then(() => refreshSessionStatus());
-    });
     return;
   }
   const chips = SESSION_DURATION_CHIPS.map(
@@ -183,12 +194,24 @@ function paintSessionActions(): void {
       `<button type="button" class="session-chip" data-duration="${chip.minutes === null ? "" : String(chip.minutes)}">${chip.label}</button>`,
   ).join("");
   sessionActionsEl.innerHTML = `<span class="session-actions-label">${LABEL_SESSION_DURATION}</span><div class="session-chip-row">${chips}</div>`;
-  sessionActionsEl.querySelectorAll<HTMLButtonElement>(".session-chip").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const raw = btn.dataset["duration"] ?? "";
-      const duration: number | null = raw === "" ? null : parseInt(raw, 10);
-      void window.api.session.start(duration).then(() => refreshSessionStatus());
-    });
+}
+
+function ensureSessionActionsDelegation(container: HTMLElement): void {
+  if (sessionActionsDelegated) return;
+  sessionActionsDelegated = true;
+  container.addEventListener("click", (event: MouseEvent) => {
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+    const btn = target.closest<HTMLButtonElement>("button.session-chip");
+    if (btn === null || !container.contains(btn)) return;
+    if (btn.id === "cancel-session-action") {
+      void window.api.session.cancel().then(() => refreshSessionStatus());
+      return;
+    }
+    const raw = btn.dataset["duration"] ?? "";
+    const duration: number | null = raw === "" ? null : parseInt(raw, 10);
+    if (raw !== "" && Number.isNaN(duration)) return;
+    void window.api.session.start(duration).then(() => refreshSessionStatus());
   });
 }
 
@@ -317,6 +340,9 @@ function render(version: string): void {
     </div>
   `;
 
+  // Full shell re-render: reset mode so actions paint once after cache is set.
+  sessionActionsMode = null;
+  sessionActionsDelegated = false;
   bindEvents();
 
   requestAnimationFrame(() => {
@@ -327,6 +353,7 @@ function render(version: string): void {
     statusErrorEl = app.querySelector("#status-error");
     preventSleepToggleEl = app.querySelector("#prevent-sleep-toggle");
     sessionActionsEl = app.querySelector("#session-actions");
+    paintSessionActions();
     resizeToContent();
 
     if (isPopoverVisible) {
@@ -335,7 +362,12 @@ function render(version: string): void {
   });
 }
 
+/**
+ * Transition-based hide: ignore duplicate hide signals while already hidden
+ * so countdown stop/clear is recorded once per hide transition.
+ */
 function handlePopoverHide(): void {
+  if (!isPopoverVisible) return;
   const app = getApp();
   if (!app) return;
 
@@ -349,6 +381,10 @@ function handleVisibilityChange(): void {
   if (!app) return;
 
   if (document.visibilityState === "visible") {
+    if (isPopoverVisible) {
+      // Already visible — no transition work.
+      return;
+    }
     isPopoverVisible = true;
     app.classList.add("visible");
     updateStatusUI();
@@ -356,9 +392,8 @@ function handleVisibilityChange(): void {
     return;
   }
 
-  isPopoverVisible = false;
-  app.classList.remove("visible");
-  syncCountdownTicker();
+  // Hidden: same transition path as window:hide (dedupe if already hidden).
+  handlePopoverHide();
 }
 
 /** Load settings and version from main process */
@@ -404,6 +439,8 @@ function attachWindowEvents(): void {
     statusErrorEl = null;
     preventSleepToggleEl = null;
     sessionActionsEl = null;
+    sessionActionsMode = null;
+    sessionActionsDelegated = false;
     unsubscribeSessionStatus?.();
     unsubscribeSessionStatus = null;
     unsubscribeSettings?.();
