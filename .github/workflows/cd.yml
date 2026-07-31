@@ -239,16 +239,18 @@ jobs:
             rm -f artifacts/win-x64/latest.yml artifacts/win-arm64/latest.yml
           fi
 
-          # Drop builder-debug.yml noise from release assets
-          find artifacts -name 'builder-debug.yml' -delete || true
+          # Drop all remaining yml from arch dirs so staging never double-uploads feeds
+          # (builder-debug.yml, stray latest.yml from mac, etc.). Only update-feed keeps yml.
+          find artifacts/arm64 artifacts/x64 artifacts/win-x64 artifacts/win-arm64 \
+            -type f -name '*.yml' -delete 2>/dev/null || true
 
           echo "Staged update feeds:"
           ls -la artifacts/update-feed/ || true
           find artifacts -name '*.yml' | sort
 
-      # softprops uploads by basename. Nested globs from multi-arch dirs can collide
-      # (same filename in two folders) and fail with update-a-release-asset 404.
-      # Flatten into one directory and fail closed on basename collisions.
+      # softprops uploads by basename. Multi-arch CI dirs can share basenames
+      # (e.g. unqualified Amphetamine-1.10.x.exe from both Windows jobs).
+      # Stage feeds only from update-feed; binaries from arch dirs with collision rules.
       - name: Stage unique release assets
         if: steps.skip_release.outputs.skip != 'true'
         run: |
@@ -256,33 +258,70 @@ jobs:
           STAGE=artifacts/release-staging
           rm -rf "$STAGE"
           mkdir -p "$STAGE"
-          while IFS= read -r -d '' f; do
+
+          stage_one() {
+            local f="$1"
+            local base dest
             base=$(basename "$f")
-            # Skip nested junk / already-staged paths
-            case "$base" in
-              builder-debug.yml) continue ;;
-            esac
             dest="$STAGE/$base"
-            if [ -e "$dest" ]; then
-              echo "ERROR: duplicate release asset basename '$base'"
-              echo "  existing: $dest"
-              echo "  incoming: $f"
-              echo "List of staged so far:"
-              ls -la "$STAGE"
-              exit 1
+            if [ ! -e "$dest" ]; then
+              cp -a "$f" "$dest"
+              echo "staged $base <- $f"
+              return 0
             fi
-            cp -a "$f" "$dest"
-            echo "staged $base <- $f"
-          done < <(
-            find artifacts -type f \
-              \( -name '*.dmg' -o -name '*.zip' -o -name '*.exe' -o \
-                 -name '*.yml' -o -name '*.blockmap' \) \
-              ! -path 'artifacts/release-staging/*' \
-              -print0
-          )
+            if cmp -s "$f" "$dest"; then
+              echo "skip identical duplicate $base <- $f"
+              return 0
+            fi
+            # Prefer arch-qualified basenames (contain -arm64 / -x64) over bare names.
+            if [[ "$base" != *arm64* && "$base" != *x64* ]]; then
+              echo "skip unqualified collision $base <- $f (keeping existing arch-qualified or first copy)"
+              return 0
+            fi
+            local existing_base
+            existing_base=$(basename "$dest")
+            if [[ "$existing_base" != *arm64* && "$existing_base" != *x64* ]]; then
+              echo "replace unqualified $existing_base with arch-qualified from $f"
+              cp -a "$f" "$dest"
+              return 0
+            fi
+            echo "ERROR: conflicting release assets with basename '$base'"
+            echo "  existing staged content differs from: $f"
+            ls -la "$STAGE"
+            exit 1
+          }
+
+          # 1) Merged updater feeds only (must keep exact basenames for electron-updater).
+          if [ ! -f artifacts/update-feed/latest-mac.yml ] || [ ! -f artifacts/update-feed/latest.yml ]; then
+            echo "ERROR: expected merged feeds in artifacts/update-feed/"
+            ls -la artifacts/update-feed/ || true
+            exit 1
+          fi
+          stage_one artifacts/update-feed/latest-mac.yml
+          stage_one artifacts/update-feed/latest.yml
+
+          # 2) Package binaries + blockmaps from known arch artifact dirs only.
+          for dir in artifacts/arm64 artifacts/x64 artifacts/win-x64 artifacts/win-arm64; do
+            if [ ! -d "$dir" ]; then
+              echo "WARN: missing artifact dir $dir"
+              continue
+            fi
+            while IFS= read -r -d '' f; do
+              stage_one "$f"
+            done < <(
+              find "$dir" -type f \
+                \( -name '*.dmg' -o -name '*.zip' -o -name '*.exe' -o -name '*.blockmap' \) \
+                -print0
+            )
+          done
+
           COUNT=$(find "$STAGE" -type f | wc -l | tr -d ' ')
           echo "Staged ${COUNT} unique asset(s) for upload:"
           ls -la "$STAGE"
+          if [ "$COUNT" -lt 4 ]; then
+            echo "ERROR: expected more release assets (got ${COUNT})"
+            exit 1
+          fi
 
       - name: Publish GitHub release
         if: steps.skip_release.outputs.skip != 'true'
