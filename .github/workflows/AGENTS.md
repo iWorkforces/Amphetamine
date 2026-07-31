@@ -31,14 +31,16 @@ Workflow definitions for lint/test/build, production release publishing, and dev
 
 - CD triggers from successful CI `workflow_run` on `main`, not directly from tags.
 - It checks out the CI head SHA with full history (`fetch-depth: 0`) and fetches tags.
-- It creates and pushes `v<version>` only if missing.
+- It creates and pushes `v<version>` only if the git tag is missing.
+- Skip re-publish only when a **GitHub release already has assets** — not merely when the tag exists (allows recovery after tag-push + failed asset upload).
 - It resolves the previous **production** tag (`vX.Y.Z` only) and calls GitHub
   `GET /repos/{owner}/{repo}/releases/generate-notes` for auto release notes.
 - Release body includes a short production preamble plus the generated "What's Changed" section.
 - It downloads `dist-mac-arm64`, `dist-mac-x64`, `dist-win-x64`, and `dist-win-arm64` artifacts from that CI run.
 - It verifies at least one DMG, ZIP, or EXE before `softprops/action-gh-release` publishes.
 - It **merges** multi-arch `latest-mac.yml` / `latest.yml` via `scripts/merge-latest-yml.ts` before attaching release assets (unique basenames on GitHub).
-- Production release uses `make_latest: true`.
+- It **flattens** remaining assets into `artifacts/release-staging/` and fails on basename collisions (softprops uploads by basename; nested globs can 404 on `update-a-release-asset`).
+- Production release uses `make_latest: true` and `target_commitish` = CI head SHA.
 - Release concurrency is global `release` with `cancel-in-progress: false`.
 - **CD workflow file must exist on the default branch (`main`)** for `workflow_run` to fire.
 
