@@ -239,66 +239,65 @@ jobs:
             rm -f artifacts/win-x64/latest.yml artifacts/win-arm64/latest.yml
           fi
 
-          # Drop builder-debug.yml noise from release assets
-          find artifacts -name 'builder-debug.yml' -delete || true
+          # Drop all remaining yml from arch dirs so staging never double-uploads feeds
+          # (builder-debug.yml, stray latest.yml from mac, etc.). Only update-feed keeps yml.
+          find artifacts/arm64 artifacts/x64 artifacts/win-x64 artifacts/win-arm64 \
+            -type f -name '*.yml' -delete 2>/dev/null || true
 
           echo "Staged update feeds:"
           ls -la artifacts/update-feed/ || true
           find artifacts -name '*.yml' | sort
 
-      # softprops uploads by basename. Nested globs from multi-arch dirs can collide
-      # (same filename in two folders) and fail with update-a-release-asset 404.
-      # Flatten into one directory and fail closed on basename collisions.
+      # softprops/gh upload by basename. Multi-arch dirs often share basenames.
+      # Staging lives in scripts/stage-release-assets.py (not inline YAML/Python).
       - name: Stage unique release assets
         if: steps.skip_release.outputs.skip != 'true'
-        run: |
-          set -euo pipefail
-          STAGE=artifacts/release-staging
-          rm -rf "$STAGE"
-          mkdir -p "$STAGE"
-          while IFS= read -r -d '' f; do
-            base=$(basename "$f")
-            # Skip nested junk / already-staged paths
-            case "$base" in
-              builder-debug.yml) continue ;;
-            esac
-            dest="$STAGE/$base"
-            if [ -e "$dest" ]; then
-              echo "ERROR: duplicate release asset basename '$base'"
-              echo "  existing: $dest"
-              echo "  incoming: $f"
-              echo "List of staged so far:"
-              ls -la "$STAGE"
-              exit 1
-            fi
-            cp -a "$f" "$dest"
-            echo "staged $base <- $f"
-          done < <(
-            find artifacts -type f \
-              \( -name '*.dmg' -o -name '*.zip' -o -name '*.exe' -o \
-                 -name '*.yml' -o -name '*.blockmap' \) \
-              ! -path 'artifacts/release-staging/*' \
-              -print0
-          )
-          COUNT=$(find "$STAGE" -type f | wc -l | tr -d ' ')
-          echo "Staged ${COUNT} unique asset(s) for upload:"
-          ls -la "$STAGE"
+        run: python3 scripts/stage-release-assets.py
 
       - name: Publish GitHub release
         if: steps.skip_release.outputs.skip != 'true'
-        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3.0.0
-        with:
-          tag_name: ${{ steps.version.outputs.tag }}
-          name: ${{ steps.notes.outputs.name }}
-          body: ${{ steps.notes.outputs.body }}
-          # Body already includes API-generated notes; avoid double-append
-          generate_release_notes: false
-          make_latest: true
-          # Existing tag is OK (retry after failed publish); do not require a new tag.
-          target_commitish: ${{ github.event.workflow_run.head_sha }}
-          fail_on_unmatched_files: true
-          overwrite_files: true
-          files: |
-            artifacts/release-staging/*
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TITLE: ${{ steps.notes.outputs.name }}
+          RELEASE_BODY: ${{ steps.notes.outputs.body }}
+          RELEASE_TAG: ${{ steps.version.outputs.tag }}
+          RELEASE_TARGET: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          BODY_FILE=$(mktemp)
+          # Body comes from RELEASE_BODY env (set above); do not put Actions expression markers in this script.
+          printf '%s\n' "$RELEASE_BODY" >"$BODY_FILE"
+
+          # Avoid bash array length syntax and Actions expression markers in this block.
+          FILE_LIST=$(mktemp)
+          find artifacts/release-staging -type f | sort >"$FILE_LIST"
+          FILE_COUNT=$(wc -l <"$FILE_LIST" | tr -d ' ')
+          if [ "$FILE_COUNT" -eq 0 ]; then
+            echo "ERROR: nothing in artifacts/release-staging"
+            exit 1
+          fi
+          echo "Uploading ${FILE_COUNT} asset(s) to ${RELEASE_TAG} (target ${RELEASE_TARGET})"
+          cat "$FILE_LIST"
+
+          # shellcheck disable=SC2046
+          set -- $(cat "$FILE_LIST")
+
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "Release ${RELEASE_TAG} already exists — uploading/clobbering assets"
+            gh release upload "$RELEASE_TAG" "$@" --clobber
+            gh release edit "$RELEASE_TAG" \
+              --title "$RELEASE_TITLE" \
+              --notes-file "$BODY_FILE" \
+              --latest
+          else
+            echo "Creating release ${RELEASE_TAG}"
+            gh release create "$RELEASE_TAG" "$@" \
+              --target "$RELEASE_TARGET" \
+              --title "$RELEASE_TITLE" \
+              --notes-file "$BODY_FILE" \
+              --latest
+          fi
+
+          echo "Release assets after upload:"
+          gh release view "$RELEASE_TAG" --json assets --jq '.assets[].name' | sort
+          rm -f "$BODY_FILE" "$FILE_LIST"
