@@ -1,6 +1,10 @@
 import { app } from "electron/main";
 import { cpus, freemem, totalmem } from "node:os";
-import type { RendererCountdownTimerCounters } from "../../shared/benchmark-types.js";
+import type {
+  BatteryBenchmarkCounters,
+  BenchmarkScenario,
+  RendererCountdownTimerCounters,
+} from "../../shared/benchmark-types.js";
 
 export type MainTimerCounters = {
   readonly timerResourcesCreated: number;
@@ -12,6 +16,7 @@ export type MainTimerCounters = {
 export type BenchmarkTimerCounters = {
   readonly main: MainTimerCounters;
   readonly rendererCountdown: RendererCountdownTimerCounters;
+  readonly battery: BatteryBenchmarkCounters;
 };
 
 export type BenchmarkContext = {
@@ -41,6 +46,16 @@ export type IdleSample = {
 export type BenchmarkArtifact = {
   readonly schemaVersion: 1;
   readonly label: string;
+  /**
+   * Additive v1 scenario metadata (idle default). Harness and unit guards
+   * treat missing scenario as idle for older artifacts.
+   */
+  readonly scenario: BenchmarkScenario;
+  readonly scenarioMeta: {
+    readonly name: BenchmarkScenario;
+    /** Minutes for active-session timed run; null for idle. */
+    readonly sessionDurationMinutes: number | null;
+  };
   readonly timestamps: {
     readonly startedAt: string;
     readonly completedAt: string;
