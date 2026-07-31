@@ -39,8 +39,8 @@ Workflow definitions for lint/test/build, production release publishing, and dev
 - It downloads `dist-mac-arm64`, `dist-mac-x64`, `dist-win-x64`, and `dist-win-arm64` artifacts from that CI run.
 - It verifies at least one DMG, ZIP, or EXE before `softprops/action-gh-release` publishes.
 - It **merges** multi-arch `latest-mac.yml` / `latest.yml` via `scripts/merge-latest-yml.ts` before attaching release assets (unique basenames on GitHub).
-- It **flattens** assets into `artifacts/release-staging/`: merged `latest-mac.yml` / `latest.yml` only from `update-feed/`; binaries from arch dirs. Identical basename collisions are skipped; unqualified names yield to arch-qualified (`-arm64` / `-x64`); true conflicts fail closed.
-- Production release uses `make_latest: true` and `target_commitish` = CI head SHA.
+- It **flattens** assets into `artifacts/release-staging/` via Python: feeds only from `update-feed/`; binaries from arch dirs. Basename collisions never fail the job (skip identical / prefer arch-qualified / warn-and-keep-first).
+- Publish uses `gh release create|upload --clobber` (not softprops) so existing tags without assets can recover cleanly.
 - Release concurrency is global `release` with `cancel-in-progress: false`.
 - **CD workflow file must exist on the default branch (`main`)** for `workflow_run` to fire.
 
