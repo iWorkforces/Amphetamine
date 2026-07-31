@@ -3,7 +3,7 @@ import {
   parseLatestYml,
   mergeFeeds,
   serializeLatestYml,
-} from "../../scripts/merge-latest-yml.ts";
+} from "../../scripts/merge-latest-yml.js";
 
 const ARM64 = `version: 1.10.2
 files:
