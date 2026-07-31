@@ -20,14 +20,14 @@ Main process owns app lifecycle, BrowserWindows, tray, typed IPC registration, a
 | `sleep-prevention.ts` | Façade over `infrastructure/sleep` (`SleepBlockerPort`) |
 | `session-timer.ts` | Façade over `application/session` engine; **handle injection only** |
 | `global-shortcut.ts` | Façade over RegisterAppShortcut + GlobalShortcutPort |
-| `auto-launch.ts` | Login items + `AutoLaunchPort` view |
+| `auto-launch.ts` | Login items + `AutoLaunchPort` view (port lives here, not infrastructure) |
 | `battery-monitor.ts` | Threshold **detector** only; percent via `platform/battery-percent` |
 | `auto-updater.ts` | IPC registration + re-exports of hybrid policy (`infrastructure/updater`) |
 | `auto-updater-utils.ts` | Façade over pure release-URL helpers + package repo lookup |
 | `settings-window.ts` | Thin re-export of WindowGraph settings APIs |
 | `about-window.ts` | Thin re-export of WindowGraph about APIs (built `about.html`) |
-| `security.ts` | WebContents hardening / navigation allowlist |
-| `constants.ts` | Window sizes, timeouts, UI timing constants |
+| `security.ts` | WebContents navigation hardening; default deny-all `window.open` |
+| `constants.ts` | Window sizes, timeouts, tray/menu UI strings |
 | `platform/` | OS adapters; see `platform/AGENTS.md` |
 | `utils/broadcast.ts` | Typed main→renderer push helper (`PushChannel`) |
 | `utils/packageInfo.ts` | Cached package metadata guard |
@@ -69,7 +69,9 @@ Do not register a second `before-quit` handler on settings or other modules.
 - Raw `ipcMain.on()` only with explicit `validateSender()`.
 - Packaged senders: exact-match NFC-normalized `lib/renderer/{index,settings,about}.html`; dev: `DEV_ORIGINS`.
 - Renderer pushes: `broadcastToWindows<K>()`; skip destroyed windows.
-- About external links: `setWindowOpenHandler` allowlists `https://github.com/*` only.
+- `hardenWebContents` blocks off-allowlist navigation and **denies all** `window.open` by default.
+- About external links: WindowGraph overrides `setWindowOpenHandler` to allowlist `https://github.com/*` via `shell.openExternal` (still returns `deny` so no popup BrowserWindow).
+- All three windows use shared preload via `createSecureWebPreferences({ preload })`.
 
 ## Timing and state
 
@@ -84,7 +86,7 @@ Do not register a second `before-quit` handler on settings or other modules.
 
 - Icon = **effective** active (`getEffectiveActive`).
 - Menu checkbox = **user intent** (`getPreventSleep`) only.
-- Menu: Prevent Sleep, Settings, About, Check for Updates…, Quit.
+- Menu: Prevent Sleep, Settings, About, Check for Updates…, Quit (strings in `constants.ts`).
 - Icons: `nativeImage.createFromPath()` only (asar-safe). Cleanup calls `tray.destroy()`.
 
 ## Platform

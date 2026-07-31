@@ -34,9 +34,10 @@ Electron renderer web context. Vanilla TypeScript only. Three built entries (Rsb
 
 - Built entry `about.html` (Rsbuild env `about`); loaded by WindowGraph with shared preload.
 - Bootstrap calls `window.api.app.getAbout()` for product name, version, description, repository.
-- Icon click uses `window.open(repository)` — main allowlists `https://github.com/*` via `setWindowOpenHandler`.
+- Icon click uses `window.open(repository)` — main allowlists `https://github.com/*` via `setWindowOpenHandler` + `shell.openExternal`.
 - Close uses `window.close()`.
 - Hero icon: bundled `settings-hero-icon.png` via `import.meta.url` (not a main-process data URI).
+- No separate `constants.ts`; copy comes from `AboutInfo` + static HTML structure.
 
 ## Countdown
 

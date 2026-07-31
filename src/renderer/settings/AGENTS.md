@@ -36,6 +36,7 @@ Separate Rsbuild renderer entry for the settings BrowserWindow. Vanilla TypeScri
 - Debounced (~300ms); queue latest snapshot if a save is in flight.
 - Display save state via constants; errors use `textContent` on the error element.
 - Validation is enforced on main (domain validators); do not reimplement full validation in UI.
+- `settings.set` returns `{ settings, rejectedKeys }` — surface rejected keys if present.
 
 ## Shortcut recorder
 
