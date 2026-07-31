@@ -42,6 +42,7 @@ Workflow definitions for lint/test/build, production release publishing, and dev
 - Staging: `python3 scripts/stage-release-assets.py` → `artifacts/release-staging/` (feeds from `update-feed/`; binaries from arch dirs; collisions never fail the job).
 - Publish uses `gh release create|upload --clobber` (not softprops) so existing tags without assets can recover cleanly.
 - Do **not** embed large Python heredocs in `cd.yml` — GitHub can reject the workflow file as invalid YAML.
+- Do **not** put Actions expression markers (dollar-brace-brace) in `run:` script comments; the workflow linter still parses them (`An expression was expected`).
 - Release concurrency is global `release` with `cancel-in-progress: false`.
 - **CD workflow file must exist on the default branch (`main`)** for `workflow_run` to fire.
 
