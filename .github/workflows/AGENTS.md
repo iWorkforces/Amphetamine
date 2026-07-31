@@ -39,8 +39,9 @@ Workflow definitions for lint/test/build, production release publishing, and dev
 - It downloads `dist-mac-arm64`, `dist-mac-x64`, `dist-win-x64`, and `dist-win-arm64` artifacts from that CI run.
 - It verifies at least one DMG, ZIP, or EXE before `softprops/action-gh-release` publishes.
 - It **merges** multi-arch `latest-mac.yml` / `latest.yml` via `scripts/merge-latest-yml.ts` before attaching release assets (unique basenames on GitHub).
-- It **flattens** assets into `artifacts/release-staging/` via Python: feeds only from `update-feed/`; binaries from arch dirs. Basename collisions never fail the job (skip identical / prefer arch-qualified / warn-and-keep-first).
+- Staging: `python3 scripts/stage-release-assets.py` → `artifacts/release-staging/` (feeds from `update-feed/`; binaries from arch dirs; collisions never fail the job).
 - Publish uses `gh release create|upload --clobber` (not softprops) so existing tags without assets can recover cleanly.
+- Do **not** embed large Python heredocs in `cd.yml` — GitHub can reject the workflow file as invalid YAML.
 - Release concurrency is global `release` with `cancel-in-progress: false`.
 - **CD workflow file must exist on the default branch (`main`)** for `workflow_run` to fire.
 
