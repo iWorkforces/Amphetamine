@@ -13,6 +13,7 @@ type BenchmarkArgs = {
   readonly label: string;
   readonly outPath: string;
   readonly baselinePath: string | null;
+  readonly scenario: "idle" | "active-session";
 };
 
 type ElectronRunResult = {
@@ -65,6 +66,7 @@ function parseArgs(argv: readonly string[]): BenchmarkArgs {
   let label = "benchmark";
   let outPath: string | null = null;
   let baselinePath: string | null = null;
+  let scenario: "idle" | "active-session" = "idle";
 
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
@@ -77,6 +79,13 @@ function parseArgs(argv: readonly string[]): BenchmarkArgs {
     } else if (arg === "--baseline") {
       baselinePath = readOptionValue(argv, index, arg);
       index += 1;
+    } else if (arg === "--scenario") {
+      const value = readOptionValue(argv, index, arg);
+      if (value !== "idle" && value !== "active-session") {
+        throw new UsageError(`Invalid --scenario ${value}; expected idle|active-session.`);
+      }
+      scenario = value;
+      index += 1;
     } else {
       throw new UsageError(`Unknown argument: ${arg ?? ""}`);
     }
@@ -85,7 +94,7 @@ function parseArgs(argv: readonly string[]): BenchmarkArgs {
   if (outPath === null) {
     throw new UsageError("Missing required --out <path> argument.");
   }
-  return { label, outPath, baselinePath };
+  return { label, outPath, baselinePath, scenario };
 }
 
 function readOptionValue(argv: readonly string[], index: number, flag: string): string {
@@ -126,6 +135,7 @@ function buildBenchmarkEnv(
     AMPHETAMINE_BENCHMARK: "1",
     AMPHETAMINE_BENCHMARK_LABEL: args.label,
     AMPHETAMINE_BENCHMARK_USER_DATA: userDataPath,
+    AMPHETAMINE_BENCHMARK_SCENARIO: args.scenario,
     ELECTRON_DISABLE_SECURITY_WARNINGS: "true",
   };
 }
@@ -229,7 +239,7 @@ main().catch((error: unknown) => {
   if (error instanceof UsageError) {
     process.stderr.write(`${error.message}\n`);
     process.stderr.write(
-      "Usage: bun run benchmark:performance -- --label <label> --out <path> [--baseline <path>]\n",
+      "Usage: bun run benchmark:performance -- --label <label> --out <path> [--baseline <path>] [--scenario idle|active-session]\n",
     );
     process.exit(2);
   }

@@ -626,6 +626,122 @@ describe("renderer popover (index.ts)", () => {
     });
   });
 
+  describe("session action subtree stability", () => {
+    it("preserves cancel-button node identity across same-mode status pushes and ticks", async () => {
+      mockApi.session.getStatus.mockResolvedValue(timedSessionStatus(30 * 60));
+      mockApi.session.cancel.mockResolvedValue({ cancelled: true });
+      await bootRenderer();
+      await vi.advanceTimersByTimeAsync(16);
+
+      const cancelBefore = document.getElementById("cancel-session-action");
+      expect(cancelBefore).not.toBeNull();
+
+      const sessionCallback = mockApi.onSessionStatusUpdate.mock.calls[0]?.[0];
+      expect(sessionCallback).toBeDefined();
+      // Same running mode with updated remaining — must not rebuild actions.
+      sessionCallback?.(timedSessionStatus(29 * 60));
+      await vi.advanceTimersByTimeAsync(16);
+      sessionCallback?.(timedSessionStatus(28 * 60));
+      await vi.advanceTimersByTimeAsync(60_000);
+      await vi.advanceTimersByTimeAsync(16);
+
+      const cancelAfter = document.getElementById("cancel-session-action");
+      expect(cancelAfter).toBe(cancelBefore);
+
+      cancelAfter?.click();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(mockApi.session.cancel).toHaveBeenCalledTimes(1);
+    });
+
+    it("replaces chips with cancel on idle→running and restores chips on running→idle", async () => {
+      mockApi.session.getStatus.mockResolvedValue(null);
+      mockApi.session.start.mockResolvedValue({
+        ok: true,
+        startedAt: Date.now(),
+        durationMinutes: 30,
+        expiresAt: Date.now() + 30 * 60 * 1000,
+      });
+      await bootRenderer();
+      await vi.advanceTimersByTimeAsync(16);
+
+      const chipsBefore = document.querySelectorAll(".session-chip:not(.session-chip--cancel)");
+      expect(chipsBefore.length).toBeGreaterThan(0);
+      expect(document.getElementById("cancel-session-action")).toBeNull();
+
+      const sessionCallback = mockApi.onSessionStatusUpdate.mock.calls[0]?.[0];
+      sessionCallback?.(timedSessionStatus());
+      await vi.advanceTimersByTimeAsync(16);
+      expect(document.getElementById("cancel-session-action")).not.toBeNull();
+      expect(document.querySelectorAll(".session-chip:not(.session-chip--cancel)").length).toBe(0);
+
+      sessionCallback?.({
+        isRunning: false,
+        startedAt: null,
+        expiresAt: null,
+        remainingSeconds: null,
+        durationMinutes: null,
+      });
+      await vi.advanceTimersByTimeAsync(16);
+      expect(document.getElementById("cancel-session-action")).toBeNull();
+      expect(document.querySelectorAll(".session-chip:not(.session-chip--cancel)").length).toBeGreaterThan(
+        0,
+      );
+    });
+
+    it("chip click invokes session.start exactly once via delegation", async () => {
+      mockApi.session.getStatus.mockResolvedValue(null);
+      mockApi.session.start.mockResolvedValue({
+        ok: true,
+        startedAt: Date.now(),
+        durationMinutes: 15,
+        expiresAt: Date.now() + 15 * 60 * 1000,
+      });
+      await bootRenderer();
+      await vi.advanceTimersByTimeAsync(16);
+
+      const chip = document.querySelector<HTMLButtonElement>(
+        '.session-chip[data-duration="15"]',
+      );
+      expect(chip).not.toBeNull();
+      chip?.click();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(mockApi.session.start).toHaveBeenCalledTimes(1);
+      expect(mockApi.session.start).toHaveBeenCalledWith(15);
+    });
+
+    it("duplicate hide signals clear countdown only once", async () => {
+      mockApi.session.getStatus.mockResolvedValue(timedSessionStatus());
+      const setIntervalSpy = vi.spyOn(globalThis, "setInterval");
+      const clearIntervalSpy = vi.spyOn(globalThis, "clearInterval");
+      await bootRenderer();
+      await vi.advanceTimersByTimeAsync(16);
+
+      const intervalId = setIntervalSpy.mock.results[0]?.value as ReturnType<typeof setInterval>;
+      expect(intervalId).toBeDefined();
+      clearIntervalSpy.mockClear();
+
+      const windowHideCallback = mockApi.onWindowHide.mock.calls[0]?.[0];
+      expect(windowHideCallback).toBeDefined();
+      windowHideCallback?.();
+      // First hide clears the countdown interval exactly once.
+      expect(clearIntervalSpy).toHaveBeenCalledWith(intervalId);
+      const clearsAfterFirstHide = clearIntervalSpy.mock.calls.filter(
+        (c) => c[0] === intervalId,
+      ).length;
+      expect(clearsAfterFirstHide).toBe(1);
+
+      setDocumentVisibility("hidden");
+      document.dispatchEvent(new Event("visibilitychange"));
+      windowHideCallback?.();
+
+      // Duplicate hide / visibilitychange must not clear the same interval again.
+      const clearsAfterDupes = clearIntervalSpy.mock.calls.filter(
+        (c) => c[0] === intervalId,
+      ).length;
+      expect(clearsAfterDupes).toBe(1);
+    });
+  });
+
   describe("session display", () => {
     it("renders seconds when less than a minute", async () => {
       mockApi.settings.get.mockResolvedValue({ ...DEFAULT_SETTINGS,

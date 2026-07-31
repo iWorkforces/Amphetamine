@@ -30,6 +30,12 @@ vi.mock("../../src/main/platform/index.js", async (importOriginal) => {
   };
 });
 
+const mockIsBenchmarkMode = vi.hoisted(() => vi.fn(() => false));
+vi.mock("../../src/infrastructure/benchmark/benchmark-env.js", () => ({
+  isBenchmarkMode: () => mockIsBenchmarkMode() as boolean,
+  BENCHMARK_ENV_NAME: "AMPHETAMINE_BENCHMARK",
+}));
+
 describe("battery-monitor", () => {
   let handle: BatteryMonitorHandle;
   let mockGetThreshold: ReturnType<typeof vi.fn<() => number>>;
@@ -449,6 +455,92 @@ describe("battery-monitor", () => {
       expect(mockPowerMonitor.off).toHaveBeenCalledWith("resume", expect.any(Function));
       expect(clearIntervalSpy).toHaveBeenCalled();
       clearIntervalSpy.mockRestore();
+    });
+  });
+
+  describe("benchmark battery counters", () => {
+    beforeEach(async () => {
+      mockIsBenchmarkMode.mockReturnValue(true);
+      vi.resetModules();
+      const mod = await import("../../src/main/battery-monitor.js");
+      mod.resetBatteryBenchmarkCounters();
+      handle = mod.createBatteryMonitor({
+        getThreshold: () => mockGetThreshold(),
+        onAutoStop: () => mockOnAutoStop(),
+        isPreventingSleep: () => mockIsActive(),
+      });
+    });
+
+    afterEach(() => {
+      mockIsBenchmarkMode.mockReturnValue(false);
+    });
+
+    it("records scheduled and completedRead on active gated check", async () => {
+      mockGetThreshold.mockReturnValue(20);
+      mockIsActive.mockReturnValue(true);
+      mockPowerMonitor.isOnBatteryPower.mockReturnValue(true);
+      mockGetBatteryPercent.mockResolvedValue(50);
+
+      await handle.initBatteryMonitoring();
+      // startPeriodic at init
+      const mod = await import("../../src/main/battery-monitor.js");
+      expect(mod.getBatteryBenchmarkCounters().scheduled).toBeGreaterThanOrEqual(1);
+
+      // Fire on-battery listener for a check
+      const onBattery = mockPowerMonitor.on.mock.calls.find((c) => c[0] === "on-battery")?.[1] as
+        | (() => void)
+        | undefined;
+      onBattery?.();
+      await vi.advanceTimersByTimeAsync(0);
+      await Promise.resolve();
+      await Promise.resolve();
+
+      const counters = mod.getBatteryBenchmarkCounters();
+      expect(counters.callbackAttempted).toBeGreaterThanOrEqual(1);
+      expect(counters.completedRead).toBeGreaterThanOrEqual(1);
+    });
+
+    it("records guardedSkipped when threshold disabled (no completed read)", async () => {
+      mockGetThreshold.mockReturnValue(0);
+      mockIsActive.mockReturnValue(true);
+      mockPowerMonitor.isOnBatteryPower.mockReturnValue(true);
+      const mod = await import("../../src/main/battery-monitor.js");
+      mod.resetBatteryBenchmarkCounters();
+
+      await handle.initBatteryMonitoring();
+      const onBattery = mockPowerMonitor.on.mock.calls.find((c) => c[0] === "on-battery")?.[1] as
+        | (() => void)
+        | undefined;
+      onBattery?.();
+      await vi.advanceTimersByTimeAsync(0);
+      await Promise.resolve();
+      await Promise.resolve();
+
+      const counters = mod.getBatteryBenchmarkCounters();
+      expect(counters.callbackAttempted).toBeGreaterThanOrEqual(1);
+      expect(counters.guardedSkipped).toBeGreaterThanOrEqual(1);
+      expect(counters.completedRead).toBe(0);
+      // No periodic schedule when threshold disabled
+      expect(counters.scheduled).toBe(0);
+    });
+
+    it("returns zeros when not in benchmark mode", async () => {
+      mockIsBenchmarkMode.mockReturnValue(false);
+      vi.resetModules();
+      const mod = await import("../../src/main/battery-monitor.js");
+      const h = mod.createBatteryMonitor({
+        getThreshold: () => 20,
+        onAutoStop: () => {},
+        isPreventingSleep: () => true,
+      });
+      mockPowerMonitor.isOnBatteryPower.mockReturnValue(true);
+      await h.initBatteryMonitoring();
+      expect(mod.getBatteryBenchmarkCounters()).toEqual({
+        scheduled: 0,
+        callbackAttempted: 0,
+        guardedSkipped: 0,
+        completedRead: 0,
+      });
     });
   });
 });

@@ -14,10 +14,10 @@ Implementation files remain importable for focused unit tests (e.g. `battery-per
 
 | File | Role |
 |------|------|
-| `index.ts` | Public API surface |
+| `index.ts` | Public API surface (re-exports only) |
 | `os.ts` | Pure identity: `isDarwin`, `isWin32`, `resolvePlatformId`, `isSupportedPlatform` |
 | `shell.ts` | Activation policy, Dock icon, login-item settings builders |
-| `window-chrome.ts` | BrowserWindow chrome fragments (popover / settings / about) |
+| `window-chrome.ts` | BrowserWindow chrome fragments (popover / settings / about) + `appIconFileName` |
 | `battery-percent.ts` | Charge percent: pmset (darwin) / PowerShell CIM (win32) |
 
 Shortcut defaults, reserved keys, and accelerator validation live in domain validators + application shortcut registration; settings UI labels use preload `platform.os`.
@@ -36,17 +36,25 @@ Shortcut defaults, reserved keys, and accelerator validation live in domain vali
 | Concern | Call site | Via |
 |---------|-----------|-----|
 | Tray-only boot | `app-shell.ts` | `enterTrayOnlyMode()` |
-| Settings Dock / foreground | WindowGraph settings path | shell helpers |
+| Settings Dock + foreground | WindowGraph `createSettingsWindow` | `enterForegroundMode`, `setDockIcon` on show; `enterTrayOnlyMode` on close |
 | Popover / settings / about chrome | `process/window-graph.ts` | `*WindowChrome()` |
 | Login items | `auto-launch.ts` | `buildLoginItemSettings` |
 | Battery % | `battery-monitor.ts` | `getBatteryPercent` |
 | Updater dialog presentation | composition → hybrid updater hooks | `enterForegroundMode` / `enterTrayOnlyMode` |
+| App / window icons | WindowGraph | `appIconFileName`, `settings-hero-icon.png` |
+
+## Window chrome summary
+
+| Surface | macOS | Windows |
+|---------|-------|---------|
+| Popover | vibrancy popover, transparent, `skipTaskbar: true` | opaque frameless, `skipTaskbar: true` |
+| Settings / About | vibrancy under-window, Dock visible | mica material, taskbar visible |
 
 ## Battery percent
 
 - `null` means unavailable — monitor must not auto-stop.
 - darwin: `/usr/bin/pmset -g batt` → `parsePmsetOutput` (requires `InternalBattery`).
-- win32: `powershell.exe` + `Win32_Battery.EstimatedChargeRemaining`.
+- win32: `powershell.exe` + `Win32_Battery.EstimatedChargeRemaining` → `parsePowerShellBatteryOutput`.
 - Never call `pmset` or PowerShell outside `battery-percent.ts`.
 
 ## Anti-Patterns

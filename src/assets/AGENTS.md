@@ -13,6 +13,8 @@ Checked-in PNG assets consumed by Electron main/renderer. Most files are generat
 | `tray-icon-inactive-light.png` / `tray-icon-inactive-light@2x.png` | `scripts/generate-coffee-tray-icons.mjs` | Inactive tray icon on light menu bar |
 | `tray-iconTemplate.png` / `tray-iconTemplate@2x.png` | Legacy/template asset | Not used by current `tray.ts` lookup |
 
+Root `assets/` (repo top-level) holds marketing screenshots for README — not runtime Electron assets.
+
 ## Couplings
 
 - `src/main/tray.ts` computes `tray-icon-${statePrefix}${suffix}.png` and `@2x` variants from `nativeTheme.shouldUseDarkColors` + **effective active** from composition tray deps (`getEffectiveActive` = domain OR of intent and session).

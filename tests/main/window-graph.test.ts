@@ -58,6 +58,9 @@ vi.mock("../../src/main/utils/packageInfo.js", () => ({
   }),
 }));
 
+const mockAcquireUtility = vi.hoisted(() => vi.fn());
+const mockReleaseUtility = vi.hoisted(() => vi.fn());
+
 vi.mock("../../src/main/platform/index.js", () => ({
   popoverWindowChrome: () => ({ skipTaskbar: true }),
   settingsWindowChrome: () => ({ skipTaskbar: false }),
@@ -66,6 +69,9 @@ vi.mock("../../src/main/platform/index.js", () => ({
   enterForegroundMode: vi.fn(),
   enterTrayOnlyMode: vi.fn(),
   setDockIcon: vi.fn(),
+  acquireUtilityForeground: (...args: unknown[]) => mockAcquireUtility(...args),
+  releaseUtilityForeground: (...args: unknown[]) => mockReleaseUtility(...args),
+  setUtilityDockIcon: vi.fn(),
 }));
 
 vi.mock("../../src/main/utils/broadcast.js", () => ({
@@ -139,5 +145,116 @@ describe("window-graph", () => {
     destroyAllWindows();
     expect(mockClose).toHaveBeenCalled();
     expect(mockDestroy).toHaveBeenCalled();
+  });
+
+  describe("popover hide coalescing", () => {
+    it("blur/minimize bursts create at most one pending hide and one broadcast", async () => {
+      vi.useFakeTimers();
+      const { createPopoverWindow, hasPendingPopoverHide } = await import(
+        "../../src/main/process/window-graph.js"
+      );
+      const { broadcastToWindows } = await import("../../src/main/utils/broadcast.js");
+      createPopoverWindow({ isQuitting: () => false });
+
+      const blurHandler = mockOn.mock.calls.find((c) => c[0] === "blur")?.[1] as
+        | (() => void)
+        | undefined;
+      const minimizeHandler = mockOn.mock.calls.find((c) => c[0] === "minimize")?.[1] as
+        | (() => void)
+        | undefined;
+      expect(blurHandler).toBeTypeOf("function");
+      expect(minimizeHandler).toBeTypeOf("function");
+
+      // Force non-dev packaged-like hide path: isDev is false when packaged or benchmark.
+      // blur handler checks !isDev — constants isDev is based on app.isPackaged.
+      // In this mock app.isPackaged is false so isDev may be true and blur no-ops.
+      // minimize always schedules.
+      minimizeHandler?.();
+      minimizeHandler?.();
+      minimizeHandler?.();
+
+      expect(hasPendingPopoverHide()).toBe(true);
+      expect(vi.mocked(broadcastToWindows)).toHaveBeenCalledTimes(1);
+      expect(mockHide).not.toHaveBeenCalled();
+
+      await vi.advanceTimersByTimeAsync(200);
+      expect(mockHide).toHaveBeenCalledTimes(1);
+      expect(hasPendingPopoverHide()).toBe(false);
+      vi.useRealTimers();
+    });
+
+    it("showing before hide expiry cancels stale hide", async () => {
+      vi.useFakeTimers();
+      const { createPopoverWindow, hasPendingPopoverHide } = await import(
+        "../../src/main/process/window-graph.js"
+      );
+      createPopoverWindow({ isQuitting: () => false });
+
+      const minimizeHandler = mockOn.mock.calls.find((c) => c[0] === "minimize")?.[1] as
+        | (() => void)
+        | undefined;
+      const showHandler = mockOn.mock.calls.find((c) => c[0] === "show")?.[1] as
+        | (() => void)
+        | undefined;
+      expect(showHandler).toBeTypeOf("function");
+
+      minimizeHandler?.();
+      expect(hasPendingPopoverHide()).toBe(true);
+      showHandler?.();
+      expect(hasPendingPopoverHide()).toBe(false);
+
+      await vi.advanceTimersByTimeAsync(500);
+      expect(mockHide).not.toHaveBeenCalled();
+      vi.useRealTimers();
+    });
+
+    it("destroyAllWindows clears pending hide timer", async () => {
+      vi.useFakeTimers();
+      const { createPopoverWindow, destroyAllWindows, hasPendingPopoverHide } = await import(
+        "../../src/main/process/window-graph.js"
+      );
+      createPopoverWindow({ isQuitting: () => false });
+      const minimizeHandler = mockOn.mock.calls.find((c) => c[0] === "minimize")?.[1] as
+        | (() => void)
+        | undefined;
+      minimizeHandler?.();
+      expect(hasPendingPopoverHide()).toBe(true);
+      destroyAllWindows();
+      expect(hasPendingPopoverHide()).toBe(false);
+      vi.useRealTimers();
+    });
+  });
+
+  describe("utility foreground pairing", () => {
+    it("does not release foreground if closed before ready-to-show", async () => {
+      const { createSettingsWindow } = await import("../../src/main/process/window-graph.js");
+      createSettingsWindow();
+
+      const closedHandler = mockOn.mock.calls.find((c) => c[0] === "closed")?.[1] as
+        | (() => void)
+        | undefined;
+      expect(closedHandler).toBeTypeOf("function");
+      // Never fire ready-to-show → heldForeground stays false
+      closedHandler?.();
+
+      expect(mockAcquireUtility).not.toHaveBeenCalled();
+      expect(mockReleaseUtility).not.toHaveBeenCalled();
+    });
+
+    it("acquires on ready-to-show and releases once on closed", async () => {
+      mockOnce.mockImplementation((event: string, cb: () => void) => {
+        if (event === "ready-to-show") cb();
+      });
+      const { createSettingsWindow } = await import("../../src/main/process/window-graph.js");
+      createSettingsWindow();
+
+      expect(mockAcquireUtility).toHaveBeenCalledTimes(1);
+
+      const closedHandler = mockOn.mock.calls.find((c) => c[0] === "closed")?.[1] as
+        | (() => void)
+        | undefined;
+      closedHandler?.();
+      expect(mockReleaseUtility).toHaveBeenCalledTimes(1);
+    });
   });
 });

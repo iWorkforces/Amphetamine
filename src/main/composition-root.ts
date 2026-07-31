@@ -11,7 +11,6 @@ import {
   getSettings,
   getSettingsStore,
   onSettingsChanged,
-  updateSettings,
 } from "./settings.js";
 import { getAutoLaunchPort } from "./auto-launch.js";
 import {
@@ -29,17 +28,20 @@ import {
   type SessionTimerHandle,
 } from "./session-timer.js";
 import type { TrayDeps } from "./tray.js";
-import { createSettingsWindow, closeSettingsWindow, isSettingsWindowOpen } from "./settings-window.js";
+import { createSettingsWindow, closeSettingsWindow } from "./settings-window.js";
 import { closeAboutWindow } from "./about-window.js";
 import { registerAutoUpdaterIpc } from "./auto-updater.js";
-import { enterForegroundMode, enterTrayOnlyMode } from "./platform/index.js";
+import { acquireUtilityForeground, releaseUtilityForeground } from "./platform/index.js";
 import { getPackageInfo } from "./utils/packageInfo.js";
 import { createRecomputeSleepPrevention } from "../application/sleep/recompute-sleep-prevention.js";
 import { createTogglePreventSleep } from "../application/sleep/toggle-prevent-sleep.js";
 import { createHandleLowBatteryAutoStop } from "../application/battery/handle-low-battery-auto-stop.js";
+import { createGetSettings } from "../application/settings/get-settings.js";
+import { createUpdateSettings } from "../application/settings/update-settings.js";
 import { createSettingsReactionService } from "../application/settings/settings-reaction-service.js";
 import { createElectronLogger } from "../infrastructure/logging/electron-logger.js";
 import { createBroadcastNotifier } from "../infrastructure/notification/broadcast-notifier.js";
+import { createOsUserNotifier } from "../infrastructure/notification/os-user-notifier.js";
 import { createElectronUpdaterPort } from "../infrastructure/updater/electron-updater-port.js";
 import { broadcastToWindows } from "./utils/broadcast.js";
 import type { IpcDeps } from "./ipc.js";
@@ -73,16 +75,18 @@ export function createAppComposition(): AppComposition {
 
   const logger = createElectronLogger();
   const notifier = createBroadcastNotifier(broadcastToWindows);
+  const userNotifier = createOsUserNotifier(logger);
+  let lastBatteryPercent: number | null = null;
   const updaterPort = createElectronUpdaterPort(notifier, {
     getRepositoryUrl: () => getPackageInfo().repository,
     prepareDialogPresentation: () => {
-      enterForegroundMode();
+      acquireUtilityForeground();
       app.focus({ steal: true });
     },
     restoreTrayPresentation: () => {
-      if (!isSettingsWindowOpen()) {
-        enterTrayOnlyMode();
-      }
+      // Pair with prepareDialogPresentation acquire (dialog is not a BrowserWindow ref).
+      // Utility windows keep their own refs so Dock stays while Settings/About open.
+      releaseUtilityForeground();
     },
   });
 
@@ -123,8 +127,13 @@ export function createAppComposition(): AppComposition {
       sessionTimer?.cancelSession();
     },
     logger,
+    userNotifier,
+    getLastKnownPercent: () => lastBatteryPercent,
     logTag: "[composition]",
   });
+
+  const getSettingsUc = createGetSettings(getSettingsStore());
+  const updateSettingsUc = createUpdateSettings(getSettingsStore());
 
   const requireSessionTimer = (): SessionTimerHandle => {
     if (sessionTimer === null) {
@@ -158,6 +167,9 @@ export function createAppComposition(): AppComposition {
       getThreshold: () => getSettings().batteryThreshold,
       onAutoStop: handleLowBatteryAutoStop,
       isPreventingSleep,
+      onPercentSample: (percent) => {
+        lastBatteryPercent = percent;
+      },
     });
     void batteryMonitor
       .initBatteryMonitoring()
@@ -223,8 +235,8 @@ export function createAppComposition(): AppComposition {
   };
 
   const getIpcDeps = (): IpcDeps => ({
-    getSettings,
-    updateSettings,
+    getSettings: () => getSettingsUc(),
+    updateSettings: (partial) => updateSettingsUc(partial),
     createSettingsWindow,
     registerAutoUpdaterIpc,
     sessionTimer: {
@@ -237,6 +249,7 @@ export function createAppComposition(): AppComposition {
   const getTrayDeps = (): TrayDeps => ({
     getPreventSleep: () => getSettings().preventSleep,
     getEffectiveActive: () => effectiveActive,
+    getSessionActive: () => sessionActiveCache,
     togglePreventSleep,
     onSettingsChanged: (cb: () => void) =>
       onSettingsChanged((_settings) => {
@@ -250,6 +263,9 @@ export function createAppComposition(): AppComposition {
     },
     openSettings: () => createSettingsWindow(),
     checkForUpdates: () => updaterPort.checkNow(),
+    cancelSession: () => {
+      sessionTimer?.cancelSession();
+    },
   });
 
   const initUpdater = (): void => {

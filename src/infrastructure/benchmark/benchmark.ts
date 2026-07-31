@@ -5,8 +5,10 @@ import {
   type RendererCountdownTimerCounters,
 } from "../../shared/benchmark-types.js";
 import {
+  BENCHMARK_ACTIVE_SESSION_MINUTES,
   BENCHMARK_LABEL_ENV_NAME,
   BENCHMARK_USER_DATA_ENV_NAME,
+  getBenchmarkScenario,
   isBenchmarkMode,
 } from "./benchmark-env.js";
 import {
@@ -23,6 +25,9 @@ import {
   type LoadResult,
   type MainTimerCounters,
 } from "./benchmark-metrics.js";
+import {
+  getBatteryBenchmarkCounters,
+} from "../../main/battery-monitor.js";
 
 const RESULT_PREFIX = "AMPHETAMINE_BENCHMARK_RESULT:";
 const RENDERER_COUNTER_SCRIPT =
@@ -31,6 +36,7 @@ const LOAD_TIMEOUT_MS = 7000;
 const RESPONSIVENESS_SAMPLE_COUNT = 5;
 const IDLE_SAMPLE_COUNT = 6;
 const IDLE_SAMPLE_INTERVAL_MS = 250;
+const ACTIVE_SESSION_CONFIRM_TIMEOUT_MS = 5000;
 
 type MutableTimerState = {
   timerResourcesCreated: number;
@@ -85,9 +91,15 @@ export function installBenchmarkTimerCounters(): void {
 export async function runBenchmarkIfRequested(context: BenchmarkContext): Promise<void> {
   if (!isBenchmarkMode()) return;
 
+  const scenario = getBenchmarkScenario();
   const startedAt = new Date().toISOString();
   const startMs = performance.now();
   const popoverDomReady = await waitForWindowLoad(context.mainWindow);
+
+  if (scenario === "active-session") {
+    await prepareActiveSessionScenario(context.mainWindow);
+  }
+
   const idleSamples = await collectIdleSamples(startMs, context.mainWindow);
   const popoverShowHide = sampleSync(() => {
     context.mainWindow.showInactive();
@@ -100,6 +112,12 @@ export async function runBenchmarkIfRequested(context: BenchmarkContext): Promis
   const artifact: BenchmarkArtifact = {
     schemaVersion: 1,
     label: process.env[BENCHMARK_LABEL_ENV_NAME] ?? "benchmark",
+    scenario,
+    scenarioMeta: {
+      name: scenario,
+      sessionDurationMinutes:
+        scenario === "active-session" ? BENCHMARK_ACTIVE_SESSION_MINUTES : null,
+    },
     timestamps: { startedAt, completedAt: new Date().toISOString() },
     runtime: buildRuntimeInfo(),
     launchReadiness: {
@@ -124,6 +142,40 @@ export async function runBenchmarkIfRequested(context: BenchmarkContext): Promis
   app.quit();
 }
 
+/**
+ * Start a timed session via the existing renderer IPC bridge and confirm
+ * countdown counters are active before idle sampling begins.
+ */
+async function prepareActiveSessionScenario(win: BrowserWindow): Promise<void> {
+  // Ensure the popover is visible so the renderer countdown ticker arms.
+  win.showInactive();
+  await sleep(50);
+
+  const startScript = `window.api.session.start(${BENCHMARK_ACTIVE_SESSION_MINUTES})`;
+  const startResult: unknown = await win.webContents.executeJavaScript(startScript, true);
+  if (
+    typeof startResult !== "object" ||
+    startResult === null ||
+    !("ok" in startResult) ||
+    (startResult as { ok: unknown }).ok !== true
+  ) {
+    throw new Error(
+      `[benchmark] active-session scenario failed to start session: ${JSON.stringify(startResult)}`,
+    );
+  }
+
+  const deadline = performance.now() + ACTIVE_SESSION_CONFIRM_TIMEOUT_MS;
+  while (performance.now() < deadline) {
+    const counters = await readRendererCountdownTimerCounters(win);
+    if (counters.active || counters.starts > 0 || counters.schedules > 0) {
+      return;
+    }
+    await sleep(50);
+  }
+  // Countdown may still be zero if the window was not considered visible in test
+  // environments; status start success is the hard gate above.
+}
+
 function snapshotMainTimerCounters(): MainTimerCounters {
   return {
     timerResourcesCreated: timerState.timerResourcesCreated,
@@ -139,6 +191,7 @@ function snapshotTimerCounters(
   return {
     main: snapshotMainTimerCounters(),
     rendererCountdown,
+    battery: getBatteryBenchmarkCounters(),
   };
 }
 
@@ -165,8 +218,8 @@ async function sampleSettingsWindowReady(): Promise<readonly number[]> {
   );
   const samples: number[] = [];
   for (let index = 0; index < RESPONSIVENESS_SAMPLE_COUNT; index += 1) {
-    const win = createSettingsWindow();
-    const result = await waitForWindowReadyToShow(win);
+    const settingsWin = createSettingsWindow();
+    const result = await waitForWindowReadyToShow(settingsWin);
     samples.push(round(result.elapsedMs));
     closeSettingsWindow();
     await sleep(25);

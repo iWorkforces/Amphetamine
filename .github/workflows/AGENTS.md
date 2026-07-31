@@ -23,7 +23,9 @@ Workflow definitions for lint/test/build, production release publishing, and dev
 - Build jobs run only for push to `main` after lint and test pass.
 - macOS matrix packages arm64 on `macos-latest` and x64 on `macos-15-intel`.
 - Windows matrix packages **x64** on `windows-latest` and **arm64** on `windows-11-arm` (NSIS + portable `.exe`).
-- Artifacts: `dist-mac-{arch}` (dmg/zip) and `dist-win-{arch}` (`x64` / `arm64`, exe/yml/blockmap) for 14 days (no `-beta` suffix).
+- Artifacts: `dist-mac-{arch}` (dmg/zip/**yml**/blockmap) and `dist-win-{arch}` (`x64` / `arm64`, exe/yml/blockmap) for 14 days (no `-beta` suffix).
+- **Mac update feed:** CI must upload `latest-mac.yml` (and blockmaps). CD merges arm64+x64 feeds into one release asset. Without `latest-mac.yml`, packaged macOS apps fail "Check for Updates" with a false network error.
+- Packaging uses raw `electron-builder` (fuses are flipped on local `bun run package*` paths).
 
 ## CD Rules
 
@@ -35,6 +37,8 @@ Workflow definitions for lint/test/build, production release publishing, and dev
 - Release body includes a short production preamble plus the generated "What's Changed" section.
 - It downloads `dist-mac-arm64`, `dist-mac-x64`, `dist-win-x64`, and `dist-win-arm64` artifacts from that CI run.
 - It verifies at least one DMG, ZIP, or EXE before `softprops/action-gh-release` publishes.
+- It **merges** multi-arch `latest-mac.yml` / `latest.yml` via `scripts/merge-latest-yml.ts` before attaching release assets (unique basenames on GitHub).
+- Production release uses `make_latest: true`.
 - Release concurrency is global `release` with `cancel-in-progress: false`.
 - **CD workflow file must exist on the default branch (`main`)** for `workflow_run` to fire.
 
@@ -44,8 +48,8 @@ Workflow definitions for lint/test/build, production release publishing, and dev
 - **Why not `workflow_run`?** GitHub only registers `workflow_run` listeners from workflow files on the **default branch** (`main`). `beta.yml` is develop-oriented and is not required on `main`, so a `workflow_run` listener would never fire.
 - Jobs: `lint` + `test` → **`prepare`** (version + beta N) → `package` / `package-windows` → **`release`**.
 - Packaging: mac arm64/x64 plus Windows x64/arm64 (`package` + `package-windows` matrix).
-- After `electron-builder`, basenames get a **`-beta-{N}`** suffix (e.g. `Amphetamine-1.10.1-arm64-beta-1.dmg`).
-  Tag uses a dot (`v1.10.1-beta.1`); filenames use a hyphen before N (`-beta-1`).
+- After `electron-builder`, basenames get a **`-beta-{N}`** suffix (e.g. `Amphetamine-1.10.2-arm64-beta-1.dmg`).
+  Tag uses a dot (`v1.10.2-beta.1`); filenames use a hyphen before N (`-beta-1`).
 - Artifacts: `dist-mac-beta-{arch}` and `dist-win-beta-{arch}` (`x64` / `arm64`) for 14 days.
 - **`prepare` job** (after lint/test) computes a single N for the run so tags and filenames match.
 - **`release` job** publishes a GitHub **prerelease** (not latest production):

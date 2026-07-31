@@ -87,6 +87,12 @@ describe("benchmark-metrics", () => {
             clears: 0,
             active: false,
           },
+          battery: {
+            scheduled: 0,
+            callbackAttempted: 0,
+            guardedSkipped: 0,
+            completedRead: 0,
+          },
         },
       },
     ]);
