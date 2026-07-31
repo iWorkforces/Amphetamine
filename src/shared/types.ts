@@ -112,7 +112,10 @@ export type AutoUpdaterStatus =
   | { status: "not-available"; info: UpdateMeta }
   | { status: "downloaded"; info: UpdateMeta }
   | { status: "downloading"; progress: { percent: number; transferred: number; total: number } }
-  | { status: "check-error" | "download-error" | "error"; category: "network" | "signature" | "io" | "unknown" };
+  | {
+      status: "check-error" | "download-error" | "error";
+      category: "network" | "feed-missing" | "signature" | "io" | "unknown";
+    };
 
 /** IPC Request/Response type map for type-safe IPC */
 export type IpcChannelMap = {

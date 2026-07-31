@@ -55,18 +55,41 @@ export function deriveReleaseUrlBase(repoUrlStr: string): string | null {
  * filesystem paths, proxy URLs, or tokens into the renderer/UI. The raw
  * `err.message` is still logged via electron-log for diagnostics.
  */
-export function categorizeUpdaterError(err: Error): "network" | "signature" | "io" | "unknown" {
+/** Sanitized updater error category for UI and status broadcasts. */
+export type UpdaterErrorCategory =
+  | "network"
+  | "feed-missing"
+  | "signature"
+  | "io"
+  | "unknown";
+
+export function categorizeUpdaterError(err: Error): UpdaterErrorCategory {
   const haystack = `${err.name} ${err.message}`.toLowerCase();
-  // Missing latest-mac.yml / latest.yml surfaces as HTTP 404 from GitHub — treat as network-ish
-  // for status broadcast; UI may still open the releases page as a fallback.
+  // Missing latest-mac.yml / latest.yml surfaces as HTTP 404 from GitHub.
+  if (
+    haystack.includes("404") ||
+    haystack.includes("status code 404") ||
+    haystack.includes("httperror: 404") ||
+    haystack.includes("cannot find latest") ||
+    haystack.includes("latest-mac.yml") ||
+    haystack.includes("latest.yml") ||
+    (haystack.includes("enoent") && haystack.includes("latest"))
+  ) {
+    return "feed-missing";
+  }
   if (
     haystack.includes("enotfound") ||
     haystack.includes("econnrefused") ||
     haystack.includes("etimedout") ||
-    haystack.includes("net") ||
-    haystack.includes("404") ||
-    haystack.includes("status code 404") ||
-    haystack.includes("httperror: 404")
+    haystack.includes("enetunreach") ||
+    haystack.includes("ehostunreach") ||
+    haystack.includes("econnreset") ||
+    haystack.includes("eai_again") ||
+    haystack.includes("enetdown") ||
+    haystack.includes("err_internet_disconnected") ||
+    haystack.includes("err_network_changed") ||
+    haystack.includes("net::") ||
+    haystack.includes("network")
   ) {
     return "network";
   }

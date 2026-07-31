@@ -173,18 +173,20 @@ function runSharedCheckForUpdates(): Promise<
  * Finish a failed user-initiated check with browser fallback or a dialog.
  * No-ops if event handlers already consumed the user-initiated flag.
  */
+let lastCheckErrorCategory: "network" | "feed-missing" | "signature" | "io" | "unknown" =
+  "unknown";
+
 function finishUserInitiatedFailure(): void {
   if (!userInitiatedCheck) {
     return;
   }
   const version = lastAvailableVersion;
+  const category = lastCheckErrorCategory;
   clearUserInitiated();
   if (version !== null) {
     openReleasePageInBrowser(version);
   } else {
-    // No update metadata (often missing latest-mac.yml / latest.yml on the release).
-    // Surface a dialog that can open the releases list for manual download.
-    showCheckFailedDialog();
+    showCheckFailedDialog(category);
   }
 }
 
@@ -203,7 +205,23 @@ function showUpToDateDialog(version: string): void {
 }
 
 /** User-facing dialog when a manual check fails and we have no update payload. */
-function showCheckFailedDialog(): void {
+function showCheckFailedDialog(
+  category: "network" | "feed-missing" | "signature" | "io" | "unknown" = "unknown",
+): void {
+  const detailByCategory: Record<typeof category, string> = {
+    network:
+      "Amphetamine could not reach the update server. Check your network connection and try again, " +
+      "or open the GitHub releases page to download manually.",
+    "feed-missing":
+      "Update metadata is missing for this release (for example latest-mac.yml or latest.yml on GitHub). " +
+      "Open the Releases page to download manually, or try again after a new release is published.",
+    signature:
+      "An update was found but could not be verified. Open the GitHub releases page to download manually.",
+    io: "Amphetamine could not save or read update files. Check disk space and try again, " +
+      "or open the GitHub releases page to download manually.",
+    unknown:
+      "Amphetamine could not complete the update check. Open the GitHub releases page to download manually.",
+  };
   void presentUserDialog({
     type: "warning",
     buttons: ["OK", "Open Releases"],
@@ -211,9 +229,7 @@ function showCheckFailedDialog(): void {
     cancelId: 0,
     title: "Amphetamine",
     message: "Could not check for updates",
-    detail:
-      "Amphetamine could not reach the update server. Check your network connection and try again, " +
-      "or open the GitHub releases page to download manually.",
+    detail: detailByCategory[category],
   })
     .then((result) => {
       if (result.response === 1) {
@@ -370,9 +386,11 @@ function onError(err: Error): void {
   log.error("[auto-updater] Error:", err.message);
   consecutiveFailures += 1;
   rescheduleCheckLoop();
+  const category = categorizeUpdaterError(err);
+  lastCheckErrorCategory = category;
   publishStatus({
     status: "error",
-    category: categorizeUpdaterError(err),
+    category,
   });
 
   // User-initiated path failed (check/download/signature): open release page when we know a version;
@@ -385,7 +403,7 @@ function onError(err: Error): void {
       openReleasePageInBrowser(version);
     } else {
       log.info("[auto-updater] Error during user-initiated check with no known version");
-      showCheckFailedDialog();
+      showCheckFailedDialog(category);
     }
   }
 }
@@ -540,6 +558,9 @@ export function checkForUpdatesNow(): void {
   userInitiatedCheck = true;
   void runSharedCheckForUpdates().catch((err: unknown) => {
     log.warn("[auto-updater] Manual update check failed:", err);
+    if (err instanceof Error) {
+      lastCheckErrorCategory = categorizeUpdaterError(err);
+    }
     // Prefer event-handler path (onError / onUpdateNotAvailable) when it already ran.
     finishUserInitiatedFailure();
   });
@@ -572,6 +593,9 @@ export async function checkForUpdatesForIpc(): Promise<{
     return null;
   } catch (err) {
     log.warn("[auto-updater] Failed to check for updates:", err);
+    if (err instanceof Error) {
+      lastCheckErrorCategory = categorizeUpdaterError(err);
+    }
     finishUserInitiatedFailure();
     return null;
   }

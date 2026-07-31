@@ -61,7 +61,15 @@ describe("auto-updater-utils", () => {
       "../../src/infrastructure/updater/auto-updater-utils.js"
     );
     expect(categorizeUpdaterError(new Error("ENOTFOUND host"))).toBe("network");
-    expect(categorizeUpdaterError(new Error("HttpError: 404 Not Found"))).toBe("network");
+    expect(categorizeUpdaterError(new Error("HttpError: 404 Not Found"))).toBe("feed-missing");
+    expect(categorizeUpdaterError(new Error("network timeout"))).toBe("network");
+    expect(categorizeUpdaterError(new Error("connect ENETUNREACH"))).toBe("network");
+    expect(categorizeUpdaterError(new Error("EHOSTUNREACH 1.2.3.4"))).toBe("network");
+    expect(categorizeUpdaterError(new Error("read ECONNRESET"))).toBe("network");
+    expect(categorizeUpdaterError(new Error("getaddrinfo EAI_AGAIN api.github.com"))).toBe(
+      "network",
+    );
+    expect(categorizeUpdaterError(new Error("net::ERR_INTERNET_DISCONNECTED"))).toBe("network");
     expect(categorizeUpdaterError(new Error("code-signing failed"))).toBe("signature");
     expect(categorizeUpdaterError(new Error("ENOSPC"))).toBe("io");
     expect(categorizeUpdaterError(new Error("mystery"))).toBe("unknown");
