@@ -9,3 +9,4 @@ export type { GlobalShortcutPort } from "./global-shortcut.port.js";
 export type { BatterySensorPort } from "./battery-sensor.port.js";
 export type { LoggerPort } from "./logger.port.js";
 export type { UpdaterPort } from "./updater.port.js";
+export type { UserNotifierPort } from "./user-notifier.port.js";

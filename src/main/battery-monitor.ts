@@ -64,6 +64,8 @@ export interface BatteryDeps {
   onAutoStop: () => void;
   /** Returns true if sleep prevention is currently active (used to gate polling). */
   isPreventingSleep: () => boolean;
+  /** Optional: report last successful charge percent for user feedback. */
+  onPercentSample?: (percent: number | null) => void;
 }
 
 /** Public handle returned by `createBatteryMonitor`. */
@@ -101,6 +103,7 @@ export function createBatteryMonitor(deps: BatteryDeps): BatteryMonitorHandle {
   }
 
   const { getThreshold, onAutoStop, isPreventingSleep } = deps;
+  const onPercentSample = deps.onPercentSample;
 
   let isCheckingBattery = false;
   let onBatteryListener: (() => void) | null = null;
@@ -122,6 +125,7 @@ export function createBatteryMonitor(deps: BatteryDeps): BatteryMonitorHandle {
     try {
       const percent = await getBatteryPercent();
       recordBattery("completedRead");
+      onPercentSample?.(percent);
       if (percent !== null && percent <= threshold) {
         log.info(
           `[battery] Auto-stop triggered: battery at ${percent}% (threshold: ${threshold}%)`,
