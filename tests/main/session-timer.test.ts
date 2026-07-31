@@ -499,7 +499,7 @@ describe("session-timer additional edge cases", () => {
   });
 
   describe("performance.now() controlled clock", () => {
-    it("getStatus().remainingSeconds is computed from mocked performance.now()", async () => {
+    it("getStatus().remainingSeconds is computed from wall clock after start", async () => {
       vi.resetModules();
       settingsState = {
         ...DEFAULT_SETTINGS,
@@ -508,20 +508,21 @@ describe("session-timer additional edge cases", () => {
         defaultSessionDuration: null,
       };
 
-      let nowValue = 0;
-      const nowSpy = vi.spyOn(performance, "now").mockImplementation(() => nowValue);
+      let wallValue = 1_000_000;
+      const wallSpy = vi.spyOn(Date, "now").mockImplementation(() => wallValue);
+      const nowSpy = vi.spyOn(performance, "now").mockImplementation(() => 0);
 
       const handle = await buildHandle();
 
-      nowValue = 0;
       handle.startSession(2);
 
-      // Advance the mocked clock by 60 seconds, then read status
-      nowValue = 60000;
+      // Advance wall clock by 60 seconds (session remaining 60s of 120s).
+      wallValue = 1_000_000 + 60_000;
       const status = handle.getStatus();
       expect(status.isRunning).toBe(true);
       expect(status.remainingSeconds).toBe(60);
 
+      wallSpy.mockRestore();
       nowSpy.mockRestore();
     });
   });

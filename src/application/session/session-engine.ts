@@ -99,7 +99,9 @@ export function createSessionEngine(deps: SessionEngineDeps): SessionEngine {
           durationMinutes: null,
         };
       case "timed": {
-        const remainingMs = Math.max(0, state.expiresAt - clock.perfNow());
+        // Prefer wall-clock remaining so post-sleep UI matches real expiry
+        // (perf clock may stall or skew across system sleep).
+        const remainingMs = Math.max(0, state.wallClockExpiresAt - clock.wallNow());
         const remainingSeconds = Math.floor(remainingMs / 1000);
         return {
           isRunning: true,
@@ -202,8 +204,10 @@ export function createSessionEngine(deps: SessionEngineDeps): SessionEngine {
       return;
     }
     state.cancelExpiry();
+    // Realign perf expiry so anchors and any perf-based math match wall remaining.
+    const expiresAt = asPerf(clock.perfNow() + remainingMs);
     const handle = armTimedExpiry(remainingMs);
-    state = { ...state, cancelExpiry: handle.cancel };
+    state = { ...state, expiresAt, cancelExpiry: handle.cancel };
     broadcastSessionUpdate();
   };
 

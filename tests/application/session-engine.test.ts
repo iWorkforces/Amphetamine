@@ -198,7 +198,20 @@ describe("createSessionEngine", () => {
     expect(onActiveMock).toHaveBeenCalledWith(false);
   });
 
-  it("getStatus remainingSeconds uses clock.perfNow for timed sessions", () => {
+  it("reconcileAfterResume realigns remainingSeconds when wall advances more than perf", () => {
+    const engine = build();
+    engine.startSession(30);
+    // Only wall advances (simulates sleep skew where perf stalled).
+    clock.wall += 10 * 60_000;
+    engine.reconcileAfterResume();
+    const status = engine.getStatus();
+    expect(status.isRunning).toBe(true);
+    if (status.isRunning) {
+      expect(status.remainingSeconds).toBe(20 * 60);
+    }
+  });
+
+  it("getStatus remainingSeconds uses wall clock for timed sessions", () => {
     const engine = build();
     engine.startSession(1);
     clock.advance(15_000);
