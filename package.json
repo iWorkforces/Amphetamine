@@ -51,7 +51,7 @@
     "build:renderer": "NODE_ENV=production rsbuild build",
     "package": "bun run build && electron-builder --mac --arm64 && node build/flip-fuses.cjs mac arm64",
     "package:x64": "bun run build && electron-builder --mac --x64 && node build/flip-fuses.cjs mac x64",
-    "package:universal": "bun run build && electron-builder --mac --universal && node build/flip-fuses.cjs mac arm64",
+    "package:universal": "bun run build && electron-builder --mac --universal && node build/flip-fuses.cjs mac universal",
     "package:dir": "bun run build && electron-builder --mac --arm64 --dir",
     "package:win": "bun run build && electron-builder --win --x64 && node build/flip-fuses.cjs win x64",
     "package:win:dir": "bun run build && electron-builder --win --x64 --dir",
@@ -68,8 +68,10 @@
     "clean": "rimraf lib dist",
     "lint": "eslint src/ tests/",
     "lint:fix": "eslint src/ tests/ --fix",
-    "format": "prettier --cache --write 'src/**/*.{ts,html,css}' 'tests/**/*.ts'"
+    "format": "prettier --cache --write 'src/**/*.{ts,html,css}' 'tests/**/*.ts'",
+    "check": "bun run typecheck && bun run typecheck:tests && bun run typecheck:sticky && bun run typecheck:layers && bun run lint && bun run test"
   },
+
   "sideEffects": false,
   "type": "module",
   "dependencies": {

@@ -10,8 +10,8 @@ Source-controlled packaging resources for electron-builder. Product targets: **m
 | `icon.ico` | Windows app icon consumed by electron-builder |
 | `entitlements.mac.plist` | App entitlements: JIT + unsigned executable memory |
 | `entitlements.mac.inherit.plist` | Child-process entitlements matching app needs |
-| `after-pack.cjs` | ARM64 strip/locales optimization hook (macOS only; no-ops on Windows) |
-| `flip-fuses.cjs` | Post-package Electron fuse hardening (mac + win paths) |
+| `after-pack.cjs` | Pre-archive: ARM64 strip/locales then **fail-closed** fuse flip (darwin/win32); CI’s fuse path for DMG/ZIP/NSIS |
+| `flip-fuses.cjs` | Electron fuse hardening (mac + win; also called from after-pack via `AMPHETAMINE_FUSE_APP_PATH`) |
 | `notarize.cjs` | Optional notarization hook; currently disabled by config |
 
 Generate icons: `bun scripts/generate-app-icon.mjs` (writes `icon.icns` on macOS via iconutil, always writes `icon.ico` + hero PNG).
@@ -50,11 +50,11 @@ Unsigned by default (`CSC_IDENTITY_AUTO_DISCOVERY: false` in CI). No native Node
 
 | Pipeline | Branch | Artifact names | Fuses flipped in workflow? |
 |----------|--------|----------------|----------------------------|
-| CI `build` job | `main` push | `dist-mac-{arch}` (dmg/zip/**yml**/blockmap) | No (raw electron-builder) |
-| CI `build-windows` matrix | `main` push | `dist-win-x64`, `dist-win-arm64` (exe/yml/blockmap) | No (raw electron-builder) |
+| CI `build` job | `main` push | `dist-mac-{arch}` (dmg/zip/**yml**/blockmap) | Yes via `afterPack` (fail-closed) |
+| CI `build-windows` matrix | `main` push | `dist-win-x64`, `dist-win-arm64` (exe/yml/blockmap) | Yes via `afterPack` (fail-closed) |
 | CD release | after main CI | merges multi-arch `latest-mac.yml` / `latest.yml` then publishes | N/A |
-| Beta workflow | push to `develop` | mac/win beta artifacts renamed `*-beta-{N}.*` | No (raw electron-builder + rename) |
-| Local `bun run package*` | developer machine | `dist/*` then flip-fuses | Yes |
+| Beta workflow | push to `develop` | mac/win beta artifacts renamed `*-beta-{N}.*` | Yes via `afterPack` (fail-closed) |
+| Local `bun run package*` | developer machine | afterPack + post `flip-fuses` on leftover unpacked | Yes |
 
 Windows matrix runners: `windows-latest` (x64), `windows-11-arm` (arm64 native). If arm runners are unavailable for the repo, fall back to cross-compile `--arm64` on `windows-latest` (document in PR).
 
@@ -69,7 +69,7 @@ If changing release packaging, keep CI/CD/Beta and local package scripts intenti
 - Windows signing is off by default; add Authenticode later via cert env vars.
 - Windows `win.target` includes **x64 and arm64** for NSIS + portable; CI packages one arch per job.
 - `electronLanguages: [en]` and after-pack locale stripping keep bundles small.
-- `after-pack.cjs` must handle electron-builder ARM64 arch enum `3` as well as string `arm64`; it no-ops on Windows.
+- `after-pack.cjs`: strip/locales first (arm64 mac only), then fuse flip last for darwin/win32. Fuse miss/failure **throws** (fail-closed).
 - Packaged files include `src/assets/!(*Template).png` (template tray icons excluded).
 
 ## Flip Fuses

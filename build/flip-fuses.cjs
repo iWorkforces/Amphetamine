@@ -32,10 +32,11 @@ function resolveTarget(cliArgs) {
   }
 
   if (platform === "mac") {
+    const macDir = arch === "universal" ? "mac-universal" : `mac-${arch}`;
     return {
       platform,
       arch,
-      appPath: path.resolve(__dirname, "..", "dist", `mac-${arch}`, "Amphetamine.app"),
+      appPath: path.resolve(__dirname, "..", "dist", macDir, "Amphetamine.app"),
     };
   }
 
@@ -48,7 +49,15 @@ function resolveTarget(cliArgs) {
   };
 }
 
-const { platform, arch, appPath } = resolveTarget(args);
+const resolved = resolveTarget(args);
+const platform = resolved.platform;
+const arch = resolved.arch;
+// Prefer explicit path from after-pack (unpacked app before archive).
+const appPath =
+  typeof process.env.AMPHETAMINE_FUSE_APP_PATH === "string" &&
+  process.env.AMPHETAMINE_FUSE_APP_PATH.length > 0
+    ? path.resolve(process.env.AMPHETAMINE_FUSE_APP_PATH)
+    : resolved.appPath;
 
 if (!fs.existsSync(appPath)) {
   console.error(`[flip-fuses] App not found at: ${appPath}`);
