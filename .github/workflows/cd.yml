@@ -43,13 +43,30 @@ jobs:
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
 
-      - name: Check if tag already exists
+      - name: Check if tag / release already exists
         id: check_tag
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if git rev-parse "${{ steps.version.outputs.tag }}" >/dev/null 2>&1; then
+          set -euo pipefail
+          TAG="${{ steps.version.outputs.tag }}"
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "git tag $TAG already present"
           else
             echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+          # Softprops/partial failures can leave a tag without a usable release.
+          # Only skip publish when a non-empty production release already exists.
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            ASSET_COUNT=$(gh release view "$TAG" --json assets --jq '.assets | length')
+            echo "release_exists=true" >> "$GITHUB_OUTPUT"
+            echo "asset_count=${ASSET_COUNT}" >> "$GITHUB_OUTPUT"
+            echo "GitHub release $TAG exists with ${ASSET_COUNT} asset(s)"
+          else
+            echo "release_exists=false" >> "$GITHUB_OUTPUT"
+            echo "asset_count=0" >> "$GITHUB_OUTPUT"
+            echo "No GitHub release for $TAG yet (will publish even if tag exists)"
           fi
 
       - name: Create and push tag
@@ -126,15 +143,18 @@ jobs:
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Skip re-release when production tag already exists
-        if: steps.check_tag.outputs.exists == 'true'
+      # Skip only when a production release already has assets (not merely a git tag).
+      # Tag-without-release happens when Publish fails mid-run after Create tag.
+      - name: Skip re-release when production release already published
+        id: skip_release
+        if: steps.check_tag.outputs.release_exists == 'true' && steps.check_tag.outputs.asset_count != '0'
         run: |
-          echo "Tag ${{ steps.version.outputs.tag }} already exists — skipping download/publish."
+          echo "Release ${{ steps.version.outputs.tag }} already has assets — skipping download/publish."
           echo "Bump package.json version for a new production release."
-          exit 0
+          echo "skip=true" >> "$GITHUB_OUTPUT"
 
       - name: Download arm64 artifacts
-        if: steps.check_tag.outputs.exists == 'false'
+        if: steps.skip_release.outputs.skip != 'true'
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           run-id: ${{ github.event.workflow_run.id }}
@@ -143,7 +163,7 @@ jobs:
           path: artifacts/arm64
 
       - name: Download x64 artifacts
-        if: steps.check_tag.outputs.exists == 'false'
+        if: steps.skip_release.outputs.skip != 'true'
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           run-id: ${{ github.event.workflow_run.id }}
@@ -152,7 +172,7 @@ jobs:
           path: artifacts/x64
 
       - name: Download Windows x64 artifacts
-        if: steps.check_tag.outputs.exists == 'false'
+        if: steps.skip_release.outputs.skip != 'true'
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           run-id: ${{ github.event.workflow_run.id }}
@@ -161,7 +181,7 @@ jobs:
           path: artifacts/win-x64
 
       - name: Download Windows arm64 artifacts
-        if: steps.check_tag.outputs.exists == 'false'
+        if: steps.skip_release.outputs.skip != 'true'
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           run-id: ${{ github.event.workflow_run.id }}
@@ -170,7 +190,7 @@ jobs:
           path: artifacts/win-arm64
 
       - name: Verify release artifacts
-        if: steps.check_tag.outputs.exists == 'false'
+        if: steps.skip_release.outputs.skip != 'true'
         run: |
           DMG_COUNT=$(find artifacts -name '*.dmg' 2>/dev/null | wc -l | tr -d ' ')
           ZIP_COUNT=$(find artifacts -name '*.zip' 2>/dev/null | wc -l | tr -d ' ')
@@ -185,7 +205,7 @@ jobs:
       # Arch-matrix jobs each emit their own feed file with the same basename; merge
       # them before publish so GitHub assets stay unique and every arch is listed.
       - name: Merge multi-arch update feeds
-        if: steps.check_tag.outputs.exists == 'false'
+        if: steps.skip_release.outputs.skip != 'true'
         run: |
           set -euo pipefail
           mkdir -p artifacts/update-feed
@@ -226,8 +246,46 @@ jobs:
           ls -la artifacts/update-feed/ || true
           find artifacts -name '*.yml' | sort
 
+      # softprops uploads by basename. Nested globs from multi-arch dirs can collide
+      # (same filename in two folders) and fail with update-a-release-asset 404.
+      # Flatten into one directory and fail closed on basename collisions.
+      - name: Stage unique release assets
+        if: steps.skip_release.outputs.skip != 'true'
+        run: |
+          set -euo pipefail
+          STAGE=artifacts/release-staging
+          rm -rf "$STAGE"
+          mkdir -p "$STAGE"
+          while IFS= read -r -d '' f; do
+            base=$(basename "$f")
+            # Skip nested junk / already-staged paths
+            case "$base" in
+              builder-debug.yml) continue ;;
+            esac
+            dest="$STAGE/$base"
+            if [ -e "$dest" ]; then
+              echo "ERROR: duplicate release asset basename '$base'"
+              echo "  existing: $dest"
+              echo "  incoming: $f"
+              echo "List of staged so far:"
+              ls -la "$STAGE"
+              exit 1
+            fi
+            cp -a "$f" "$dest"
+            echo "staged $base <- $f"
+          done < <(
+            find artifacts -type f \
+              \( -name '*.dmg' -o -name '*.zip' -o -name '*.exe' -o \
+                 -name '*.yml' -o -name '*.blockmap' \) \
+              ! -path 'artifacts/release-staging/*' \
+              -print0
+          )
+          COUNT=$(find "$STAGE" -type f | wc -l | tr -d ' ')
+          echo "Staged ${COUNT} unique asset(s) for upload:"
+          ls -la "$STAGE"
+
       - name: Publish GitHub release
-        if: steps.check_tag.outputs.exists == 'false'
+        if: steps.skip_release.outputs.skip != 'true'
         uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3.0.0
         with:
           tag_name: ${{ steps.version.outputs.tag }}
@@ -236,11 +294,11 @@ jobs:
           # Body already includes API-generated notes; avoid double-append
           generate_release_notes: false
           make_latest: true
+          # Existing tag is OK (retry after failed publish); do not require a new tag.
+          target_commitish: ${{ github.event.workflow_run.head_sha }}
+          fail_on_unmatched_files: true
+          overwrite_files: true
           files: |
-            artifacts/**/*.dmg
-            artifacts/**/*.zip
-            artifacts/**/*.exe
-            artifacts/**/*.yml
-            artifacts/**/*.blockmap
+            artifacts/release-staging/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
