@@ -61,11 +61,6 @@ vi.mock("electron-log", () => ({
   default: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
-const mockShowPopoverNearTray = vi.hoisted(() => vi.fn());
-vi.mock("../../src/main/process/window-graph.js", () => ({
-  showPopoverNearTray: (...args: unknown[]) => mockShowPopoverNearTray(...args),
-}));
-
 describe("tray", () => {
   let preventSleep: boolean;
   let effectiveActive: boolean;
@@ -141,14 +136,16 @@ describe("tray", () => {
       expect(mockTrayConstructor).toHaveBeenCalledTimes(1);
     });
 
-    it("ignores double-click so Windows popover toggle stays stable", async () => {
+    it("ignores double-click so Windows menu click stays stable", async () => {
       const { setupTray } = await import("../../src/main/tray.js");
       setupTray(createTrayDeps());
 
       const trayInstance = mockTrayConstructor.mock.results[0]!.value as {
         setIgnoreDoubleClickEvents: ReturnType<typeof vi.fn>;
+        setContextMenu: ReturnType<typeof vi.fn>;
       };
       expect(trayInstance.setIgnoreDoubleClickEvents).toHaveBeenCalledWith(true);
+      expect(trayInstance.setContextMenu).toHaveBeenCalled();
     });
 
     it("sets tooltip to Amphetamine", async () => {
@@ -398,25 +395,17 @@ describe("tray", () => {
       expect(preventSleepItem.checked).toBe(false);
     });
 
-    it("left-click shows popover; right-click pops context menu", async () => {
+    it("left-click pops the classic context menu", async () => {
       const { setupTray } = await import("../../src/main/tray.js");
       setupTray(createTrayDeps());
 
       const trayInstance = mockTrayConstructor.mock.results[0]!.value;
+      expect(trayInstance.setContextMenu).toHaveBeenCalled();
       const clickCall = trayInstance.on.mock.calls.find(
         (call: [string, ...unknown[]]) => call[0] === "click",
       );
-      const rightClickCall = trayInstance.on.mock.calls.find(
-        (call: [string, ...unknown[]]) => call[0] === "right-click",
-      );
       expect(clickCall).toBeDefined();
-      expect(rightClickCall).toBeDefined();
-
-      const bounds = { x: 10, y: 20, width: 22, height: 22 };
-      (clickCall![1] as (e: unknown, b: typeof bounds) => void)({}, bounds);
-      expect(mockShowPopoverNearTray).toHaveBeenCalledWith(bounds);
-
-      (rightClickCall![1] as (e: unknown, b: typeof bounds) => void)({}, bounds);
+      (clickCall![1] as () => void)();
       expect(trayInstance.popUpContextMenu).toHaveBeenCalled();
     });
   });
