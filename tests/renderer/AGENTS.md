@@ -16,6 +16,7 @@ Renderer Vitest suites run in jsdom and assert DOM behavior for vanilla TypeScri
 - Build DOM explicitly (`#app`).
 - Install `window.api` mock before importing renderer modules.
 - Include `window.api.benchmark.isEnabled()` when importing popover code.
+- Include `window.api.platform.os` when testing settings shortcut labels.
 - Import entry after mocks, then dispatch `DOMContentLoaded`.
 - Fake timers for countdown, debounced saves, RAF, delayed indicators.
 - Settings fixtures: spread `DEFAULT_SETTINGS`.
@@ -27,6 +28,7 @@ Renderer Vitest suites run in jsdom and assert DOM behavior for vanilla TypeScri
 - Popover chips need not persist `defaultSessionDuration`.
 - Effective active: status stays on when session running even if `preventSleep` is false (domain OR rule).
 - Settings: duration select starts session + saves preference; sleep mode saves `sleepBlockMode`.
+- Settings save path handles `{ settings, rejectedKeys }` responses.
 
 ## Mocking
 
