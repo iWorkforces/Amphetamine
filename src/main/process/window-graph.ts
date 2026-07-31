@@ -4,7 +4,7 @@
  * Process-model role: the only place that spawns renderer processes. Shared
  * secure webPreferences, navigation hardening, and singleton tracking live here.
  */
-import { BrowserWindow } from "electron/main";
+import { BrowserWindow, screen } from "electron/main";
 import { nativeImage, shell } from "electron/common";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -25,13 +25,14 @@ import { IPC_CHANNELS } from "../../shared/types.js";
 import {
   aboutWindowChrome,
   appIconFileName,
-  enterForegroundMode,
-  enterTrayOnlyMode,
+  acquireUtilityForeground,
+  releaseUtilityForeground,
+  setUtilityDockIcon,
   popoverWindowChrome,
-  setDockIcon,
   settingsWindowChrome,
 } from "../platform/index.js";
 import { createSecureWebPreferences } from "./secure-web-preferences.js";
+import { getPackageInfo } from "../utils/packageInfo.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -59,6 +60,10 @@ function getDockIcon(): Electron.NativeImage {
     cachedDockIcon = nativeImage.createFromPath(getAppIconPath());
   }
   return cachedDockIcon;
+}
+
+function ensureUtilityDockIcon(): void {
+  setUtilityDockIcon(getDockIcon());
 }
 
 // --- Registry ---
@@ -177,6 +182,49 @@ export function createPopoverWindow(options: PopoverWindowOptions): BrowserWindo
   return win;
 }
 
+/**
+ * Position and show the popover near the tray icon (or last known bounds).
+ * Toggle hide when already visible.
+ */
+export function showPopoverNearTray(trayBounds: {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}): void {
+  const win = getPopoverWindow();
+  if (win === null || win.isDestroyed()) return;
+
+  cancelPendingPopoverHide();
+
+  if (win.isVisible()) {
+    win.hide();
+    return;
+  }
+
+  const size = win.getSize();
+  const winWidth = size[0] ?? MAIN_WINDOW_WIDTH;
+  const winHeight = size[1] ?? MAIN_WINDOW_HEIGHT;
+  const display = screen.getDisplayNearestPoint({
+    x: trayBounds.x,
+    y: trayBounds.y,
+  });
+  const work = display.workArea;
+
+  // Center horizontally on tray; prefer below tray on top menu bar, else above.
+  let x = Math.round(trayBounds.x + trayBounds.width / 2 - winWidth / 2);
+  let y = trayBounds.y + trayBounds.height + 4;
+  if (y + winHeight > work.y + work.height) {
+    y = trayBounds.y - winHeight - 4;
+  }
+  x = Math.max(work.x, Math.min(x, work.x + work.width - winWidth));
+  y = Math.max(work.y, Math.min(y, work.y + work.height - winHeight));
+
+  win.setPosition(x, y, false);
+  win.show();
+  win.focus();
+}
+
 // --- Settings ---
 
 /**
@@ -212,18 +260,25 @@ export function createSettingsWindow(): BrowserWindow {
     void win.loadFile(path.join(__dirname, "..", "renderer", "settings.html"));
   }
 
+  // Pair acquire/release: only release if this window actually acquired.
+  // Avoids closed-before-ready releasing another utility's Dock ref.
+  let heldForeground = false;
   win.once("ready-to-show", () => {
     if (win.isDestroyed()) return;
+    ensureUtilityDockIcon();
+    acquireUtilityForeground();
+    heldForeground = true;
     win.show();
-    enterForegroundMode();
-    setDockIcon(getDockIcon());
   });
 
   win.on("closed", () => {
     if (settingsWindow === win) {
       settingsWindow = null;
     }
-    enterTrayOnlyMode();
+    if (heldForeground) {
+      releaseUtilityForeground();
+      heldForeground = false;
+    }
   });
 
   settingsWindow = win;
@@ -260,7 +315,7 @@ export function showAbout(_mainWindow?: BrowserWindow): void {
     minimizable: false,
     maximizable: false,
     fullscreenable: false,
-    alwaysOnTop: true,
+    alwaysOnTop: false,
     show: false,
     icon: getWindowIconPath(),
     ...aboutWindowChrome(),
@@ -269,11 +324,16 @@ export function showAbout(_mainWindow?: BrowserWindow): void {
 
   hardenWebContents(win);
 
-  // Allow only the package repository URL via window.open from the about renderer.
+  // Allow only the package repository URL (and its path under github.com).
+  const repoUrl = getPackageInfo().repository.replace(/\.git$/i, "").replace(/\/$/, "");
   win.webContents.setWindowOpenHandler(({ url }) => {
     try {
       const parsed = new URL(url);
-      if (parsed.protocol === "https:" && parsed.hostname === "github.com") {
+      if (
+        parsed.protocol === "https:" &&
+        parsed.hostname === "github.com" &&
+        (url === repoUrl || url.startsWith(`${repoUrl}/`))
+      ) {
         void shell.openExternal(url);
       }
     } catch {
@@ -288,14 +348,23 @@ export function showAbout(_mainWindow?: BrowserWindow): void {
     void win.loadFile(path.join(__dirname, "..", "renderer", "about.html"));
   }
 
+  // Pair acquire/release: only release if this window actually acquired.
+  let heldForeground = false;
   win.once("ready-to-show", () => {
     if (win.isDestroyed()) return;
+    ensureUtilityDockIcon();
+    acquireUtilityForeground();
+    heldForeground = true;
     win.show();
   });
 
   win.on("closed", () => {
     if (aboutWindow === win) {
       aboutWindow = null;
+    }
+    if (heldForeground) {
+      releaseUtilityForeground();
+      heldForeground = false;
     }
   });
 
