@@ -24,6 +24,7 @@ Workflow definitions for lint/test/build, production release publishing, and dev
 - macOS matrix packages arm64 on `macos-latest` and x64 on `macos-15-intel`.
 - Windows matrix packages **x64** on `windows-latest` and **arm64** on `windows-11-arm` (NSIS + portable `.exe`).
 - Artifacts: `dist-mac-{arch}` (dmg/zip) and `dist-win-{arch}` (`x64` / `arm64`, exe/yml/blockmap) for 14 days (no `-beta` suffix).
+- Packaging uses raw `electron-builder` (fuses are flipped on local `bun run package*` paths).
 
 ## CD Rules
 
@@ -35,6 +36,7 @@ Workflow definitions for lint/test/build, production release publishing, and dev
 - Release body includes a short production preamble plus the generated "What's Changed" section.
 - It downloads `dist-mac-arm64`, `dist-mac-x64`, `dist-win-x64`, and `dist-win-arm64` artifacts from that CI run.
 - It verifies at least one DMG, ZIP, or EXE before `softprops/action-gh-release` publishes.
+- Production release uses `make_latest: true`.
 - Release concurrency is global `release` with `cancel-in-progress: false`.
 - **CD workflow file must exist on the default branch (`main`)** for `workflow_run` to fire.
 

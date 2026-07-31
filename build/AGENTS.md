@@ -10,11 +10,11 @@ Source-controlled packaging resources for electron-builder. Product targets: **m
 | `icon.ico` | Windows app icon consumed by electron-builder |
 | `entitlements.mac.plist` | App entitlements: JIT + unsigned executable memory |
 | `entitlements.mac.inherit.plist` | Child-process entitlements matching app needs |
-| `after-pack.cjs` | ARM64 strip/locales optimization hook (macOS only) |
+| `after-pack.cjs` | ARM64 strip/locales optimization hook (macOS only; no-ops on Windows) |
 | `flip-fuses.cjs` | Post-package Electron fuse hardening (mac + win paths) |
 | `notarize.cjs` | Optional notarization hook; currently disabled by config |
 
-Generate icons: `bun scripts/generate-app-icon.mjs` (writes `icon.icns` on macOS via iconutil, always writes `icon.ico`).
+Generate icons: `bun scripts/generate-app-icon.mjs` (writes `icon.icns` on macOS via iconutil, always writes `icon.ico` + hero PNG).
 
 ## Packaging Flow
 
@@ -61,12 +61,13 @@ If changing release packaging, keep CI/CD/Beta and local package scripts intenti
 
 - `hardenedRuntime: false` is intentional. Re-enable only with notarization and JIT entitlements.
 - `notarize: false` by default. `notarize.cjs` requires `APPLE_ID`, `APPLE_TEAM_ID`, `APPLE_APP_PASSWORD`.
-- `LSUIElement: true` keeps the app tray-only; settings window temporarily shows Dock icon at runtime.
+- `LSUIElement: true` keeps the app tray-only; the settings window temporarily shows the Dock icon at runtime (About uses taskbar-visible chrome without Dock policy flip).
 - `dmg.sign: false`; local wrapper owns ad-hoc DMG signing for quarantine compatibility.
 - Windows signing is off by default; add Authenticode later via cert env vars.
 - Windows `win.target` includes **x64 and arm64** for NSIS + portable; CI packages one arch per job.
 - `electronLanguages: [en]` and after-pack locale stripping keep bundles small.
 - `after-pack.cjs` must handle electron-builder ARM64 arch enum `3` as well as string `arm64`; it no-ops on Windows.
+- Packaged files include `src/assets/!(*Template).png` (template tray icons excluded).
 
 ## Flip Fuses
 

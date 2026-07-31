@@ -10,8 +10,8 @@ Developer-only Bun/Node scripts. Runtime app code must not import from here. Scr
 | `benchmark-performance.ts` | Runs built app in benchmark mode and writes harness JSON artifact |
 | `check-sticky-ts.mjs` | Asserts sticky TypeScript compiler flags via `tsc --showConfig` |
 | `check-layer-imports.mjs` | Asserts domain/application import boundaries (no Electron / outer layers) |
-| `generate-app-icon.mjs` | Generates `build/icon.icns` and `src/assets/settings-hero-icon.png` |
-| `generate-coffee-tray-icons.mjs` | Generates 8 tray PNGs for active/inactive x light/dark x scale |
+| `generate-app-icon.mjs` | Generates `build/icon.icns`, `build/icon.ico`, and `src/assets/settings-hero-icon.png` |
+| `generate-coffee-tray-icons.mjs` | Generates 8 tray PNGs for active/inactive × light/dark × scale |
 
 ## Dev Orchestration
 
@@ -28,7 +28,7 @@ Developer-only Bun/Node scripts. Runtime app code must not import from here. Scr
 ## Sticky Typecheck Guard
 
 - `check-sticky-ts.mjs` runs `tsc -p tsconfig.json --showConfig` and `tsconfig.tests.json`.
-- Fails if sticky flags are missing or not `true` (`strict` family + project extras).
+- Fails if sticky flags are missing or not `true` (strict family + project extras such as `exactOptionalPropertyTypes`, `verbatimModuleSyntax`, `noUncheckedIndexedAccess`, …).
 - Invoked by `bun run typecheck:sticky` and the CI lint job.
 - Do not weaken the flag list without an intentional sticky-policy change in root `AGENTS.md`.
 
@@ -37,6 +37,7 @@ Developer-only Bun/Node scripts. Runtime app code must not import from here. Scr
 - `check-layer-imports.mjs` scans `src/domain` and `src/application` for forbidden imports.
 - Domain: no `electron*`, `main`, `application`, `infrastructure`, `preload`, `renderer`.
 - Application: no `electron*`, `main`, `infrastructure`, `preload`, `renderer` (may import domain + shared).
+- Also blocks package imports of `electron`, `electron-log`, `electron-updater`.
 - Invoked by `bun run typecheck:layers` and the CI lint job.
 
 ## Benchmark Harness
