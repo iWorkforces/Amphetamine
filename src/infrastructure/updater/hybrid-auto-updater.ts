@@ -10,7 +10,11 @@ import { shell } from "electron/common";
 import log from "electron-log";
 import type { AutoUpdaterStatus, UpdateMeta } from "../../shared/types.js";
 import type { AppPushEvent } from "../../application/ports/main-to-renderer-notifier.port.js";
-import { categorizeUpdaterError, deriveReleaseUrlBase } from "./auto-updater-utils.js";
+import {
+  categorizeUpdaterError,
+  deriveReleaseUrlBase,
+  parseGitHubRepoIdentity,
+} from "./auto-updater-utils.js";
 
 /** Timing constants (keep in sync with main/constants.ts updater values). */
 const INITIAL_UPDATE_CHECK_DELAY_MS = 3000;
@@ -178,6 +182,8 @@ function finishUserInitiatedFailure(): void {
   if (version !== null) {
     openReleasePageInBrowser(version);
   } else {
+    // No update metadata (often missing latest-mac.yml / latest.yml on the release).
+    // Surface a dialog that can open the releases list for manual download.
     showCheckFailedDialog();
   }
 }
@@ -469,6 +475,25 @@ export function initAutoUpdater(): void {
   // otherwise browser fallback covers unsigned CI builds and download/install failures.
   autoUpdater.autoDownload = false;
   autoUpdater.autoInstallOnAppQuit = false;
+
+  // Prefer package.json repository over a possibly stale app-update.yml baked at
+  // package time (e.g. after org rename). electron-updater GitHub provider needs
+  // owner/repo; feed files (latest-mac.yml / latest.yml) must still be on the release.
+  const identity = parseGitHubRepoIdentity(requireDeps().getRepositoryUrl());
+  if (identity !== null) {
+    autoUpdater.setFeedURL({
+      provider: "github",
+      owner: identity.owner,
+      repo: identity.repo,
+    });
+    log.info(
+      `[auto-updater] GitHub feed configured: ${identity.owner}/${identity.repo}`,
+    );
+  } else {
+    log.warn(
+      "[auto-updater] Could not parse GitHub owner/repo from package repository; using packaged app-update.yml",
+    );
+  }
 
   registerUpdateEventHandlers();
   startUpdateCheckLoop();

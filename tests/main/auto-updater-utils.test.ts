@@ -45,11 +45,23 @@ describe("auto-updater-utils", () => {
     );
   });
 
+  it("parseGitHubRepoIdentity extracts owner/repo", async () => {
+    const { parseGitHubRepoIdentity } = await import(
+      "../../src/infrastructure/updater/auto-updater-utils.js"
+    );
+    expect(parseGitHubRepoIdentity("https://github.com/iWorkforces/Amphetamine.git")).toEqual({
+      owner: "iWorkforces",
+      repo: "Amphetamine",
+    });
+    expect(parseGitHubRepoIdentity("https://gitlab.com/org/repo")).toBeNull();
+  });
+
   it("categorizeUpdaterError classifies network errors", async () => {
     const { categorizeUpdaterError } = await import(
       "../../src/infrastructure/updater/auto-updater-utils.js"
     );
     expect(categorizeUpdaterError(new Error("ENOTFOUND host"))).toBe("network");
+    expect(categorizeUpdaterError(new Error("HttpError: 404 Not Found"))).toBe("network");
     expect(categorizeUpdaterError(new Error("code-signing failed"))).toBe("signature");
     expect(categorizeUpdaterError(new Error("ENOSPC"))).toBe("io");
     expect(categorizeUpdaterError(new Error("mystery"))).toBe("unknown");

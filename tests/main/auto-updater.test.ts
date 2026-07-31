@@ -36,9 +36,11 @@ const mockGetPackageInfo = vi.hoisted(() =>
     description: "",
     repository: "https://github.com/iWorkforces/Amphetamine",
     homepage: "https://github.com/iWorkforces/Amphetamine",
-    author: "OCWorkforces Engineers",
+    author: "iWorkforces Engineers",
   }),
 );
+
+const mockSetFeedURL = vi.hoisted(() => vi.fn());
 
 vi.mock("electron-updater", () => ({
   autoUpdater: {
@@ -47,6 +49,7 @@ vi.mock("electron-updater", () => ({
     checkForUpdates: mockCheckForUpdates,
     downloadUpdate: mockDownloadUpdate,
     quitAndInstall: mockQuitAndInstall,
+    setFeedURL: mockSetFeedURL,
     logger: null,
     autoDownload: false,
     autoInstallOnAppQuit: false,
@@ -181,6 +184,15 @@ describe("auto-updater (hybrid infrastructure)", () => {
       expect(mockOn).toHaveBeenCalledWith("download-progress", expect.any(Function));
       expect(mockOn).toHaveBeenCalledWith("update-downloaded", expect.any(Function));
       expect(mockOn).toHaveBeenCalledWith("error", expect.any(Function));
+    });
+
+    it("configures GitHub feed from package repository (owner/repo)", () => {
+      initAutoUpdater();
+      expect(mockSetFeedURL).toHaveBeenCalledWith({
+        provider: "github",
+        owner: "iWorkforces",
+        repo: "Amphetamine",
+      });
     });
 
     it("sets autoDownload and autoInstallOnAppQuit to false", async () => {
