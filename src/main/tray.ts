@@ -10,7 +10,6 @@ import log from "electron-log";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { showAbout as openAboutWindow } from "./about-window.js";
-import { showPopoverNearTray } from "./process/window-graph.js";
 
 import {
   ACCELERATOR_QUIT,
@@ -137,8 +136,6 @@ export function setupTray(deps: TrayDeps): () => void {
   const initialEffectiveActive = deps.getEffectiveActive();
   tray = new Tray(buildIcon(nativeTheme.shouldUseDarkColors, initialEffectiveActive));
   tray.setToolTip(tooltipForState(initialEffectiveActive, deps.getSessionActive()));
-  // Windows fires click twice on double-click by default; ignore so popover toggle stays stable.
-  tray.setIgnoreDoubleClickEvents(true);
 
   // Update icon whenever the system theme changes or settings change (debounced)
   const onThemeUpdated = (): void => {
@@ -167,6 +164,7 @@ export function setupTray(deps: TrayDeps): () => void {
     if (currentPreventSleep !== lastPreventSleep) {
       lastPreventSleep = currentPreventSleep;
       cachedMenu = buildMenu();
+      tray?.setContextMenu(cachedMenu);
       iconNeedsRefresh = true;
     }
     if (iconNeedsRefresh) {
@@ -188,6 +186,7 @@ export function setupTray(deps: TrayDeps): () => void {
     if (sessionActive !== lastSessionActive) {
       lastSessionActive = sessionActive;
       cachedMenu = buildMenu();
+      tray?.setContextMenu(cachedMenu);
     }
   });
 
@@ -227,24 +226,16 @@ export function setupTray(deps: TrayDeps): () => void {
   }
 
   cachedMenu = buildMenu();
-  // Do not setContextMenu permanently — left-click opens popover; right-click shows menu.
-  tray.setContextMenu(null);
+  // Classic tray menu: setContextMenu so OS left/right click show menu items.
+  // Explicit click handler keeps left-click reliable across macOS/Windows.
+  tray.setContextMenu(cachedMenu);
+  // Windows: avoid double-click firing click twice (opens menu then dismisses).
+  tray.setIgnoreDoubleClickEvents(true);
 
-  // Primary click: toggle popover near tray.
-  tray.on("click", (_event, bounds) => {
-    if (!tray) return;
-    const b =
-      bounds.width > 0 && bounds.height > 0
-        ? bounds
-        : tray.getBounds();
-    showPopoverNearTray(b);
-  });
-
-  // Secondary click: classic context menu.
-  tray.on("right-click", (_event, bounds) => {
-    if (!tray) return;
-    cachedMenu = buildMenu();
-    tray.popUpContextMenu(cachedMenu, bounds);
+  tray.on("click", () => {
+    if (tray !== null && cachedMenu !== null) {
+      tray.popUpContextMenu(cachedMenu);
+    }
   });
 
   return () => {

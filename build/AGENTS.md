@@ -76,6 +76,8 @@ If changing release packaging, keep CI/CD/Beta and local package scripts intenti
 
 `flip-fuses.cjs` disables RunAsNode, inspect args, and `NODE_OPTIONS`; requires app load from ASAR; enables ASAR integrity and cookie encryption.
 
+**macOS:** after flipping fuses, the script **must** deep re-sign the `.app` (ad-hoc when `CSC_NAME` is unset, else `CSC_NAME`) and `codesign --verify --deep --strict`. Fuse/strip without re-sign causes Apple Silicon `SIGKILL (Code Signature Invalid)` at launch.
+
 ```bash
 node build/flip-fuses.cjs mac arm64   # dist/mac-arm64/Amphetamine.app
 node build/flip-fuses.cjs win x64     # dist/win-unpacked/Amphetamine.exe
@@ -85,6 +87,7 @@ node build/flip-fuses.cjs arm64       # legacy mac alias
 
 ## Anti-Patterns
 
+- Never distribute a macOS app after fuse flip or strip without re-signing (and verifying) the bundle.
 - Never distribute an app bundle before the intended fuse hardening path has run.
 - Never enable hardened runtime alone; pair it with notarization and verified Electron/V8 entitlements.
 - Never remove JIT/unsigned executable memory entitlements without testing macOS launch.
