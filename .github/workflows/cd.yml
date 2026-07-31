@@ -260,38 +260,44 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_TITLE: ${{ steps.notes.outputs.name }}
           RELEASE_BODY: ${{ steps.notes.outputs.body }}
+          RELEASE_TAG: ${{ steps.version.outputs.tag }}
+          RELEASE_TARGET: ${{ github.event.workflow_run.head_sha }}
         run: |
           set -euo pipefail
-          TAG="${{ steps.version.outputs.tag }}"
-          TARGET="${{ github.event.workflow_run.head_sha }}"
           BODY_FILE=$(mktemp)
-          # Multiline body via env (Actions expands ${{ }} before bash runs).
+          # Body comes from RELEASE_BODY env (set above); do not put Actions expression markers in this script.
           printf '%s\n' "$RELEASE_BODY" >"$BODY_FILE"
 
-          mapfile -t FILES < <(find artifacts/release-staging -type f | sort)
-          if [ "${#FILES[@]}" -eq 0 ]; then
+          # Avoid bash array length syntax and Actions expression markers in this block.
+          FILE_LIST=$(mktemp)
+          find artifacts/release-staging -type f | sort >"$FILE_LIST"
+          FILE_COUNT=$(wc -l <"$FILE_LIST" | tr -d ' ')
+          if [ "$FILE_COUNT" -eq 0 ]; then
             echo "ERROR: nothing in artifacts/release-staging"
             exit 1
           fi
-          echo "Uploading ${#FILES[@]} asset(s) to $TAG (target $TARGET)"
-          printf '  %s\n' "${FILES[@]}"
+          echo "Uploading ${FILE_COUNT} asset(s) to ${RELEASE_TAG} (target ${RELEASE_TARGET})"
+          cat "$FILE_LIST"
 
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            echo "Release $TAG already exists — uploading/clobbering assets"
-            gh release upload "$TAG" "${FILES[@]}" --clobber
-            gh release edit "$TAG" \
+          # shellcheck disable=SC2046
+          set -- $(cat "$FILE_LIST")
+
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "Release ${RELEASE_TAG} already exists — uploading/clobbering assets"
+            gh release upload "$RELEASE_TAG" "$@" --clobber
+            gh release edit "$RELEASE_TAG" \
               --title "$RELEASE_TITLE" \
               --notes-file "$BODY_FILE" \
               --latest
           else
-            echo "Creating release $TAG"
-            gh release create "$TAG" "${FILES[@]}" \
-              --target "$TARGET" \
+            echo "Creating release ${RELEASE_TAG}"
+            gh release create "$RELEASE_TAG" "$@" \
+              --target "$RELEASE_TARGET" \
               --title "$RELEASE_TITLE" \
               --notes-file "$BODY_FILE" \
               --latest
           fi
 
           echo "Release assets after upload:"
-          gh release view "$TAG" --json assets --jq '.assets[].name' | sort
-          rm -f "$BODY_FILE"
+          gh release view "$RELEASE_TAG" --json assets --jq '.assets[].name' | sort
+          rm -f "$BODY_FILE" "$FILE_LIST"
