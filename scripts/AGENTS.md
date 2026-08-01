@@ -10,6 +10,7 @@ Developer-only Bun/Node scripts. Runtime app code must not import from here. Scr
 | `build-production.ts` | Parallel production compile: main + preload + renderer; labels output; kills siblings on failure |
 | `benchmark-performance.ts` | Runs built app in benchmark mode; writes harness JSON; supports `--scenario idle\|active-session` |
 | `merge-latest-yml.ts` | Merge dual-arch electron-builder `latest*.yml` feeds for GitHub Releases (CD) |
+| `stage-release-assets.py` | Stage unique basenames for CD publish (`artifacts/release-staging/`; feeds + binaries) |
 | `check-sticky-ts.mjs` | Asserts sticky TypeScript compiler flags via native `tsc --showConfig` (prefers `@typescript/native`) |
 | `check-layer-imports.mjs` | Asserts domain/application import boundaries (no Electron / outer layers) |
 | `generate-app-icon.mjs` | Generates `build/icon.icns`, `build/icon.ico`, and `src/assets/settings-hero-icon.png` |
@@ -65,6 +66,11 @@ Developer-only Bun/Node scripts. Runtime app code must not import from here. Scr
 - `merge-latest-yml.ts` combines per-arch `latest-mac.yml` / `latest.yml` from CI matrix jobs into one release asset.
 - Usage: `bun run scripts/merge-latest-yml.ts a.yml b.yml --out out.yml`.
 - Unit tests: `tests/main/merge-latest-yml.test.ts`.
+
+## Release asset staging (CD)
+
+- `stage-release-assets.py` copies arch-job artifacts into a flat staging dir with unique basenames for `gh release upload`.
+- Invoked from CD (not runtime). Feeds come from `update-feed/`; binaries from arch dirs; collisions must not fail the job (see workflows AGENTS).
 
 ## Conventions
 
