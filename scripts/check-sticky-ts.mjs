@@ -1,8 +1,12 @@
 /**
  * Assert sticky TypeScript compiler flags stay enabled.
  * Fails CI if strict family or project extras are missing/false in effective config.
+ *
+ * Prefer TypeScript 7 native `tsc` when installed as `@typescript/native`
+ * (side-by-side with `typescript@6` for the JS API / ESLint).
  */
 import { spawnSync } from "node:child_process";
+import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -33,16 +37,50 @@ const STICKY_TRUE_FLAGS = [
 ];
 
 /**
+ * Resolve the `tsc` CLI used for sticky config checks (native TS7 when present).
+ * @returns {string}
+ */
+function resolveTsc() {
+  try {
+    const pkgDir = path.dirname(require.resolve("@typescript/native/package.json"));
+    const nativeBin = path.join(pkgDir, "bin", "tsc");
+    if (existsSync(nativeBin)) {
+      return nativeBin;
+    }
+  } catch {
+    // @typescript/native not installed
+  }
+
+  const workspaceBin = path.join(root, "node_modules", ".bin", "tsc");
+  if (existsSync(workspaceBin)) {
+    return workspaceBin;
+  }
+
+  // Legacy single-package layouts (typescript@6 and earlier expose bin/tsc)
+  try {
+    return require.resolve("typescript/bin/tsc");
+  } catch {
+    // fall through
+  }
+
+  console.error(
+    "[typecheck:sticky] Could not resolve tsc. Install @typescript/native (TS7) or typescript.",
+  );
+  process.exit(1);
+}
+
+/**
  * @param {string} project
  * @returns {Record<string, unknown>}
  */
 function showConfig(project) {
-  const tsc = require.resolve("typescript/bin/tsc");
-  const result = spawnSync(
-    process.execPath,
-    [tsc, "-p", project, "--showConfig"],
-    { cwd: root, encoding: "utf-8" },
-  );
+  const tsc = resolveTsc();
+  // Launchers are Node scripts (TS7 native wraps the Go binary). Run via node for
+  // portability; do not assume a JS file under the `typescript` package name.
+  const result = spawnSync(process.execPath, [tsc, "-p", project, "--showConfig"], {
+    cwd: root,
+    encoding: "utf-8",
+  });
   if (result.status !== 0) {
     console.error(`[typecheck:sticky] tsc --showConfig failed for ${project}`);
     console.error(result.stderr || result.stdout);
