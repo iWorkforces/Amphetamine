@@ -1,6 +1,6 @@
 {
   "name": "amphetamine",
-  "version": "1.10.4",
+  "version": "1.10.5",
   "author": "iWorkforces Engineers",
   "authorEmail": "kennydizi@ocworkforces.com",
   "description": "A tray app that keeps your computer awake on macOS and Windows. Lives in the system tray, prevents the system from going to sleep, and stays out of the Dock/taskbar when idle.",
