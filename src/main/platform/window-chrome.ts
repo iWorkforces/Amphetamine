@@ -14,6 +14,7 @@ export type WindowChromeOptions = Pick<
   | "vibrancy"
   | "visualEffectState"
   | "titleBarStyle"
+  | "titleBarOverlay"
   | "transparent"
   | "hasShadow"
   | "backgroundMaterial"
@@ -67,6 +68,12 @@ export function settingsWindowChrome(
       skipTaskbar: false,
       titleBarStyle: "hidden",
       backgroundMaterial: "mica",
+      // System caption buttons for close/min while using custom/mica chrome.
+      titleBarOverlay: {
+        color: "#2c2c2e",
+        symbolColor: "#f5f5f7",
+        height: 40,
+      },
     };
   }
   return {
@@ -95,6 +102,11 @@ export function aboutWindowChrome(
       skipTaskbar: false,
       titleBarStyle: "hidden",
       backgroundMaterial: "mica",
+      titleBarOverlay: {
+        color: "#2c2c2e",
+        symbolColor: "#f5f5f7",
+        height: 40,
+      },
     };
   }
   return {
