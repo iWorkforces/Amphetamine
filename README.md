@@ -4,7 +4,7 @@ A tray app that keeps your computer awake on **macOS** and **Windows**. Lives in
 
 > **One principle:** Do one thing and do it best.
 
-**Current version:** 1.10.4 · **Repo:** [iWorkforces/Amphetamine](https://github.com/iWorkforces/Amphetamine)
+**Current version:** 1.10.5 · **Repo:** [iWorkforces/Amphetamine](https://github.com/iWorkforces/Amphetamine)
 
 ## Features
 
@@ -47,10 +47,10 @@ bun run build             # parallel production main + preload + renderer
 bun run build:main        # rslib main → lib/main/
 bun run build:preload     # rslib preload → lib/preload/
 bun run build:renderer    # rsbuild renderer → lib/renderer/
-bun run typecheck         # tsc -b for src/
+bun run typecheck         # native tsc -b for src/ (TypeScript 7)
 bun run typecheck:sticky  # assert sticky strict compiler flags
 bun run typecheck:layers  # assert domain/application import boundaries
-bun run typecheck:tests   # tsc for tests/
+bun run typecheck:tests   # native tsc for tests/
 bun run test              # Vitest workspace (55 files, 627 tests)
 bun run test:watch
 bun run test:coverage
@@ -113,7 +113,7 @@ bun scripts/generate-app-icon.mjs       # build/icon.icns (mac) + build/icon.ico
 bun scripts/generate-coffee-tray-icons.mjs
 ```
 
-Outputs go to `dist/` (e.g. `Amphetamine-1.10.4-arm64.dmg`, `Amphetamine-1.10.4-x64.exe`, `Amphetamine-1.10.4-arm64.exe`, portable `*-portable.exe`).
+Outputs go to `dist/` (e.g. `Amphetamine-1.10.5-arm64.dmg`, `Amphetamine-1.10.5-x64.exe`, `Amphetamine-1.10.5-arm64.exe`, portable `*-portable.exe`).
 
 Local macOS helper:
 

@@ -10,7 +10,7 @@ Developer-only Bun/Node scripts. Runtime app code must not import from here. Scr
 | `build-production.ts` | Parallel production compile: main + preload + renderer; labels output; kills siblings on failure |
 | `benchmark-performance.ts` | Runs built app in benchmark mode; writes harness JSON; supports `--scenario idle\|active-session` |
 | `merge-latest-yml.ts` | Merge dual-arch electron-builder `latest*.yml` feeds for GitHub Releases (CD) |
-| `check-sticky-ts.mjs` | Asserts sticky TypeScript compiler flags via `tsc --showConfig` |
+| `check-sticky-ts.mjs` | Asserts sticky TypeScript compiler flags via native `tsc --showConfig` (prefers `@typescript/native`) |
 | `check-layer-imports.mjs` | Asserts domain/application import boundaries (no Electron / outer layers) |
 | `generate-app-icon.mjs` | Generates `build/icon.icns`, `build/icon.ico`, and `src/assets/settings-hero-icon.png` |
 | `generate-coffee-tray-icons.mjs` | Generates 8 tray PNGs for active/inactive × light/dark × scale |
@@ -40,6 +40,7 @@ Developer-only Bun/Node scripts. Runtime app code must not import from here. Scr
 ## Sticky Typecheck Guard
 
 - `check-sticky-ts.mjs` runs `tsc -p tsconfig.json --showConfig` and `tsconfig.tests.json`.
+- Resolves **TypeScript 7 native** `tsc` from `@typescript/native` when present (side-by-side with `typescript@6` for the JS API / ESLint).
 - Fails if sticky flags are missing or not `true` (strict family + project extras such as `exactOptionalPropertyTypes`, `verbatimModuleSyntax`, `noUncheckedIndexedAccess`, …).
 - Invoked by `bun run typecheck:sticky` and the CI lint job.
 - Do not weaken the flag list without an intentional sticky-policy change in root `AGENTS.md`.
