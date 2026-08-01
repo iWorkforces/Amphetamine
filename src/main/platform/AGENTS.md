@@ -17,6 +17,7 @@ Implementation files remain importable for focused unit tests (e.g. `battery-per
 | `index.ts` | Public API surface (re-exports only) |
 | `os.ts` | Pure identity: `isDarwin`, `isWin32`, `resolvePlatformId`, `isSupportedPlatform` |
 | `shell.ts` | Activation policy, Dock icon, login-item settings builders |
+| `utility-presentation.ts` | Refcounted Dock / foreground for Settings, About, and updater dialogs |
 | `window-chrome.ts` | BrowserWindow chrome fragments (popover / settings / about) + `appIconFileName` |
 | `battery-percent.ts` | Charge percent: pmset (darwin) / PowerShell CIM (win32) |
 
@@ -30,25 +31,34 @@ Shortcut defaults, reserved keys, and accelerator validation live in domain vali
 - Never call macOS-only APIs (`setActivationPolicy`, `app.dock`, vibrancy, `openAsHidden`) without a darwin guard.
 - Physical path stays under `main/platform` (not moved to `infrastructure/`).
 - Electron imports: `electron/main` for `app`; types such as `NativeImage` from `electron/common` where needed.
+- Prefer `acquireUtilityForeground` / `releaseUtilityForeground` over raw `enterForegroundMode` / `enterTrayOnlyMode` for utility windows and dialogs so overlapping surfaces do not fight Dock policy.
 
 ## Call sites
 
 | Concern | Call site | Via |
 |---------|-----------|-----|
 | Tray-only boot | `app-shell.ts` | `enterTrayOnlyMode()` |
-| Settings Dock + foreground | WindowGraph `createSettingsWindow` | `enterForegroundMode`, `setDockIcon` on show; `enterTrayOnlyMode` on close |
+| Settings / About Dock + foreground | WindowGraph show/close | `setUtilityDockIcon` + `acquireUtilityForeground` on ready-to-show; `releaseUtilityForeground` on closed |
 | Popover / settings / about chrome | `process/window-graph.ts` | `*WindowChrome()` |
 | Login items | `auto-launch.ts` | `buildLoginItemSettings` |
 | Battery % | `battery-monitor.ts` | `getBatteryPercent` |
-| Updater dialog presentation | composition → hybrid updater hooks | `enterForegroundMode` / `enterTrayOnlyMode` |
+| Updater dialog presentation | composition → hybrid updater hooks | `acquireUtilityForeground` + `app.focus` / `releaseUtilityForeground` |
 | App / window icons | WindowGraph | `appIconFileName`, `settings-hero-icon.png` |
+
+## Utility foreground (refcounted)
+
+- `utility-presentation.ts` holds a refcount so closing one utility (or finishing a dialog) does not force tray-only while another still needs Dock presentation.
+- `setUtilityDockIcon` caches the Dock image applied on the first acquire.
+- Pair acquire/release carefully: WindowGraph only releases if the window actually acquired (`heldForeground` flag) so closed-before-ready cannot drop another surface's ref.
+- Dialog path (composition) acquires once around `showMessageBox` and releases in `finally`; utility windows keep independent refs.
+- Test seam: `resetUtilityForegroundForTests()`.
 
 ## Window chrome summary
 
 | Surface | macOS | Windows |
 |---------|-------|---------|
 | Popover | vibrancy popover, transparent, `skipTaskbar: true` | opaque frameless, `skipTaskbar: true` |
-| Settings / About | vibrancy under-window, Dock visible | mica material, taskbar visible |
+| Settings / About | vibrancy under-window, `hiddenInset`, Dock via utility-presentation | mica material, taskbar visible (`skipTaskbar: false`) |
 
 ## Battery percent
 
