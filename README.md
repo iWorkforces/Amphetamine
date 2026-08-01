@@ -47,10 +47,10 @@ bun run build             # parallel production main + preload + renderer
 bun run build:main        # rslib main → lib/main/
 bun run build:preload     # rslib preload → lib/preload/
 bun run build:renderer    # rsbuild renderer → lib/renderer/
-bun run typecheck         # tsc -b for src/
+bun run typecheck         # native tsc -b for src/ (TypeScript 7)
 bun run typecheck:sticky  # assert sticky strict compiler flags
 bun run typecheck:layers  # assert domain/application import boundaries
-bun run typecheck:tests   # tsc for tests/
+bun run typecheck:tests   # native tsc for tests/
 bun run test              # Vitest workspace (55 files, 627 tests)
 bun run test:watch
 bun run test:coverage

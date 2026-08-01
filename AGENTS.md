@@ -7,6 +7,7 @@ Tray-only Electron app for **macOS and Windows**. Prevents system sleep through 
 | Layer | Tech |
 |------|------|
 | Runtime | Bun 1.3.14+ / Node `>=26 <27` |
+| TypeScript | Dual: native **7.x** (`@typescript/native` owns workspace `tsc`) for typecheck; **6.x** (`typescript@6`) for the JS API / ESLint until 7.1 programmatic API lands |
 | Electron | `^43.2.0` (package pin; do not downgrade below patched 43.x) |
 | Build | Rslib main/preload to CJS + Rsbuild renderer (popover + settings + about) |
 | Test | Vitest 4 workspace: domain + application + main (Node) + renderer (jsdom) |
@@ -142,11 +143,11 @@ bun run benchmark:performance  # requires build; optional --scenario idle|active
 bun run package                # arm64 DMG/ZIP + flip-fuses; also :x64, :universal, :dir
 bun run package:win            # Windows x64 NSIS + portable + flip-fuses; also :win:dir
 bun run package:win:arm64      # Windows arm64 NSIS + portable + flip-fuses; also :win:dir:arm64
-bun run typecheck              # tsc -b
-bun run typecheck:tests        # tsc tests project
+bun run typecheck              # native tsc -b (TypeScript 7 via @typescript/native)
+bun run typecheck:tests        # native tsc tests project
 bun run typecheck:sticky       # assert sticky strict compiler flags
 bun run typecheck:layers       # assert domain/application import boundaries
-bun run lint                   # ESLint src/ tests/
+bun run lint                   # ESLint src/ tests/ (uses typescript@6 API package)
 bun run format                 # Prettier src/tests targets
 bun run clean                  # remove lib/dist outputs
 ```
