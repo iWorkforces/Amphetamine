@@ -4,6 +4,8 @@ import {
   MAIN_WINDOW_HEIGHT,
   SETTINGS_WINDOW_WIDTH,
   SETTINGS_WINDOW_HEIGHT,
+  ABOUT_WINDOW_WIDTH,
+  ABOUT_WINDOW_HEIGHT,
   MIN_POPOVER_HEIGHT,
   MAX_POPOVER_HEIGHT,
   HIDE_DELAY_MS,
@@ -26,6 +28,11 @@ describe("constants", () => {
     it("has correct settings window dimensions", () => {
       expect(SETTINGS_WINDOW_WIDTH).toBe(520);
       expect(SETTINGS_WINDOW_HEIGHT).toBe(640);
+    });
+
+    it("has correct about window dimensions", () => {
+      expect(ABOUT_WINDOW_WIDTH).toBe(340);
+      expect(ABOUT_WINDOW_HEIGHT).toBe(380);
     });
   });
 

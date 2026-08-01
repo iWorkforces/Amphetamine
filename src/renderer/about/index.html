@@ -10,18 +10,27 @@
     <title>About Amphetamine</title>
   </head>
   <body>
-    <div id="app" class="about">
+    <div
+      id="app"
+      class="about"
+      role="dialog"
+      aria-labelledby="product-name"
+      aria-describedby="version description"
+    >
       <img
         id="app-icon"
         class="app-icon"
         alt=""
         draggable="false"
-        title="View source on GitHub"
+        role="button"
+        tabindex="0"
+        aria-label="View source on GitHub"
       />
       <h1 id="product-name">Amphetamine</h1>
       <div id="version" class="version"></div>
       <div id="description" class="description"></div>
-      <button type="button" id="close-btn">Close</button>
+      <div id="copyright" class="copyright"></div>
+      <button type="button" id="close-btn">OK</button>
     </div>
   </body>
 </html>
