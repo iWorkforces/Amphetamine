@@ -234,6 +234,7 @@ describe("ipc-handlers", () => {
         version: "1.0.0",
         description: "Keep awake",
         repository: "https://github.com/iWorkforces/Amphetamine",
+        author: "Test",
       });
     });
   });

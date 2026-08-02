@@ -5,10 +5,11 @@
  * sibling files.
  *
  * Modules:
- *   os.ts               — pure identity helpers
- *   shell.ts            — activation policy, Dock icon, login items
- *   window-chrome.ts    — BrowserWindow option builders
- *   battery-percent.ts  — multi-OS charge percent providers
+ *   os.ts                    — pure identity helpers
+ *   shell.ts                 — activation policy, Dock icon, login items
+ *   utility-presentation.ts  — refcounted Dock / foreground for utility surfaces
+ *   window-chrome.ts         — BrowserWindow option builders
+ *   battery-percent.ts       — multi-OS charge percent providers
  *
  * Rules:
  * - Prefer these helpers over raw `process.platform` in main code.

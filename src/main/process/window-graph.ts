@@ -225,15 +225,152 @@ export function showPopoverNearTray(trayBounds: {
   win.focus();
 }
 
+// --- Settings / About: hide-on-close warm cache ---
+//
+// First open creates + loads the BrowserWindow (slow). User close hides and keeps
+// the renderer process warm so the next open is show/focus only (fast). Quit and
+// composition cleanup force-destroy via closeSettingsWindow / closeAboutWindow.
+
+let settingsHeldForeground = false;
+let aboutHeldForeground = false;
+/** When true, close is allowed to destroy (quit / composition cleanup). */
+let settingsAllowDestroy = false;
+let aboutAllowDestroy = false;
+/**
+ * User intent to have the utility visible. Cleared on hide/destroy.
+ * Guards late `ready-to-show` so a dismiss before first paint cannot re-show the window.
+ */
+let settingsWantsVisible = false;
+let aboutWantsVisible = false;
+
+type UtilityKind = "settings" | "about";
+
+function isUtilityHeld(kind: UtilityKind): boolean {
+  return kind === "settings" ? settingsHeldForeground : aboutHeldForeground;
+}
+
+function setUtilityHeld(kind: UtilityKind, held: boolean): void {
+  if (kind === "settings") {
+    settingsHeldForeground = held;
+  } else {
+    aboutHeldForeground = held;
+  }
+}
+
+function wantsVisible(kind: UtilityKind): boolean {
+  return kind === "settings" ? settingsWantsVisible : aboutWantsVisible;
+}
+
+function setWantsVisible(kind: UtilityKind, wants: boolean): void {
+  if (kind === "settings") {
+    settingsWantsVisible = wants;
+  } else {
+    aboutWantsVisible = wants;
+  }
+}
+
+/**
+ * Drop focus from form controls after warm-cache show.
+ * Chromium restores the previous active element on BrowserWindow.show();
+ * Settings should open without a focused switch/select (second+ open).
+ */
+function clearSettingsRendererFocus(win: BrowserWindow): void {
+  // Defer past Chromium's focus-restore pass on show/focus.
+  setTimeout(() => {
+    if (win.isDestroyed() || !wantsVisible("settings") || !win.isVisible()) {
+      return;
+    }
+    void win.webContents
+      .executeJavaScript(
+        `(() => {
+          const active = document.activeElement;
+          if (active instanceof HTMLElement && active !== document.body) {
+            active.blur();
+          }
+        })()`,
+      )
+      .catch(() => {
+        // Window may have been destroyed or navigated away mid-flight.
+      });
+  }, 0);
+}
+
+/**
+ * Show/focus a warm-cached utility. No-ops if the user already dismissed
+ * (prevents late ready-to-show from resurrecting a closed window).
+ */
+function presentCachedUtilityWindow(win: BrowserWindow, kind: UtilityKind): void {
+  if (win.isDestroyed() || !wantsVisible(kind)) return;
+  if (!isUtilityHeld(kind)) {
+    ensureUtilityDockIcon();
+    acquireUtilityForeground();
+    setUtilityHeld(kind, true);
+  }
+  if (!win.isVisible()) {
+    win.show();
+  }
+  win.focus();
+  if (kind === "settings") {
+    clearSettingsRendererFocus(win);
+  }
+}
+
+function hideCachedUtilityWindow(win: BrowserWindow, kind: UtilityKind): void {
+  // Mark dismissed before hide so any in-flight ready-to-show is ignored.
+  setWantsVisible(kind, false);
+  if (isUtilityHeld(kind)) {
+    releaseUtilityForeground();
+    setUtilityHeld(kind, false);
+  }
+  if (!win.isDestroyed() && win.isVisible()) {
+    win.hide();
+  }
+}
+
+function destroyCachedUtilityWindow(
+  win: BrowserWindow | null,
+  kind: UtilityKind,
+  clearRegistry: () => void,
+): void {
+  setWantsVisible(kind, false);
+  if (isUtilityHeld(kind)) {
+    releaseUtilityForeground();
+    setUtilityHeld(kind, false);
+  }
+  clearRegistry();
+  if (win === null || win.isDestroyed()) {
+    return;
+  }
+  if (kind === "settings") {
+    settingsAllowDestroy = true;
+  } else {
+    aboutAllowDestroy = true;
+  }
+  try {
+    // destroy() bypasses hide-on-close preventDefault and tears down the renderer.
+    win.destroy();
+  } finally {
+    if (kind === "settings") {
+      settingsAllowDestroy = false;
+    } else {
+      aboutAllowDestroy = false;
+    }
+  }
+}
+
 // --- Settings ---
 
 /**
- * Creates or focuses the settings window (singleton).
- * macOS: Dock while open. Windows: taskbar button while open.
+ * Creates or focuses the settings window (singleton, warm-cached after first open).
+ * macOS: Dock while visible. Windows: taskbar button while visible.
+ * User close hides the window; quit destroys it.
  */
 export function createSettingsWindow(): BrowserWindow {
+  // User requested visibility (clears a prior hide before late ready-to-show).
+  setWantsVisible("settings", true);
+
   if (settingsWindow !== null && !settingsWindow.isDestroyed()) {
-    settingsWindow.focus();
+    presentCachedUtilityWindow(settingsWindow, "settings");
     return settingsWindow;
   }
 
@@ -260,24 +397,28 @@ export function createSettingsWindow(): BrowserWindow {
     void win.loadFile(path.join(__dirname, "..", "renderer", "settings.html"));
   }
 
-  // Pair acquire/release: only release if this window actually acquired.
-  // Avoids closed-before-ready releasing another utility's Dock ref.
-  let heldForeground = false;
   win.once("ready-to-show", () => {
-    if (win.isDestroyed()) return;
-    ensureUtilityDockIcon();
-    acquireUtilityForeground();
-    heldForeground = true;
-    win.show();
+    // May no-op if the user dismissed before first paint (wantsVisible=false).
+    presentCachedUtilityWindow(win, "settings");
+  });
+
+  // User close (title bar / Esc / window.close) → hide + keep warm cache.
+  win.on("close", (event) => {
+    if (settingsAllowDestroy) {
+      return;
+    }
+    event.preventDefault();
+    hideCachedUtilityWindow(win, "settings");
   });
 
   win.on("closed", () => {
     if (settingsWindow === win) {
       settingsWindow = null;
     }
-    if (heldForeground) {
+    setWantsVisible("settings", false);
+    if (settingsHeldForeground) {
       releaseUtilityForeground();
-      heldForeground = false;
+      settingsHeldForeground = false;
     }
   });
 
@@ -285,26 +426,38 @@ export function createSettingsWindow(): BrowserWindow {
   return win;
 }
 
+/** True when the settings window exists and is currently visible. */
 export function isSettingsWindowOpen(): boolean {
-  return settingsWindow !== null && !settingsWindow.isDestroyed();
+  return (
+    settingsWindow !== null &&
+    !settingsWindow.isDestroyed() &&
+    settingsWindow.isVisible()
+  );
 }
 
+/**
+ * Force-destroy the settings window (quit / composition cleanup).
+ * Does not leave a warm cache entry.
+ */
 export function closeSettingsWindow(): void {
-  if (settingsWindow !== null && !settingsWindow.isDestroyed()) {
-    settingsWindow.close();
-  }
-  settingsWindow = null;
+  const win = settingsWindow;
+  destroyCachedUtilityWindow(win, "settings", () => {
+    settingsWindow = null;
+  });
 }
 
 // --- About (built renderer entry) ---
 
 /**
- * Creates or focuses the About window (singleton).
+ * Creates or focuses the About window (singleton, warm-cached after first open).
  * Shared secure webPreferences + preload; content is the about renderer entry.
+ * User close hides the window; quit destroys it.
  */
 export function showAbout(_mainWindow?: BrowserWindow): void {
+  setWantsVisible("about", true);
+
   if (aboutWindow !== null && !aboutWindow.isDestroyed()) {
-    aboutWindow.focus();
+    presentCachedUtilityWindow(aboutWindow, "about");
     return;
   }
 
@@ -348,39 +501,47 @@ export function showAbout(_mainWindow?: BrowserWindow): void {
     void win.loadFile(path.join(__dirname, "..", "renderer", "about.html"));
   }
 
-  // Pair acquire/release: only release if this window actually acquired.
-  let heldForeground = false;
   win.once("ready-to-show", () => {
-    if (win.isDestroyed()) return;
-    ensureUtilityDockIcon();
-    acquireUtilityForeground();
-    heldForeground = true;
-    win.show();
+    // May no-op if the user dismissed before first paint (wantsVisible=false).
+    presentCachedUtilityWindow(win, "about");
+  });
+
+  win.on("close", (event) => {
+    if (aboutAllowDestroy) {
+      return;
+    }
+    event.preventDefault();
+    hideCachedUtilityWindow(win, "about");
   });
 
   win.on("closed", () => {
     if (aboutWindow === win) {
       aboutWindow = null;
     }
-    if (heldForeground) {
+    setWantsVisible("about", false);
+    if (aboutHeldForeground) {
       releaseUtilityForeground();
-      heldForeground = false;
+      aboutHeldForeground = false;
     }
   });
 
   aboutWindow = win;
 }
 
+/**
+ * Force-destroy the About window (quit / composition cleanup).
+ * Does not leave a warm cache entry.
+ */
 export function closeAboutWindow(): void {
-  if (aboutWindow !== null && !aboutWindow.isDestroyed()) {
-    aboutWindow.close();
-  }
-  aboutWindow = null;
+  const win = aboutWindow;
+  destroyCachedUtilityWindow(win, "about", () => {
+    aboutWindow = null;
+  });
 }
 
 /**
  * Destroy all tracked windows. Used on quit after composition cleanup.
- * Popover uses destroy() so hide-on-close cannot prevent teardown.
+ * Utility windows and popover use destroy() so hide-on-close cannot prevent teardown.
  */
 export function destroyAllWindows(): void {
   cancelPendingPopoverHide();

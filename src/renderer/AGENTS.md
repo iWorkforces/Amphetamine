@@ -44,9 +44,12 @@ Electron renderer web context. Vanilla TypeScript only. Three built entries (Rsb
 ## About flow
 
 - Built entry `about.html` (Rsbuild env `about`); loaded by WindowGraph with shared preload.
-- Bootstrap calls `window.api.app.getAbout()` for product name, version, description, repository.
-- Icon click uses `window.open(repository)` — main allowlists `https://github.com/*` via `setWindowOpenHandler` + `shell.openExternal`.
-- Close uses `window.close()`.
+- Classic macOS About panel: icon, name, version, description, copyright (`AboutInfo.author`), **OK** button (default focus on first open).
+- Translucent material + open scale/opacity; press feedback on icon and button.
+- Bootstrap calls `window.api.app.getAbout()` for product name, version, description, repository, author.
+- Icon click / Enter / Space uses `window.open(repository)` — main allowlists the package repository URL (and paths under it on `github.com`) via `setWindowOpenHandler` + `shell.openExternal`.
+- OK / Escape uses `window.close()` → main **hide-on-close** warm cache (same as Settings); quit force-destroys.
+- Safe visibility: shell materializes even if `getAbout` fails (fallback copy).
 - Hero icon: bundled `settings-hero-icon.png` via `import.meta.url` (not a main-process data URI).
 - No separate `constants.ts`; copy comes from `AboutInfo` + static HTML structure.
 

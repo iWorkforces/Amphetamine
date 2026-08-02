@@ -78,7 +78,7 @@ function registerAppIpc(): void {
     IPC_CHANNELS.APP_GET_ABOUT,
     (event): IpcResponse<typeof IPC_CHANNELS.APP_GET_ABOUT> => {
       if (!validateSender(event)) {
-        return { productName: "", version: "", description: "", repository: "" };
+        return { productName: "", version: "", description: "", repository: "", author: "" };
       }
       const pkg = getPackageInfo();
       return {
@@ -86,6 +86,7 @@ function registerAppIpc(): void {
         version: app.getVersion(),
         description: pkg.description,
         repository: pkg.repository,
+        author: pkg.author,
       };
     },
   );

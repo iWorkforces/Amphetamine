@@ -282,14 +282,23 @@ describe("auto-updater (hybrid infrastructure)", () => {
     });
 
     it("prompts to restart after download and calls quitAndInstall on Restart", async () => {
-      mockShowMessageBox.mockResolvedValueOnce({ response: 0, checkboxChecked: false });
+      // HIG layout: secondary left (Later=0), primary right (Restart=1)
+      mockShowMessageBox.mockResolvedValueOnce({ response: 1, checkboxChecked: false });
       initAutoUpdater();
       checkForUpdatesNow();
       getHandler("update-available")({ version: "2.1.0", releaseDate: "2025-01-01" });
       getHandler("update-downloaded")({ version: "2.1.0", releaseDate: "2025-01-01" });
 
       await vi.waitFor(() => {
-        expect(mockShowMessageBox).toHaveBeenCalled();
+        expect(mockShowMessageBox).toHaveBeenCalledWith(
+          expect.objectContaining({
+            message: "A New Version Is Ready to Install",
+            buttons: ["Later", "Restart"],
+            defaultId: 1,
+            cancelId: 0,
+            noLink: true,
+          }),
+        );
       });
       await vi.waitFor(() => {
         expect(mockQuitAndInstall).toHaveBeenCalledWith(false, true);
@@ -298,7 +307,7 @@ describe("auto-updater (hybrid infrastructure)", () => {
     });
 
     it("does not quitAndInstall when user chooses Later", async () => {
-      mockShowMessageBox.mockResolvedValueOnce({ response: 1, checkboxChecked: false });
+      mockShowMessageBox.mockResolvedValueOnce({ response: 0, checkboxChecked: false });
       initAutoUpdater();
       checkForUpdatesNow();
       getHandler("update-available")({ version: "2.1.0", releaseDate: "2025-01-01" });
@@ -312,7 +321,7 @@ describe("auto-updater (hybrid infrastructure)", () => {
     });
 
     it("opens release page when quitAndInstall throws", async () => {
-      mockShowMessageBox.mockResolvedValueOnce({ response: 0, checkboxChecked: false });
+      mockShowMessageBox.mockResolvedValueOnce({ response: 1, checkboxChecked: false });
       mockQuitAndInstall.mockImplementationOnce(() => {
         throw new Error("unsigned");
       });
@@ -363,8 +372,8 @@ describe("auto-updater (hybrid infrastructure)", () => {
       await vi.waitFor(() => {
         expect(mockShowMessageBox).toHaveBeenCalledWith(
           expect.objectContaining({
-            message: "You're up to date",
-            detail: "Amphetamine 1.0.0 is the latest version.",
+            message: "You’re Up to Date",
+            detail: "Amphetamine 1.0.0 is the latest version available.",
           }),
         );
       });
@@ -397,15 +406,33 @@ describe("auto-updater (hybrid infrastructure)", () => {
       await vi.waitFor(() => {
         expect(mockShowMessageBox).toHaveBeenCalledWith(
           expect.objectContaining({
-            message: "Could not check for updates",
+            message: "Unable to Check for Updates",
+            buttons: ["Open Releases…", "OK"],
+            defaultId: 1,
+            cancelId: 1, // Esc dismisses (OK), does not open Releases
+            noLink: true,
           }),
         );
       });
       expect(mockShellOpenExternal).not.toHaveBeenCalled();
     });
 
-    it("opens releases list when user chooses Open Releases on check failure", async () => {
+    it("does not open releases when user chooses OK on check failure", async () => {
       mockShowMessageBox.mockResolvedValueOnce({ response: 1, checkboxChecked: false });
+      initAutoUpdater();
+      checkForUpdatesNow();
+      getHandler("error")(new Error("Network error ENOTFOUND"));
+
+      await vi.waitFor(() => {
+        expect(mockShowMessageBox).toHaveBeenCalled();
+      });
+      await Promise.resolve();
+      expect(mockShellOpenExternal).not.toHaveBeenCalled();
+    });
+
+    it("opens releases list when user chooses Open Releases on check failure", async () => {
+      // Secondary (Open Releases…) is index 0 in HIG two-button layout
+      mockShowMessageBox.mockResolvedValueOnce({ response: 0, checkboxChecked: false });
       initAutoUpdater();
       checkForUpdatesNow();
       getHandler("error")(new Error("Network error"));
@@ -753,7 +780,7 @@ describe("auto-updater (hybrid infrastructure)", () => {
         await vi.waitFor(() => {
           expect(mockShowMessageBox).toHaveBeenCalledWith(
             expect.objectContaining({
-              message: "Updates unavailable",
+              message: "Updates Unavailable",
             }),
           );
         });
@@ -781,7 +808,7 @@ describe("auto-updater (hybrid infrastructure)", () => {
       await vi.waitFor(() => {
         expect(mockShowMessageBox).toHaveBeenCalledWith(
           expect.objectContaining({
-            message: "Could not check for updates",
+            message: "Unable to Check for Updates",
           }),
         );
       });

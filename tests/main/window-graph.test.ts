@@ -6,6 +6,7 @@ const mockClose = vi.fn();
 const mockDestroy = vi.fn();
 const mockHide = vi.fn();
 const mockIsDestroyed = vi.fn().mockReturnValue(false);
+const mockIsVisible = vi.fn().mockReturnValue(false);
 const mockLoadURL = vi.fn();
 const mockLoadFile = vi.fn();
 const mockOnce = vi.fn();
@@ -22,6 +23,7 @@ vi.mock("electron", () => ({
     this.destroy = mockDestroy;
     this.hide = mockHide;
     this.isDestroyed = mockIsDestroyed;
+    this.isVisible = mockIsVisible;
     this.loadURL = mockLoadURL;
     this.loadFile = mockLoadFile;
     this.once = mockOnce;
@@ -30,6 +32,7 @@ vi.mock("electron", () => ({
       setWindowOpenHandler: mockSetWindowOpenHandler,
       on: vi.fn(),
       send: vi.fn(),
+      executeJavaScript: vi.fn().mockResolvedValue(undefined),
     };
   }),
   nativeImage: {
@@ -83,6 +86,10 @@ describe("window-graph", () => {
     vi.clearAllMocks();
     vi.resetModules();
     mockIsDestroyed.mockReturnValue(false);
+    mockIsVisible.mockReturnValue(false);
+    // Default: do not auto-fire ready-to-show (tests opt in via mockImplementation).
+    mockOnce.mockReset();
+    mockOn.mockReset();
   });
 
   it("createPopoverWindow applies shared secure webPreferences with preload", async () => {
@@ -132,7 +139,7 @@ describe("window-graph", () => {
     expect(String(opts.webPreferences.preload)).toContain("preload");
   });
 
-  it("destroyAllWindows closes utility windows and destroys popover", async () => {
+  it("destroyAllWindows destroys utility windows and popover", async () => {
     const {
       createPopoverWindow,
       createSettingsWindow,
@@ -143,8 +150,159 @@ describe("window-graph", () => {
     createSettingsWindow();
     showAbout();
     destroyAllWindows();
-    expect(mockClose).toHaveBeenCalled();
-    expect(mockDestroy).toHaveBeenCalled();
+    // Utility windows force-destroy (warm cache must not survive quit).
+    expect(mockDestroy.mock.calls.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it("hides settings on user close and reuses the cached window", async () => {
+    vi.useFakeTimers();
+    mockOnce.mockImplementation((event: string, cb: () => void) => {
+      if (event === "ready-to-show") cb();
+    });
+    mockShow.mockImplementation(() => {
+      mockIsVisible.mockReturnValue(true);
+    });
+    mockHide.mockImplementation(() => {
+      mockIsVisible.mockReturnValue(false);
+    });
+
+    const { createSettingsWindow } = await import("../../src/main/process/window-graph.js");
+    const { BrowserWindow } = await import("electron");
+    createSettingsWindow();
+    expect(BrowserWindow).toHaveBeenCalledTimes(1);
+    expect(mockAcquireUtility).toHaveBeenCalledTimes(1);
+
+    const closeHandler = mockOn.mock.calls.find((c) => c[0] === "close")?.[1] as
+      | ((e: { preventDefault: () => void }) => void)
+      | undefined;
+    expect(closeHandler).toBeTypeOf("function");
+    const preventDefault = vi.fn();
+    closeHandler?.({ preventDefault });
+    expect(preventDefault).toHaveBeenCalled();
+    expect(mockHide).toHaveBeenCalled();
+    expect(mockReleaseUtility).toHaveBeenCalledTimes(1);
+
+    // Second open reuses the same BrowserWindow (no recreate / reload).
+    createSettingsWindow();
+    expect(BrowserWindow).toHaveBeenCalledTimes(1);
+    expect(mockShow).toHaveBeenCalled();
+    expect(mockFocus).toHaveBeenCalled();
+    expect(mockAcquireUtility).toHaveBeenCalledTimes(2);
+
+    // Warm-cache show clears form focus so no control (e.g. Launch at Login) is focused.
+    await vi.advanceTimersByTimeAsync(0);
+    const instance = vi.mocked(BrowserWindow).mock.results[0]?.value as {
+      webContents: { executeJavaScript: ReturnType<typeof vi.fn> };
+    };
+    expect(instance.webContents.executeJavaScript).toHaveBeenCalled();
+    vi.useRealTimers();
+  });
+
+  it("does not re-show after dismiss before first ready-to-show", async () => {
+    // Capture ready-to-show without firing it immediately.
+    let readyToShow: (() => void) | undefined;
+    mockOnce.mockImplementation((event: string, cb: () => void) => {
+      if (event === "ready-to-show") {
+        readyToShow = cb;
+      }
+    });
+    mockShow.mockImplementation(() => {
+      mockIsVisible.mockReturnValue(true);
+    });
+    mockHide.mockImplementation(() => {
+      mockIsVisible.mockReturnValue(false);
+    });
+
+    const { createSettingsWindow } = await import("../../src/main/process/window-graph.js");
+    const { BrowserWindow } = await import("electron");
+
+    createSettingsWindow();
+    // Second open before paint: early present (show + acquire).
+    createSettingsWindow();
+    expect(BrowserWindow).toHaveBeenCalledTimes(1);
+    expect(mockShow).toHaveBeenCalled();
+    expect(mockAcquireUtility).toHaveBeenCalledTimes(1);
+
+    const closeHandler = mockOn.mock.calls.find((c) => c[0] === "close")?.[1] as
+      | ((e: { preventDefault: () => void }) => void)
+      | undefined;
+    closeHandler?.({ preventDefault: vi.fn() });
+    expect(mockHide).toHaveBeenCalled();
+    expect(mockReleaseUtility).toHaveBeenCalledTimes(1);
+
+    mockShow.mockClear();
+    mockAcquireUtility.mockClear();
+    mockFocus.mockClear();
+
+    // Late ready-to-show must not resurrect the dismissed window.
+    readyToShow?.();
+    expect(mockShow).not.toHaveBeenCalled();
+    expect(mockAcquireUtility).not.toHaveBeenCalled();
+    expect(mockFocus).not.toHaveBeenCalled();
+  });
+
+  it("About hide-on-close reuses cache and ignores late ready-to-show after dismiss", async () => {
+    let readyToShow: (() => void) | undefined;
+    mockOnce.mockImplementation((event: string, cb: () => void) => {
+      if (event === "ready-to-show") {
+        readyToShow = cb;
+      }
+    });
+    mockShow.mockImplementation(() => {
+      mockIsVisible.mockReturnValue(true);
+    });
+    mockHide.mockImplementation(() => {
+      mockIsVisible.mockReturnValue(false);
+    });
+
+    const { showAbout } = await import("../../src/main/process/window-graph.js");
+    const { BrowserWindow } = await import("electron");
+
+    showAbout();
+    showAbout(); // early present before ready
+    expect(BrowserWindow).toHaveBeenCalledTimes(1);
+
+    const closeHandler = mockOn.mock.calls.find((c) => c[0] === "close")?.[1] as
+      | ((e: { preventDefault: () => void }) => void)
+      | undefined;
+    closeHandler?.({ preventDefault: vi.fn() });
+    expect(mockHide).toHaveBeenCalled();
+
+    mockShow.mockClear();
+    mockAcquireUtility.mockClear();
+    readyToShow?.();
+    expect(mockShow).not.toHaveBeenCalled();
+    expect(mockAcquireUtility).not.toHaveBeenCalled();
+
+    // Explicit reopen after dismiss still works (warm cache).
+    showAbout();
+    expect(BrowserWindow).toHaveBeenCalledTimes(1);
+    expect(mockShow).toHaveBeenCalled();
+    expect(mockAcquireUtility).toHaveBeenCalledTimes(1);
+  });
+
+  it("isSettingsWindowOpen is true only when visible", async () => {
+    mockOnce.mockImplementation((event: string, cb: () => void) => {
+      if (event === "ready-to-show") cb();
+    });
+    mockShow.mockImplementation(() => {
+      mockIsVisible.mockReturnValue(true);
+    });
+    mockHide.mockImplementation(() => {
+      mockIsVisible.mockReturnValue(false);
+    });
+
+    const { createSettingsWindow, isSettingsWindowOpen } = await import(
+      "../../src/main/process/window-graph.js"
+    );
+    createSettingsWindow();
+    expect(isSettingsWindowOpen()).toBe(true);
+
+    const closeHandler = mockOn.mock.calls.find((c) => c[0] === "close")?.[1] as
+      | ((e: { preventDefault: () => void }) => void)
+      | undefined;
+    closeHandler?.({ preventDefault: vi.fn() });
+    expect(isSettingsWindowOpen()).toBe(false);
   });
 
   describe("popover hide coalescing", () => {
@@ -241,20 +399,22 @@ describe("window-graph", () => {
       expect(mockReleaseUtility).not.toHaveBeenCalled();
     });
 
-    it("acquires on ready-to-show and releases once on closed", async () => {
+    it("acquires on ready-to-show and releases once on hide (user close)", async () => {
       mockOnce.mockImplementation((event: string, cb: () => void) => {
         if (event === "ready-to-show") cb();
       });
+      mockIsVisible.mockReturnValue(true);
       const { createSettingsWindow } = await import("../../src/main/process/window-graph.js");
       createSettingsWindow();
 
       expect(mockAcquireUtility).toHaveBeenCalledTimes(1);
 
-      const closedHandler = mockOn.mock.calls.find((c) => c[0] === "closed")?.[1] as
-        | (() => void)
+      const closeHandler = mockOn.mock.calls.find((c) => c[0] === "close")?.[1] as
+        | ((e: { preventDefault: () => void }) => void)
         | undefined;
-      closedHandler?.();
+      closeHandler?.({ preventDefault: vi.fn() });
       expect(mockReleaseUtility).toHaveBeenCalledTimes(1);
+      expect(mockHide).toHaveBeenCalled();
     });
   });
 });

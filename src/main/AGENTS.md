@@ -11,8 +11,8 @@ Main process owns app lifecycle, BrowserWindows, tray, typed IPC registration, a
 | `index.ts` | App lifecycle events only (ready, quit, single-instance, errors, benchmark entry) |
 | `app-shell.ts` | `createAppShell()` — process-graph root: windows + composition + IPC + tray + updater + quit cleanup |
 | `process/secure-web-preferences.ts` | Single `createSecureWebPreferences()` for all BrowserWindows (sandbox / contextIsolation / no nodeIntegration) |
-| `process/window-graph.ts` | Owns popover / settings / about BrowserWindows + registry + coalesced hide + `destroyAllWindows()` |
-| `composition-root.ts` | `createAppComposition()` — ports, session handle, reactions, `getIpcDeps` / `getTrayDeps` / `initUpdater`, ordered `cleanup()` |
+| `process/window-graph.ts` | Owns popover / settings / about BrowserWindows + registry + coalesced hide + warm cache (hide-on-close) for Settings/About + `destroyAllWindows()` |
+| `composition-root.ts` | `createAppComposition()` — ports, session handle, reactions, user notifier, updater dialog presentation, `getIpcDeps` / `getTrayDeps` / `initUpdater`, ordered `cleanup()` |
 | `ipc.ts` | Typed handler registration; session handlers use injected `IpcDeps.sessionTimer` |
 | `ipc-utils.ts` | `validateSender`, `typedHandle`; allowlisted `index.html` / `settings.html` / `about.html` |
 | `tray.ts` | Tray icon/menu; Check for Updates; destroy on cleanup |
@@ -21,14 +21,14 @@ Main process owns app lifecycle, BrowserWindows, tray, typed IPC registration, a
 | `session-timer.ts` | Façade over `application/session` engine; **handle injection only** |
 | `global-shortcut.ts` | Façade over RegisterAppShortcut + GlobalShortcutPort |
 | `auto-launch.ts` | Login items + `AutoLaunchPort` view (port lives here, not infrastructure) |
-| `battery-monitor.ts` | Threshold **detector** only; percent via `platform/battery-percent`; benchmark counters |
+| `battery-monitor.ts` | Threshold **detector** only; percent via `platform/battery-percent`; optional `onPercentSample`; benchmark counters |
 | `auto-updater.ts` | IPC registration + re-exports of hybrid policy (`infrastructure/updater`) |
 | `auto-updater-utils.ts` | Façade over pure release-URL helpers + package repo lookup |
 | `settings-window.ts` | Thin re-export of WindowGraph settings APIs |
 | `about-window.ts` | Thin re-export of WindowGraph about APIs (built `about.html`) |
 | `security.ts` | WebContents navigation hardening; default deny-all `window.open` |
 | `constants.ts` | Window sizes, timeouts, tray/menu UI strings |
-| `platform/` | OS adapters; see `platform/AGENTS.md` |
+| `platform/` | OS adapters + utility foreground; see `platform/AGENTS.md` |
 | `utils/broadcast.ts` | Typed main→renderer push helper (`PushChannel`) |
 | `utils/packageInfo.ts` | Cached package metadata guard |
 
@@ -56,11 +56,13 @@ Do not register a second `before-quit` handler on settings or other modules.
 
 - Settings field reactions run only through `SettingsReactionService` (single store `onChange` subscriber).
 - Effective sleep: `preventSleep` **OR** session active — via `createRecomputeSleepPrevention` + domain `isEffectivelyActive`.
-- Low-battery: detector calls `HandleLowBatteryAutoStop` (clear intent + cancel session).
+- Low-battery: detector calls `HandleLowBatteryAutoStop` (clear intent + cancel session + optional OS notify via `UserNotifierPort`).
+- Battery monitor may report `onPercentSample` so low-battery messages can include the last known charge percent.
 - Session IPC before `init` **fails closed** (throws); no module-level session globals.
 - Application → renderer pushes use `AppPushEvent` via `MainToRendererNotifierPort` (not raw `IPC_CHANNELS`).
+- OS user feedback uses `UserNotifierPort` (`createOsUserNotifier`) — not a push channel.
 - `getTrayDeps().checkForUpdates` → `UpdaterPort.checkNow()`.
-- Updater port is configured with UI hooks (foreground/tray restore) and `getRepositoryUrl` at composition construct time (`setFeedURL` uses that repo).
+- Updater port is configured with UI hooks (`prepareDialogPresentation` / `restoreTrayPresentation` → acquire/release utility foreground + `app.focus`) and `getRepositoryUrl` at composition construct time (`setFeedURL` uses that repo).
 - `cleanup()` order: settings/about windows → unsubscribe reactions → battery → session → sleep stop → shortcut unregister → updater stop.
 
 ## Popover hide coalescing
@@ -76,7 +78,7 @@ Do not register a second `before-quit` handler on settings or other modules.
 - Packaged senders: exact-match NFC-normalized `lib/renderer/{index,settings,about}.html`; dev: `DEV_ORIGINS`.
 - Renderer pushes: `broadcastToWindows<K>()`; skip destroyed windows.
 - `hardenWebContents` blocks off-allowlist navigation and **denies all** `window.open` by default.
-- About external links: WindowGraph overrides `setWindowOpenHandler` to allowlist `https://github.com/*` via `shell.openExternal` (still returns `deny` so no popup BrowserWindow).
+- About external links: WindowGraph overrides `setWindowOpenHandler` to allowlist the package repository URL (and paths under it on `github.com`) via `shell.openExternal` (still returns `deny` so no popup BrowserWindow).
 - All three windows use shared preload via `createSecureWebPreferences({ preload })`.
 
 ## Timing and state
@@ -100,6 +102,11 @@ Do not register a second `before-quit` handler on settings or other modules.
 - Prefer `isDarwin()` / `isWin32()` from `platform/`.
 - Tray-only boot: `enterTrayOnlyMode()` (from AppShell).
 - Window chrome: `popoverWindowChrome` / `settingsWindowChrome` / `aboutWindowChrome` (applied inside WindowGraph).
+- Settings and About acquire/release **refcounted** utility foreground on show/hide (`acquireUtilityForeground` / `releaseUtilityForeground`); Dock icon via `setUtilityDockIcon`.
+- Settings/About use **hide-on-close warm cache**: first open creates+loads the BrowserWindow; user close hides (renderer stays warm); quit/composition `close*Window` force-destroys (`win.destroy()`, not hide).
+- `*WantsVisible` intent flag: late `ready-to-show` after user dismiss must not re-show; reopening sets intent true again.
+- Settings present path clears form focus after show (deferred `webContents.executeJavaScript` blur) so warm-cache reopen does not restore Launch at Login / last control.
+- `isSettingsWindowOpen()` means **visible** (not merely cached-and-hidden).
 - Login items: `buildLoginItemSettings()` — no `openAsHidden` on non-darwin.
 - Battery shell-outs only in `platform/battery-percent.ts`.
 
@@ -132,6 +139,8 @@ Do not register a second `before-quit` handler on settings or other modules.
 - Never create `BrowserWindow`s outside `process/window-graph` (except tests).
 - Never reintroduce inline `data:` About HTML; use the built `about.html` entry.
 - Never call `initAutoUpdater()` outside `UpdaterPort` / composition `initUpdater()`.
+- Never destroy Settings/About on user close (hide-on-close); only force-destroy on quit/composition cleanup.
+- Never present a utility window when `*WantsVisible` is false (dismiss-before-ready race).
 
 ## Commands
 

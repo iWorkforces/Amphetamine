@@ -28,6 +28,15 @@ let initialCheckTimerId: ReturnType<typeof setTimeout> | null = null;
 let userInitiatedCheck = false;
 
 /**
+ * True until a user-initiated check delivers feedback (dialog, download start, or browser).
+ * Survives joining an in-flight background check whose events already fired without user intent.
+ */
+let pendingUserFeedback = false;
+
+/** True after we have notified the user that a download is underway (once per attempt). */
+let downloadNotifySent = false;
+
+/**
  * Shared in-flight `autoUpdater.checkForUpdates()` promise.
  * Background, tray, and IPC callers join this single request.
  */
@@ -55,6 +64,8 @@ export interface HybridAutoUpdaterDeps {
   prepareDialogPresentation: () => void;
   /** After native dialogs (restore tray-only when appropriate). */
   restoreTrayPresentation: () => void;
+  /** Optional OS notification for user-initiated check/download status. */
+  notifyUser?: (message: { title: string; body: string }) => void;
 }
 
 let deps: HybridAutoUpdaterDeps | null = null;
@@ -98,16 +109,61 @@ function toUpdateMeta(info: UpdateInfo): UpdateMeta {
  * Present a native dialog for tray-only apps.
  *
  * macOS `accessory` activation policy often leaves `dialog.showMessageBox` invisible.
- * Briefly switch to regular presentation, then restore tray-only unless Settings is open.
+ * Presentation hooks (utility foreground / Dock) are injected by composition.
+ * Acquire/restore are always paired even if prepare throws.
  */
 async function presentUserDialog(options: MessageBoxOptions): Promise<MessageBoxReturnValue> {
   const d = requireDeps();
-  d.prepareDialogPresentation();
+  let prepared = false;
   try {
+    d.prepareDialogPresentation();
+    prepared = true;
     app.focus({ steal: true });
-    return await dialog.showMessageBox(options);
+    return await dialog.showMessageBox({
+      ...options,
+      // Prefer ordinary buttons over Windows command-link promotion.
+      noLink: true,
+    });
   } finally {
-    d.restoreTrayPresentation();
+    if (prepared) {
+      d.restoreTrayPresentation();
+    }
+  }
+}
+
+/**
+ * Apple HIG two-button layout: secondary (dismiss/alt) left, primary right.
+ * `defaultId` lands on the primary action; `cancelId` defaults to secondary (Esc).
+ * Use `cancelOnPrimary: true` when Esc should dismiss without the secondary side effect
+ * (e.g. Open Releases… + OK).
+ */
+function twoButtonAlert(
+  primaryLabel: string,
+  secondaryLabel: string,
+  options?: { cancelOnPrimary?: boolean },
+): {
+  buttons: string[];
+  defaultId: number;
+  cancelId: number;
+  primaryResponse: number;
+  secondaryResponse: number;
+} {
+  const primaryResponse = 1;
+  const secondaryResponse = 0;
+  return {
+    buttons: [secondaryLabel, primaryLabel],
+    defaultId: primaryResponse,
+    cancelId: options?.cancelOnPrimary === true ? primaryResponse : secondaryResponse,
+    primaryResponse,
+    secondaryResponse,
+  };
+}
+
+function notifyUserStatus(body: string): void {
+  try {
+    requireDeps().notifyUser?.({ title: "Amphetamine", body });
+  } catch (err: unknown) {
+    log.warn("[auto-updater] notifyUser failed:", err);
   }
 }
 
@@ -145,6 +201,17 @@ function openReleasesListInBrowser(): void {
 
 function clearUserInitiated(): void {
   userInitiatedCheck = false;
+  pendingUserFeedback = false;
+  downloadNotifySent = false;
+}
+
+function markUserFeedbackDelivered(): void {
+  pendingUserFeedback = false;
+}
+
+/** Re-read flag after await; event handlers may clear it concurrently. */
+function stillNeedsUserFeedback(): boolean {
+  return pendingUserFeedback;
 }
 
 /**
@@ -177,7 +244,7 @@ let lastCheckErrorCategory: "network" | "feed-missing" | "signature" | "io" | "u
   "unknown";
 
 function finishUserInitiatedFailure(): void {
-  if (!userInitiatedCheck) {
+  if (!userInitiatedCheck && !pendingUserFeedback) {
     return;
   }
   const version = lastAvailableVersion;
@@ -197,8 +264,8 @@ function showUpToDateDialog(version: string): void {
     buttons: ["OK"],
     defaultId: 0,
     title: "Amphetamine",
-    message: "You're up to date",
-    detail: `Amphetamine ${version} is the latest version.`,
+    message: "You’re Up to Date",
+    detail: `Amphetamine ${version} is the latest version available.`,
   }).catch((err: unknown) => {
     log.warn("[auto-updater] Failed to show up-to-date dialog:", err);
   });
@@ -210,29 +277,32 @@ function showCheckFailedDialog(
 ): void {
   const detailByCategory: Record<typeof category, string> = {
     network:
-      "Amphetamine could not reach the update server. Check your network connection and try again, " +
-      "or open the GitHub releases page to download manually.",
+      "Amphetamine couldn’t reach the update server. Check your network connection and try again, " +
+      "or open the Releases page to download the latest version.",
     "feed-missing":
-      "Update metadata is missing for this release (for example latest-mac.yml or latest.yml on GitHub). " +
+      "Update information for this release isn’t available yet. " +
       "Open the Releases page to download manually, or try again after a new release is published.",
     signature:
-      "An update was found but could not be verified. Open the GitHub releases page to download manually.",
-    io: "Amphetamine could not save or read update files. Check disk space and try again, " +
-      "or open the GitHub releases page to download manually.",
+      "An update was found but couldn’t be verified. Open the Releases page to download manually.",
+    io:
+      "Amphetamine couldn’t save or read update files. Check available disk space and try again, " +
+      "or open the Releases page to download manually.",
     unknown:
-      "Amphetamine could not complete the update check. Open the GitHub releases page to download manually.",
+      "Amphetamine couldn’t complete the update check. Open the Releases page to download manually.",
   };
+  // Esc / cancel must dismiss (OK), not open the browser.
+  const actions = twoButtonAlert("OK", "Open Releases…", { cancelOnPrimary: true });
   void presentUserDialog({
     type: "warning",
-    buttons: ["OK", "Open Releases"],
-    defaultId: 0,
-    cancelId: 0,
+    buttons: actions.buttons,
+    defaultId: actions.defaultId,
+    cancelId: actions.cancelId,
     title: "Amphetamine",
-    message: "Could not check for updates",
+    message: "Unable to Check for Updates",
     detail: detailByCategory[category],
   })
     .then((result) => {
-      if (result.response === 1) {
+      if (result.response === actions.secondaryResponse) {
         openReleasesListInBrowser();
       }
     })
@@ -248,10 +318,10 @@ function showUpdatesUnavailableDialog(): void {
     buttons: ["OK"],
     defaultId: 0,
     title: "Amphetamine",
-    message: "Updates unavailable",
+    message: "Updates Unavailable",
     detail:
-      "Update checks only work in a packaged release build of Amphetamine. " +
-      "This development or unpackaged build cannot download updates.",
+      "Update checks work only in a packaged release of Amphetamine. " +
+      "This development or unpackaged build can’t download updates.",
   }).catch((err: unknown) => {
     log.warn("[auto-updater] Failed to show updates-unavailable dialog:", err);
   });
@@ -261,6 +331,9 @@ function showUpdatesUnavailableDialog(): void {
 function onCheckingForUpdate(): void {
   log.info("[auto-updater] Checking for updates...");
   publishStatus({ status: "checking" });
+  if (userInitiatedCheck) {
+    notifyUserStatus("Checking for updates…");
+  }
 }
 
 /**
@@ -287,15 +360,25 @@ function onUpdateAvailable(info: UpdateInfo): void {
     return;
   }
 
-  log.info("[auto-updater] User-initiated: attempting in-app download of", info.version);
+  // Download path is the user feedback for this check (progress + install dialog later).
+  markUserFeedbackDelivered();
+  startUserInitiatedDownload(info.version);
+}
+
+function startUserInitiatedDownload(version: string): void {
+  log.info("[auto-updater] User-initiated: attempting in-app download of", version);
+  if (!downloadNotifySent) {
+    downloadNotifySent = true;
+    notifyUserStatus(`Downloading Amphetamine ${version}…`);
+  }
   void autoUpdater
     .downloadUpdate()
     .then(() => {
-      log.info("[auto-updater] downloadUpdate() resolved for", info.version);
+      log.info("[auto-updater] downloadUpdate() resolved for", version);
     })
     .catch((err: unknown) => {
       log.warn("[auto-updater] In-app download failed; falling back to browser:", err);
-      openReleasePageInBrowser(info.version);
+      openReleasePageInBrowser(version);
       clearUserInitiated();
     });
 }
@@ -313,7 +396,7 @@ function onUpdateNotAvailable(info: UpdateInfo): void {
     },
   });
 
-  if (userInitiatedCheck) {
+  if (userInitiatedCheck || pendingUserFeedback) {
     clearUserInitiated();
     showUpToDateDialog(info.version);
   }
@@ -330,6 +413,11 @@ function onDownloadProgress(progress: ProgressInfo): void {
       total: progress.total,
     },
   });
+  // One notification at first progress if download start was missed.
+  if (!downloadNotifySent && lastAvailableVersion !== null) {
+    downloadNotifySent = true;
+    notifyUserStatus(`Downloading Amphetamine ${lastAvailableVersion}…`);
+  }
 }
 
 /**
@@ -351,19 +439,21 @@ function onUpdateDownloaded(info: UpdateInfo): void {
 
   clearUserInitiated();
 
+  const actions = twoButtonAlert("Restart", "Later");
   void presentUserDialog({
     type: "info",
-    buttons: ["Restart Now", "Later"],
-    defaultId: 0,
-    cancelId: 1,
-    title: "Update Ready",
-    message: `Version ${info.version} is ready to install`,
+    buttons: actions.buttons,
+    defaultId: actions.defaultId,
+    cancelId: actions.cancelId,
+    title: "Amphetamine",
+    message: "A New Version Is Ready to Install",
     detail:
-      "Restart Amphetamine to apply the update. If automatic install is not available " +
-      "(for example on unsigned builds), you can install from the GitHub release page instead.",
+      `Amphetamine ${info.version} was downloaded. Restart to finish updating. ` +
+      "If automatic install isn’t available (for example on unsigned builds), " +
+      "you can install from the Releases page instead.",
   })
     .then((result) => {
-      if (result.response === 0) {
+      if (result.response === actions.primaryResponse) {
         try {
           // isSilent=false, isForceRunAfter=true so the app relaunches after swap when possible.
           autoUpdater.quitAndInstall(false, true);
@@ -556,14 +646,37 @@ export function checkForUpdatesNow(): void {
   log.info("[auto-updater] Manual update check requested (hybrid path)");
   // Upgrade intent before awaiting so a joined background check becomes user-visible.
   userInitiatedCheck = true;
-  void runSharedCheckForUpdates().catch((err: unknown) => {
-    log.warn("[auto-updater] Manual update check failed:", err);
-    if (err instanceof Error) {
-      lastCheckErrorCategory = categorizeUpdaterError(err);
+  pendingUserFeedback = true;
+  downloadNotifySent = false;
+  notifyUserStatus("Checking for updates…");
+  void (async () => {
+    try {
+      const result = await runSharedCheckForUpdates();
+      // Event handlers already delivered feedback (dialog, download, or browser).
+      if (!stillNeedsUserFeedback()) {
+        return;
+      }
+      // Joined a check whose events ran without user intent — settle from the result.
+      if (result?.updateInfo) {
+        lastAvailableVersion = result.updateInfo.version;
+        markUserFeedbackDelivered();
+        publishStatus({
+          status: "available",
+          info: toUpdateMeta(result.updateInfo),
+        });
+        startUserInitiatedDownload(result.updateInfo.version);
+      } else {
+        clearUserInitiated();
+        showUpToDateDialog(app.getVersion());
+      }
+    } catch (err: unknown) {
+      log.warn("[auto-updater] Manual update check failed:", err);
+      if (err instanceof Error) {
+        lastCheckErrorCategory = categorizeUpdaterError(err);
+      }
+      finishUserInitiatedFailure();
     }
-    // Prefer event-handler path (onError / onUpdateNotAvailable) when it already ran.
-    finishUserInitiatedFailure();
-  });
+  })();
 }
 
 /**
@@ -581,8 +694,21 @@ export async function checkForUpdatesForIpc(): Promise<{
     return null;
   }
   userInitiatedCheck = true;
+  pendingUserFeedback = true;
+  downloadNotifySent = false;
+  notifyUserStatus("Checking for updates…");
   try {
     const result = await runSharedCheckForUpdates();
+    if (stillNeedsUserFeedback()) {
+      if (result?.updateInfo) {
+        lastAvailableVersion = result.updateInfo.version;
+        markUserFeedbackDelivered();
+        startUserInitiatedDownload(result.updateInfo.version);
+      } else {
+        clearUserInitiated();
+        showUpToDateDialog(app.getVersion());
+      }
+    }
     if (result?.updateInfo) {
       return {
         version: result.updateInfo.version,

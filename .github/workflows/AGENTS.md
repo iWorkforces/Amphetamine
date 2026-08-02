@@ -25,7 +25,7 @@ Workflow definitions for lint/test/build, production release publishing, and dev
 - Windows matrix packages **x64** on `windows-latest` and **arm64** on `windows-11-arm` (NSIS + portable `.exe`).
 - Artifacts: `dist-mac-{arch}` (dmg/zip/**yml**/blockmap) and `dist-win-{arch}` (`x64` / `arm64`, exe/yml/blockmap) for 14 days (no `-beta` suffix).
 - **Mac update feed:** CI must upload `latest-mac.yml` (and blockmaps). CD merges arm64+x64 feeds into one release asset. Without `latest-mac.yml`, packaged macOS apps fail "Check for Updates" with a false network error.
-- Packaging uses raw `electron-builder` (fuses are flipped on local `bun run package*` paths).
+- Packaging uses `electron-builder`; **fuses flip fail-closed via `build/after-pack.cjs`** on archived outputs (same path as local `bun run package*`, which also runs post `flip-fuses.cjs` on leftover unpacked apps).
 
 ## CD Rules
 
@@ -71,7 +71,7 @@ Workflow definitions for lint/test/build, production release publishing, and dev
 
 - Actions are pinned by commit SHA; update comments and SHAs together.
 - Keep CI Node/Bun pins aligned with `package.json` engines and package manager.
-- If CI packaging remains raw `electron-builder`, check it stays equivalent to local `package*` scripts for fuse/signing expectations.
+- Keep CI `electron-builder` + `afterPack` fuse flipping equivalent to local `package*` scripts (afterPack fail-closed + post `flip-fuses` on leftover unpacked where applicable).
 - Runtime updater opens GitHub release URLs derived from package metadata; release tags must match `v<package.json.version>`.
 - Do not put generated artifacts under workflow source directories; CI downloads into temporary `artifacts/` paths.
 - CD still uses `workflow_run` and must remain defined on the default branch path that receives main CI successes.

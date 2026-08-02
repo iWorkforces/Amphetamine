@@ -21,7 +21,10 @@ vi.mock("electron", () => ({
     this.focus = mockFocus;
     this.show = mockShow;
     this.close = mockClose;
+    this.hide = vi.fn();
+    this.destroy = vi.fn();
     this.isDestroyed = mockIsDestroyed;
+    this.isVisible = vi.fn().mockReturnValue(false);
     this.loadURL = mockLoadURL;
     this.loadFile = mockLoadFile;
     this.once = mockOnce;
@@ -29,6 +32,7 @@ vi.mock("electron", () => ({
     this.webContents = {
       setWindowOpenHandler: mockSetWindowOpenHandler,
       on: vi.fn(),
+      executeJavaScript: vi.fn().mockResolvedValue(undefined),
     };
   }),
   nativeImage: {
@@ -106,11 +110,28 @@ describe("about-window", () => {
     expect(vi.mocked(BrowserWindow).mock.calls.length).toBe(firstCalls);
   });
 
-  it("closeAboutWindow closes open window", async () => {
+  it("closeAboutWindow force-destroys open window", async () => {
     const { showAbout, closeAboutWindow } = await import("../../src/main/about-window.js");
+    const { BrowserWindow } = await import("electron");
     showAbout();
     closeAboutWindow();
-    expect(mockClose).toHaveBeenCalled();
+    const instance = vi.mocked(BrowserWindow).mock.results[0]?.value as {
+      destroy: ReturnType<typeof vi.fn>;
+    };
+    expect(instance.destroy).toHaveBeenCalled();
+  });
+
+  it("reuses warm-cached About window on second showAbout", async () => {
+    mockOnce.mockImplementation((event: string, cb: () => void) => {
+      if (event === "ready-to-show") cb();
+    });
+    const { showAbout } = await import("../../src/main/about-window.js");
+    const { BrowserWindow } = await import("electron");
+    showAbout();
+    const calls = vi.mocked(BrowserWindow).mock.calls.length;
+    showAbout();
+    expect(vi.mocked(BrowserWindow).mock.calls.length).toBe(calls);
+    expect(mockFocus).toHaveBeenCalled();
   });
 
   it("closeAboutWindow is safe when nothing open", async () => {

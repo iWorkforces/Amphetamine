@@ -64,7 +64,7 @@ Application code must not import channel literals; it publishes semantic `AppPus
 - `SessionStatusResponse`: 3-arm union (stopped / timed / indefinite).
 - `SessionStartResponse`: ok/fail (`invalid-duration`, `Duration cannot exceed 24 hours`, `rejected`).
 - `AutoUpdaterStatus`: checking / available / not-available / downloaded / downloading / errors.
-- `AboutInfo`: `productName`, `version`, `description`, `repository` (`app:get-about`).
+- `AboutInfo`: `productName`, `version`, `description`, `repository`, `author` (`app:get-about`).
 - `PerfTimestamp` is branded via domain `asPerf(n)`.
 
 ## Benchmark Contract

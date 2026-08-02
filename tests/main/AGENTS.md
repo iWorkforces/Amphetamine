@@ -7,14 +7,14 @@ Main-process Vitest suites run in Node with Electron mocked (project aliases `el
 | Area | Typical files |
 |------|----------------|
 | Bootstrap / quit | `index.test.ts`, `app-shell.test.ts` |
-| Window graph | `window-graph.test.ts` (hide coalesce), `secure-web-preferences.test.ts`, `settings-window*.test.ts`, `about-window.test.ts` |
+| Window graph | `window-graph.test.ts` (popover hide coalesce, Settings/About warm cache, wantsVisible dismiss race, focus-clear, utility acquire/release), `secure-web-preferences.test.ts`, `settings-window*.test.ts`, `about-window.test.ts` |
 | Composition | `composition-root.test.ts` (session IPC fail-closed before init) |
 | Composition wiring | `composition-wiring.test.ts` (settings reactions / tray effective-active matrix) |
 | IPC / security | `ipc.test.ts`, `ipc-handlers.test.ts`, `security.test.ts`, `preload.test.ts` |
 | Session façade | `session-timer.test.ts` (handle from `createSessionTimer` only) |
 | Settings store | `settings.test.ts` (write coalesce), `settings.predicates.test.ts` |
-| OS integrations | `sleep-prevention.test.ts`, `battery-monitor.test.ts` (incl. benchmark counters), `auto-launch.test.ts`, `global-shortcut.test.ts`, `shortcut.test.ts`, `tray.test.ts` |
-| Platform | `platform.test.ts`, `battery-percent.test.ts`, `platform-shell-side-effects.test.ts` |
+| OS integrations | `sleep-prevention.test.ts`, `battery-monitor.test.ts` (incl. benchmark counters / `onPercentSample`), `auto-launch.test.ts`, `global-shortcut.test.ts`, `shortcut.test.ts`, `tray.test.ts` |
+| Platform | `platform.test.ts`, `battery-percent.test.ts`, `platform-shell-side-effects.test.ts`, `utility-presentation.test.ts` (refcount / Dock icon) |
 | Updater | `auto-updater.test.ts` (hybrid + setFeedURL + single-flight), `auto-updater-utils.test.ts`; port: `tests/infrastructure/updater-port.test.ts` |
 | Tooling contracts | `merge-latest-yml.test.ts`, `build-production.test.ts` |
 | Utils | `broadcast.test.ts`, `packageInfo.test.ts`, `constants.test.ts` |
@@ -49,11 +49,16 @@ Pure use-case / domain tests live under `tests/application` and `tests/domain` (
 - SESSION_START goldens: `invalid-duration`, `Duration cannot exceed 24 hours` (>1440), 1440 inclusive, `null` indefinite.
 - SETTINGS_CHANGED only for `preventSleep` \| `batteryThreshold` \| `shortcut` (via AppPushEvent → channel).
 - `sleepBlockMode` recompute only when blocker active OR intent OR session; mode read from `getSettings()` (advance mock cache before subscriber).
-- About: shared secure prefs **with** preload; loads `/about.html`; github-only `window.open` via override after `hardenWebContents`.
+- About: shared secure prefs **with** preload; loads `/about.html`; github-only `window.open` via override after `hardenWebContents`; acquires utility foreground on ready-to-show (same as Settings).
+- Utility presentation: nested acquires keep Dock until last release; over-release is safe; dialog hooks pair with window refs.
+- Warm cache: user `close` → preventDefault + hide + release foreground; second open reuses one BrowserWindow (no recreate); `close*Window` / `destroyAllWindows` force-`destroy`.
+- Dismiss-before-ready: early present then hide then late `ready-to-show` must **not** re-show or re-acquire (`*WantsVisible`).
+- Settings present: deferred `executeJavaScript` blur so warm reopen does not focus a control.
+- `isSettingsWindowOpen` is true only when visible (hidden cache returns false).
 - AppShell: ready order tray-only → popover → composition → IPC → tray → `initUpdater` (skipped in benchmark).
 - Popover hide: blur/minimize bursts → one pending hide; show before expiry cancels hide.
 - Settings coalesce: rapid multi-field updates → fewer write/rename pairs than logical updates; flush awaits queue.
-- Updater: concurrent checks call `checkForUpdates` once; `setFeedURL` from package repository.
+- Updater: concurrent checks call `checkForUpdates` once; `setFeedURL` from package repository; HIG two-button layout + `noLink`; check-failed Esc dismisses (OK).
 
 ## Timer and async
 
