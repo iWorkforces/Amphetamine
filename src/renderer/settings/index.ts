@@ -554,6 +554,28 @@ async function saveSettings(
   }, 300);
 }
 
+/** Drop focus from toggles/selects after warm-cache show (no autofocus on reopen). */
+function clearControlFocus(): void {
+  const active = document.activeElement;
+  if (active instanceof HTMLElement && active !== document.body) {
+    active.blur();
+  }
+}
+
+/**
+ * Warm-cache reopen restores the prior focused control. Clear it when the page
+ * becomes visible again so Settings never lands on Launch at Login (or any control).
+ */
+function onSettingsVisibilityChange(): void {
+  if (document.visibilityState !== "visible") {
+    return;
+  }
+  // Double rAF: run after Chromium's focus-restore on BrowserWindow.show().
+  requestAnimationFrame(() => {
+    requestAnimationFrame(clearControlFocus);
+  });
+}
+
 async function init(): Promise<void> {
   try {
     settings = await window.api.settings.get();
@@ -586,7 +608,10 @@ async function init(): Promise<void> {
     setErrorMessage(`${SHORTCUT_REGISTRATION_FAILED_PREFIX}: ${data.accelerator}`);
   });
 
+  document.addEventListener("visibilitychange", onSettingsVisibilityChange);
+
   window.addEventListener("beforeunload", () => {
+    document.removeEventListener("visibilitychange", onSettingsVisibilityChange);
     cleanupSettings();
     cleanupShortcutFailed();
   });

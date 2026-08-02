@@ -34,7 +34,10 @@ vi.mock("electron", () => ({
     this.focus = mockFocus;
     this.close = mockClose;
     this.show = mockShow;
+    this.hide = vi.fn();
+    this.destroy = vi.fn();
     this.isDestroyed = mockIsDestroyed;
+    this.isVisible = vi.fn().mockReturnValue(false);
     this.loadURL = mockLoadURL;
     this.loadFile = mockLoadFile;
     this.once = vi.fn().mockImplementation((event: string, cb: () => void) => {
@@ -43,7 +46,12 @@ vi.mock("electron", () => ({
       }
     });
     this.on = vi.fn();
-    this.webContents = { on: vi.fn(), setWindowOpenHandler: vi.fn(), send: vi.fn() };
+    this.webContents = {
+      on: vi.fn(),
+      setWindowOpenHandler: vi.fn(),
+      send: vi.fn(),
+      executeJavaScript: vi.fn().mockResolvedValue(undefined),
+    };
   }),
   nativeImage: {
     createFromPath: vi.fn().mockReturnValue({
