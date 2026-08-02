@@ -100,6 +100,8 @@ export interface AboutInfo {
   version: string;
   description: string;
   repository: string;
+  /** Rights holder for copyright line (from package.json author). */
+  author: string;
 }
 
 /**

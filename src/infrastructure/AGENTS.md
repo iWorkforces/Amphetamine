@@ -10,11 +10,12 @@ Implements application ports with Electron/Node. May import domain types and app
 | `schedule/node-schedule.ts` | `SchedulePort` | `setTimeout` + `unref` / `clearTimeout` |
 | `logging/electron-logger.ts` | `LoggerPort` | `electron-log` |
 | `notification/broadcast-notifier.ts` | `MainToRendererNotifierPort` | maps `AppPushEvent` → IPC `PUSH_CHANNELS` |
+| `notification/os-user-notifier.ts` | `UserNotifierPort` | Electron `Notification`; falls back to logger when unsupported |
 | `settings/file-settings-store.ts` | `SettingsStorePort` | atomic JSON; **coalesced** one active write + one pending batch; corrupt backup |
 | `settings/dialog-save-failure.ts` | `SettingsSaveFailurePort` | `dialog.showErrorBox` |
 | `sleep/power-save-blocker.ts` | `SleepBlockerPort` | **sole** `powerSaveBlocker` owner |
 | `shortcut/electron-global-shortcut.ts` | `GlobalShortcutPort` | register / unregisterAll |
-| `updater/hybrid-auto-updater.ts` | hybrid policy | electron-updater events; `setFeedURL` from package repo; single-flight checks |
+| `updater/hybrid-auto-updater.ts` | hybrid policy | electron-updater events; `setFeedURL` from package repo; single-flight checks; dialog presentation hooks |
 | `updater/auto-updater-utils.ts` | pure helpers | `deriveReleaseUrlBase`, `parseGitHubRepoIdentity`, `categorizeUpdaterError` |
 | `updater/electron-updater-port.ts` | `UpdaterPort` | `configureHybridAutoUpdater` + lifecycle; **no main imports** |
 | `benchmark/` | harness | scenarios + battery counters; see local `AGENTS.md` |
@@ -40,6 +41,14 @@ Implements application ports with Electron/Node. May import domain types and app
 - Concurrent tray/IPC/background checks share one in-flight `checkForUpdates()`; manual join upgrades user intent.
 - macOS needs **`latest-mac.yml`** on the GitHub release; Windows needs **`latest.yml`**. Missing feed → false “could not reach update server” dialog.
 - Background checks keep `autoDownload = false`; user-initiated path may download/install or open GitHub.
+- Native dialogs use injected `prepareDialogPresentation` / `restoreTrayPresentation` (composition pairs these with `acquireUtilityForeground` / `releaseUtilityForeground` so tray-only macOS can show message boxes). Multi-button dialogs set `noLink: true`. Check-failed Esc dismisses (OK), not Open Releases.
+- Optional `notifyUser` surfaces Checking / Downloading OS notifications for user-initiated checks. Joining an in-flight background check settles feedback if events already ran without user intent.
+
+## User notifications
+
+- `UserNotifierPort` is for OS-level feedback that is **not** a renderer push (distinct from `MainToRendererNotifierPort`).
+- `createOsUserNotifier` uses Electron `Notification`; when unsupported, logs with `[notify]` and no-ops.
+- Production: composition wires notifier into `HandleLowBatteryAutoStop`.
 
 ## Rules
 
@@ -58,4 +67,5 @@ Implements application ports with Electron/Node. May import domain types and app
 | settings store | `[settings]` |
 | shortcut | `[shortcut]` |
 | updater | `[auto-updater]` |
+| OS notifications | `[notify]` |
 | benchmark | `[benchmark]` |

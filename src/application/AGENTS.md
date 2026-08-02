@@ -6,17 +6,17 @@ Electron-free application services. Depends on **domain** and **port interfaces*
 
 | Path | Role |
 |------|------|
-| `ports/` | Port interfaces (closed budget of 11; see barrel `ports/index.ts`) |
+| `ports/` | Port interfaces (closed budget of 12; see barrel `ports/index.ts`) |
 | `session/session-engine.ts` | Timed/indefinite session machine (`ClockPort` + `SchedulePort` + notifier + logger) |
 | `sleep/recompute-sleep-prevention.ts` | Effective sleep OR policy → `SleepBlockerPort` |
 | `sleep/toggle-prevent-sleep.ts` | Flip `preventSleep` via store (persist-only) |
 | `settings/update-settings.ts` | Persist-only partial update |
 | `settings/get-settings.ts` | Snapshot read |
 | `settings/settings-reaction-service.ts` | **Sole** settings field-diff reaction owner |
-| `battery/handle-low-battery-auto-stop.ts` | Clear intent + cancel session |
+| `battery/handle-low-battery-auto-stop.ts` | Clear intent + cancel session; optional `UserNotifierPort` feedback |
 | `shortcut/register-app-shortcut.ts` | Register shortcut; `DEFAULT_SHORTCUT`; publish failure via notifier |
 
-## Ports (budget: 11)
+## Ports (budget: 12)
 
 | Port | Purpose | Implementation home |
 |------|---------|---------------------|
@@ -24,6 +24,7 @@ Electron-free application services. Depends on **domain** and **port interfaces*
 | `SettingsSaveFailurePort` | Persist failure UX | `infrastructure/settings` |
 | `SleepBlockerPort` | Start/stop power-save blocker | `infrastructure/sleep` |
 | `MainToRendererNotifierPort` | Publish **`AppPushEvent`** only | `infrastructure/notification` |
+| `UserNotifierPort` | OS user-visible feedback (not renderer push) | `infrastructure/notification/os-user-notifier` |
 | `ClockPort` | `perfNow` / `wallNow` | `infrastructure/clock` |
 | `SchedulePort` | Delay + cancel | `infrastructure/schedule` |
 | `AutoLaunchPort` | Login-item sync | **`main/auto-launch.ts`** (not infrastructure) |
@@ -68,10 +69,11 @@ Infrastructure `broadcast-notifier` maps these to `PUSH_CHANNELS`.
 - Session engine cancels outstanding schedule handles on cancel/cleanup/expiry.
 - `reconcileSessionState` must remain a no-op regarding preference null (must not cancel live sessions).
 - Prefer factories (`createX(deps)`) matching existing style; no DI container.
-- Log tags: prefer `[session]`, `[settings-reactions]`, `[shortcut]` (see root AGENTS.md).
+- Low-battery auto-stop may take optional `userNotifier` + `getLastKnownPercent`; production wires both from composition.
+- Log tags: prefer `[session]`, `[settings-reactions]`, `[shortcut]`, `[low-battery]` / `[composition]` (see root AGENTS.md). `[notify]` is used by the OS notification adapter.
 
 ## Tests
 
-Pure unit tests under `tests/application/` with fake ports (especially fake `SchedulePort` for expiry). Notifier mocks expect `publish({ type: "…", … })`. `ports-compile.test.ts` guards the port barrel surface.
+Pure unit tests under `tests/application/` with fake ports (especially fake `SchedulePort` for expiry). Notifier mocks expect `publish({ type: "…", … })`. Low-battery tests cover optional `UserNotifierPort.notify`. `ports-compile.test.ts` guards the port barrel surface (type-only exports).
 
 Persistence coalescing and updater single-flight live in infrastructure/main tests, not here.

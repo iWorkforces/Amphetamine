@@ -27,7 +27,7 @@ src/main/                 Composition root, IPC, tray, windows, process façades
   app-shell.ts            createAppShell — process-graph root (windows/IPC/tray/composition)
   process/                WindowGraph + shared secure webPreferences
   composition-root.ts     createAppComposition — wire ports, use cases, reactions
-  platform/               OS adapters; public entry platform/index.ts
+  platform/               OS adapters + utility-presentation; public entry platform/index.ts
   utils/                  broadcastToWindows, packageInfo guard
 src/preload/              sandboxed contextBridge API
 src/renderer/             popover + settings + about (built HTML entries)
@@ -49,9 +49,10 @@ Dependency rule: **domain** and **application** must not import `electron` / `el
 | Add settings field | `src/domain/settings/app-settings.ts`, `src/domain/settings-validation/validators.ts` | Extend `AppSettings`, `DEFAULT_SETTINGS`, `VALIDATORS`; migrate legacy keys in `migrateRawSettingsRecord`; shared re-exports stay available |
 | Domain pure rules | `src/domain/` | `isEffectivelyActive`, duration validation, threshold, `PerfTimestamp` |
 | Application use cases | `src/application/` | Session engine, recompute/toggle sleep, settings reactions, low-battery, shortcut |
-| Port interfaces | `src/application/ports/` | Closed budget of **11** ports; see `ports/index.ts` |
-| Process graph / windows | `src/main/app-shell.ts`, `src/main/process/` | AppShell ready/quit; WindowGraph owns all BrowserWindows |
+| Port interfaces | `src/application/ports/` | Closed budget of **12** ports; see `ports/index.ts` |
+| Process graph / windows | `src/main/app-shell.ts`, `src/main/process/` | AppShell ready/quit; WindowGraph owns all BrowserWindows; Settings/About **hide-on-close warm cache** |
 | Main→renderer push | `MainToRendererNotifierPort` + `broadcast-notifier` | Application publishes `AppPushEvent`; adapter maps to `PUSH_CHANNELS` |
+| OS user notifications | `UserNotifierPort` + `os-user-notifier` | Low-battery feedback via Electron `Notification` (not a renderer push) |
 | Wire app / quit | `src/main/app-shell.ts`, `src/main/index.ts` | AppShell owns ready/quit graph; composition before IPC; quit: flush → tray → composition → destroy windows |
 | Settings persistence | `src/infrastructure/settings/`, façade `src/main/settings.ts` | Atomic write; coalesced one-in-flight + one pending batch; save-failure dialog |
 | Sleep blocker | `src/infrastructure/sleep/`, façade `src/main/sleep-prevention.ts` | Sole `powerSaveBlocker` owner |
@@ -60,9 +61,10 @@ Dependency rule: **domain** and **application** must not import `electron` / `el
 | Login items | `src/main/auto-launch.ts` (`AutoLaunchPort` view) | Implemented in main (not infrastructure) |
 | Tray/menu | `src/main/tray.ts`, `src/assets/AGENTS.md` | Icon = effective active; checkbox = user intent |
 | Renderer popover | `src/renderer/index.ts` | Domain `isEffectivelyActive`; mode-stable session actions; chips start session only |
-| Settings UI | `src/renderer/settings/AGENTS.md` | Debounced saves, shortcut recorder, sleep mode |
-| About window | `src/renderer/about/`, WindowGraph `showAbout` | Built `about.html`; `app:get-about`; github.com `window.open` allowlist |
+| Settings UI | `src/renderer/settings/AGENTS.md` | Debounced saves, shortcut recorder, sleep mode; warm-cache reopen clears form focus |
+| About window | `src/renderer/about/`, WindowGraph `showAbout` | Built `about.html`; `app:get-about` (+ `author`); github.com allowlist; hide-on-close cache |
 | Hybrid auto-updater | `src/infrastructure/updater/` (+ main IPC façade) | `setFeedURL` from package repo; single-flight checks; needs `latest-mac.yml` / `latest.yml` on release |
+| Utility Dock / dialogs | `src/main/platform/utility-presentation.ts` | Refcounted macOS foreground for Settings, About, and updater dialogs |
 | Benchmark mode | `src/infrastructure/benchmark/`, `src/renderer/benchmark-countdown.ts`, `scripts/benchmark-performance.ts` | Scenarios `idle` \| `active-session`; requires built `lib/` |
 | Platform OS gates | `src/main/platform/` | Prefer `isDarwin` / `isWin32` |
 | Test mocking | `tests/AGENTS.md` (+ main/renderer) | Domain/application pure; main mocks Electron |
@@ -86,6 +88,7 @@ Dependency rule: **domain** and **application** must not import `electron` / `el
 | `[auto-updater]` | Hybrid updater |
 | `[security]` | Navigation / window-open hardening |
 | `[benchmark]` | Production benchmark harness |
+| `[notify]` | OS user notifications (`UserNotifierPort` / low-battery) |
 
 ## Conventions
 
@@ -160,11 +163,13 @@ bun run clean                  # remove lib/dist outputs
 - Settings duration select still starts a session **and** updates `defaultSessionDuration`.
 - Sleep block mode defaults to `prevent-display-sleep`; `prevent-app-suspension` allows display sleep.
 - Login items: macOS uses `openAsHidden: true`; Windows uses `openAtLogin` without that flag.
-- Settings window: macOS temporarily shows the Dock icon (`enterForegroundMode` + `setDockIcon`); Windows shows a taskbar button while open. Tray-only mode returns on close.
-- About window: utility chrome with `skipTaskbar: false` (Windows taskbar); does not currently flip macOS activation policy (settings path owns Dock restore).
+- Settings and About share refcounted macOS Dock presentation via `acquireUtilityForeground` / `releaseUtilityForeground` (`platform/utility-presentation`). Windows shows a taskbar button while open (`skipTaskbar: false` + `titleBarOverlay` caption buttons). Tray-only mode returns when the last utility ref is released.
+- Settings/About **warm cache**: first open creates+loads the BrowserWindow; user close **hides** (renderer stays warm); quit/composition `close*Window` force-**destroy**s. `*WantsVisible` blocks late `ready-to-show` after dismiss. Settings reopen clears control focus (no autofocus on Launch at Login).
+- Updater dialogs also acquire/release a utility foreground ref so `dialog.showMessageBox` is visible under tray-only activation policy; utility windows keep their own refs so Dock stays if Settings/About remain open.
+- Low-battery auto-stop clears intent + cancels session and shows an OS notification via `UserNotifierPort` (`createOsUserNotifier`).
 - Popover hide on blur uses typed `window:hide`, not DOM `CustomEvent`.
 - About is a third built renderer (`about.html`) with shared preload; not inline `data:` HTML.
-- `hardenWebContents` denies all `window.open`; About overrides with a github.com-only allowlist that opens via `shell.openExternal`.
+- `hardenWebContents` denies all `window.open`; About overrides with a package-repository allowlist on `github.com` that opens via `shell.openExternal`.
 - Auto-updater is hybrid: feed from package.json `repository` via `setFeedURL`; concurrent checks single-flight. **Check for Updates** tries in-app download/install when possible; falls back to the GitHub release page. Background checks do not auto-download.
 - GitHub Releases must publish **`latest-mac.yml`** (mac) and **`latest.yml`** (win) or macOS Check for Updates fails with a false network-error dialog. Repo: `iWorkforces/Amphetamine`.
 - Electron pin is `^43.2.0` in package.json; do not downgrade below the patched 43.x line referenced by security comments.

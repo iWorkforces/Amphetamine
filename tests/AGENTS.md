@@ -66,7 +66,7 @@ bun run typecheck:layers
 ## Notes
 
 - Preload unit tests live under `tests/main/preload.test.ts`.
-- Process-graph suites: `app-shell.test.ts`, `window-graph.test.ts` (incl. hide coalesce), `secure-web-preferences.test.ts`, `composition-wiring.test.ts`, `composition-root.test.ts`.
-- Application suites cover session engine, sleep recompute/toggle, settings reactions/update/get, low-battery auto-stop, and port barrel compile.
+- Process-graph suites: `app-shell.test.ts`, `window-graph.test.ts` (incl. hide coalesce, warm cache, wantsVisible, utility foreground), `secure-web-preferences.test.ts`, `utility-presentation.test.ts`, `composition-wiring.test.ts`, `composition-root.test.ts`.
+- Application suites cover session engine, sleep recompute/toggle, settings reactions/update/get, low-battery auto-stop (incl. optional `UserNotifierPort`), and port barrel compile.
 - Perf/coalesce suites: settings write batching, updater single-flight, renderer session-action identity, `merge-latest-yml.test.ts`, `build-production.test.ts`.
-- ~52 test files / 600+ tests (Vitest workspace).
+- ~56 test files / 640+ tests (Vitest workspace).

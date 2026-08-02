@@ -7,82 +7,161 @@
 }
 
 :root {
-  --bg: #0D1017;
-  --surface: rgba(255, 255, 255, 0.8);
-  --surface-elevated: rgba(255, 255, 255, 0.95);
-  --border: rgba(0, 0, 0, 0.08);
-  --border-subtle: rgba(0, 0, 0, 0.05);
+  /* Translucent materials so window vibrancy/mica reads through (Apple preference panels). */
+  --bg: rgba(246, 246, 246, 0.78);
+  --group-bg: rgba(255, 255, 255, 0.72);
+  --group-separator: rgba(60, 60, 67, 0.12);
+  --border: rgba(0, 0, 0, 0.06);
   --text-primary: #1d1d1f;
   --text-secondary: #6e6e73;
-  --text-tertiary: #aeaeb2;
+  --text-tertiary: #8e8e93;
+  --section-label: #6e6e73;
   --accent: #007aff;
-  --accent-hover: #0051d3;
-  --accent-bg: rgba(0, 122, 255, 0.08);
+  --accent-hover: #0051d5;
+  --accent-bg: rgba(0, 122, 255, 0.12);
+  --control-fill: rgba(120, 120, 128, 0.12);
+  --control-fill-elevated: rgba(120, 120, 128, 0.2);
   --success: #34c759;
-  --success-bg: rgba(52, 199, 89, 0.1);
+  --success-bg: rgba(52, 199, 89, 0.12);
+  --danger: #ff3b30;
+  --danger-bg: rgba(255, 59, 48, 0.1);
+  --toggle-off: rgba(120, 120, 128, 0.32);
   --toggle-shadow-on: rgba(0, 122, 255, 0.35);
-  --toggle-thumb-shadow: 0 1px 4px rgba(0, 0, 0, 0.22), 0 2px 6px rgba(0, 0, 0, 0.12);
-  --toggle-thumb-shadow-active: 0 1px 5px rgba(0, 0, 0, 0.24), 0 3px 8px rgba(0, 0, 0, 0.14);
-  --radius: 10px;
-  --radius-sm: 7px;
-  --shadow: 0 4px 24px rgba(0, 0, 0, 0.18);
-  --shadow-sm: 0 1px 4px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04);
+  --toggle-thumb-shadow: 0 1px 3px rgba(0, 0, 0, 0.18), 0 1px 2px rgba(0, 0, 0, 0.12);
+  --radius-window: 12px;
+  --radius-group: 10px;
+  --radius-control: 7px;
+  --titlebar-height: 52px;
+  --content-pad-x: 20px;
   font-family:
-    -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable", "Segoe UI",
-    system-ui, sans-serif;
+    -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable", "Segoe UI", system-ui,
+    sans-serif;
   font-size: 13px;
+  line-height: 1.35;
+  letter-spacing: -0.01em;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #0D1017;
-    --surface: rgba(44, 44, 46, 0.85);
-    --surface-elevated: rgba(58, 58, 60, 0.95);
-    --border: rgba(255, 255, 255, 0.09);
-    --border-subtle: rgba(255, 255, 255, 0.05);
+    --bg: rgba(30, 30, 30, 0.72);
+    --group-bg: rgba(44, 44, 46, 0.78);
+    --group-separator: rgba(84, 84, 88, 0.65);
+    --border: rgba(255, 255, 255, 0.08);
     --text-primary: #f5f5f7;
     --text-secondary: #98989d;
     --text-tertiary: #636366;
+    --section-label: #98989d;
     --accent: #0a84ff;
     --accent-hover: #409cff;
-    --accent-bg: rgba(10, 132, 255, 0.1);
+    --accent-bg: rgba(10, 132, 255, 0.18);
+    --control-fill: rgba(120, 120, 128, 0.28);
+    --control-fill-elevated: rgba(72, 72, 74, 0.92);
     --success: #30d158;
-    --success-bg: rgba(48, 209, 88, 0.1);
+    --success-bg: rgba(48, 209, 88, 0.14);
+    --danger: #ff453a;
+    --danger-bg: rgba(255, 69, 58, 0.14);
+    --toggle-off: rgba(120, 120, 128, 0.36);
     --toggle-shadow-on: rgba(10, 132, 255, 0.4);
   }
 }
 
+@media (prefers-reduced-transparency: reduce) {
+  :root {
+    --bg: #f5f5f7;
+    --group-bg: #ffffff;
+    --control-fill-elevated: #ffffff;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1c1c1e;
+      --group-bg: #2c2c2e;
+      --control-fill-elevated: #3a3a3c;
+    }
+  }
+}
+
+@media (prefers-contrast: more) {
+  :root {
+    --bg: #ffffff;
+    --group-bg: #ffffff;
+    --group-separator: rgba(0, 0, 0, 0.35);
+    --border: rgba(0, 0, 0, 0.4);
+    --text-secondary: #3a3a3c;
+    --text-tertiary: #3a3a3c;
+    --control-fill: rgba(0, 0, 0, 0.08);
+    --control-fill-elevated: rgba(0, 0, 0, 0.12);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #000000;
+      --group-bg: #1c1c1e;
+      --group-separator: rgba(255, 255, 255, 0.45);
+      --border: rgba(255, 255, 255, 0.45);
+      --text-secondary: #ebebf5;
+      --text-tertiary: #ebebf5;
+      --control-fill: rgba(255, 255, 255, 0.14);
+      --control-fill-elevated: rgba(255, 255, 255, 0.2);
+    }
+  }
+
+  .setting-select,
+  .setting-shortcut,
+  .toggle-track {
+    box-shadow: inset 0 0 0 1px var(--border);
+  }
+}
+
+/* Sizes must match SETTINGS_WINDOW_WIDTH / SETTINGS_WINDOW_HEIGHT in main/constants.ts */
 html,
 body {
-  width: 520px;
-  height: 640px;
+  width: 100%;
+  height: 100%;
   background: transparent;
+  overflow: hidden;
+  color: var(--text-primary);
 }
 
 #app {
-  width: 520px;
-  height: 640px;
-  backdrop-filter: blur(10px) saturate(180%);
-  -webkit-backdrop-filter: blur(10px) saturate(180%);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
+  width: 100%;
+  height: 100%;
+  /* Native vibrancy/mica provides blur; CSS only tints (no second backdrop-filter). */
   background: var(--bg);
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  /* Default visible — open animation is opt-in via .pre-animate */
+  opacity: 1;
+  transform: none;
 }
 
-/* ---- Title bar / drag region ---- */
+@media (prefers-reduced-motion: no-preference) {
+  #app.pre-animate {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+
+  #app.ready {
+    opacity: 1;
+    transform: scale(1);
+    transition:
+      opacity 280ms cubic-bezier(0.22, 1, 0.36, 1),
+      transform 320ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+}
+
+/* ---- Title bar / drag region (hiddenInset traffic lights) ---- */
 .settings-titlebar {
   -webkit-app-region: drag;
-  height: 44px;
+  height: var(--titlebar-height);
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  position: relative;
-  border-bottom: 1px solid var(--border-subtle);
+  padding: 0 var(--content-pad-x);
 }
 
 .settings-title {
@@ -90,27 +169,33 @@ body {
   font-weight: 600;
   color: var(--text-primary);
   letter-spacing: -0.01em;
-  -webkit-app-region: no-drag;
+  line-height: 1.2;
   user-select: none;
 }
 
-/* ---- Hero section ---- */
+/* Windows titleBarOverlay caption buttons occupy the trailing edge */
+body.platform-win32 .settings-titlebar {
+  padding-right: 140px;
+}
+
+/* ---- Identity strip (compact, not a card) ---- */
 .settings-hero {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 16px 20px 16px;
-  border-bottom: 1px solid var(--border-subtle);
+  padding: 4px var(--content-pad-x) 16px;
   flex-shrink: 0;
 }
 
 .settings-hero-icon {
-  width: 40px;
-  height: 40px;
-  border-radius: 10px;
+  width: 48px;
+  height: 48px;
+  border-radius: 11px;
   flex-shrink: 0;
   object-fit: cover;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.06),
+    0 4px 12px rgba(0, 0, 0, 0.08);
 }
 
 .settings-hero-text {
@@ -119,7 +204,7 @@ body {
 }
 
 .settings-hero-name {
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
   color: var(--text-primary);
   letter-spacing: -0.02em;
@@ -127,36 +212,70 @@ body {
 }
 
 .settings-hero-desc {
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--text-secondary);
   margin-top: 2px;
-  line-height: 1.4;
+  line-height: 1.35;
+  letter-spacing: 0;
 }
 
-/* ---- Settings content ---- */
+/* ---- Scrollable content ---- */
 .settings-content {
   flex: 1;
   min-height: 0;
-  padding: 0 0 10px;
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-start;
+  padding: 0 var(--content-pad-x) 12px;
   overflow-x: hidden;
   overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
-/* ---- Setting row ---- */
+/* Section label above grouped list (System Settings pattern) */
+.settings-section {
+  margin-bottom: 18px;
+}
+
+.settings-section:last-child {
+  margin-bottom: 8px;
+}
+
+.settings-section-title {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--section-label);
+  letter-spacing: -0.01em;
+  line-height: 1.3;
+  margin: 0 0 6px 12px;
+  user-select: none;
+}
+
+/* Grouped inset list */
+.settings-group {
+  background: var(--group-bg);
+  border-radius: var(--radius-group);
+  overflow: hidden;
+  box-shadow: 0 0.5px 0 rgba(0, 0, 0, 0.04);
+}
+
 .setting-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 12px 20px;
-  background: var(--surface);
-  margin: 0 12px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border);
-  box-shadow: var(--shadow-sm);
+  gap: 16px;
+  min-height: 44px;
+  padding: 10px 14px;
+  position: relative;
+}
+
+/* Hairline separators between rows (not under last) */
+.setting-row + .setting-row::before {
+  content: "";
+  position: absolute;
+  left: 14px;
+  right: 0;
+  top: 0;
+  height: 0.5px;
+  background: var(--group-separator);
+  pointer-events: none;
 }
 
 .setting-row-inner {
@@ -164,20 +283,23 @@ body {
   flex-direction: column;
   flex: 1;
   min-width: 0;
-  gap: 1px;
+  gap: 2px;
+  padding: 2px 0;
 }
 
 .setting-label {
   font-size: 13px;
   color: var(--text-primary);
-  font-weight: 500;
-  line-height: 1.4;
+  font-weight: 400;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
 }
 
 .setting-description {
-  font-size: 11.5px;
+  font-size: 11px;
   color: var(--text-secondary);
-  line-height: 1.4;
+  line-height: 1.35;
+  letter-spacing: 0;
 }
 
 .setting-control {
@@ -189,23 +311,24 @@ body {
 
 /* ---- Save indicator ---- */
 .save-indicator {
-  font-size: 11.5px;
+  font-size: 11px;
+  font-weight: 500;
   color: var(--success);
-  font-weight: 600;
   opacity: 0;
   white-space: nowrap;
   background: var(--success-bg);
   padding: 2px 8px;
   border-radius: 100px;
-  letter-spacing: 0.01em;
-  transform: scale(0.9);
+  letter-spacing: 0;
+  transform: scale(0.96);
+  pointer-events: none;
 }
 
 @media (prefers-reduced-motion: no-preference) {
   .save-indicator {
     transition:
-      opacity 0.2s ease,
-      transform 0.2s ease;
+      opacity 200ms ease,
+      transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
   }
 }
 
@@ -214,29 +337,21 @@ body {
   transform: scale(1);
 }
 
-/* ---- Error message ---- */
+/* ---- Error banner ---- */
 .settings-error {
-  font-size: 11px;
-  color: #ff3b30;
-  text-align: center;
-  padding: 6px 20px;
+  font-size: 12px;
+  color: var(--danger);
+  text-align: left;
+  padding: 10px 12px;
   line-height: 1.4;
-  background: rgba(255, 59, 48, 0.07);
-  margin: 0 12px 8px;
-  border-radius: var(--radius-sm);
-  border: 1px solid rgba(255, 59, 48, 0.12);
+  background: var(--danger-bg);
+  margin: 0 0 14px;
+  border-radius: var(--radius-group);
+  border: 1px solid transparent;
 }
 
 .settings-error:empty {
   display: none;
-}
-
-@media (prefers-color-scheme: dark) {
-  .settings-error {
-    color: #ff453a;
-    background: rgba(255, 69, 58, 0.1);
-    border-color: rgba(255, 69, 58, 0.18);
-  }
 }
 
 /* ---- Footer ---- */
@@ -246,175 +361,123 @@ body {
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  border-top: 1px solid var(--border-subtle);
-  margin-top: auto;
+  border-top: 0.5px solid var(--group-separator);
 }
 
 .settings-footer-text {
   font-size: 11px;
   color: var(--text-tertiary);
   user-select: none;
-  letter-spacing: 0.01em;
+  letter-spacing: 0;
 }
 
-/* ---- Toggle switch ---- */
-.setting-row--toggle {
-  margin-top: 10px;
-}
-
+/* ---- Toggle switch (press feedback on pointer-down) ---- */
 .toggle-switch {
   position: relative;
   display: inline-flex;
   align-items: center;
   cursor: pointer;
   flex-shrink: 0;
+  -webkit-app-region: no-drag;
 }
 
 .toggle-input {
   position: absolute;
   opacity: 0;
-  width: 0;
-  height: 0;
-  pointer-events: none;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  cursor: pointer;
 }
 
 .toggle-track {
   position: relative;
-  width: 44px;
-  height: 26px;
-  background: var(--border);
+  width: 42px;
+  height: 25px;
+  background: var(--toggle-off);
   border-radius: 100px;
-  box-shadow: inset 0 0 0 1px var(--border);
   will-change: background-color, box-shadow, transform;
 }
 
 @media (prefers-reduced-motion: no-preference) {
   .toggle-track {
     transition:
-      background-color 0.24s cubic-bezier(0.22, 1, 0.36, 1),
-      box-shadow 0.24s cubic-bezier(0.22, 1, 0.36, 1),
-      transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
-  }
-}
-
-.toggle-track::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.26) 0%, rgba(255, 255, 255, 0) 62%);
-  opacity: 0;
-  pointer-events: none;
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  .toggle-track::before {
-    transition: opacity 0.24s cubic-bezier(0.22, 1, 0.36, 1);
+      background-color 220ms cubic-bezier(0.22, 1, 0.36, 1),
+      box-shadow 220ms cubic-bezier(0.22, 1, 0.36, 1),
+      transform 120ms ease-out;
   }
 }
 
 .toggle-input:checked + .toggle-track {
   background: var(--accent);
-  box-shadow:
-    inset 0 0 0 1px transparent,
-    0 2px 8px var(--toggle-shadow-on);
-}
-
-.toggle-input:checked + .toggle-track::before {
-  opacity: 1;
-}
-
-@media (prefers-color-scheme: dark) {
-  .toggle-track::before {
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.18) 0%, rgba(255, 255, 255, 0) 62%);
-  }
-
-  .toggle-input:checked + .toggle-track {
-    box-shadow:
-      inset 0 0 0 1px transparent,
-      0 2px 8px var(--toggle-shadow-on);
-  }
+  box-shadow: 0 1px 4px var(--toggle-shadow-on);
 }
 
 .toggle-thumb {
   position: absolute;
-  top: 3px;
-  left: 3px;
-  width: 20px;
-  height: 20px;
+  top: 2px;
+  left: 2px;
+  width: 21px;
+  height: 21px;
   border-radius: 50%;
   background: #ffffff;
   box-shadow: var(--toggle-thumb-shadow);
-  transform: translateX(0) scale(1);
-  transform-origin: center;
+  transform: translateX(0);
   will-change: transform;
 }
 
 @media (prefers-reduced-motion: no-preference) {
   .toggle-thumb {
-    transition:
-      transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1),
-      box-shadow 0.24s cubic-bezier(0.22, 1, 0.36, 1);
+    transition: transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
   }
 }
 
 .toggle-input:checked + .toggle-track .toggle-thumb {
-  transform: translateX(18px) scale(1);
-  box-shadow: var(--toggle-thumb-shadow-active);
-}
-
-.toggle-switch:hover .toggle-track {
-  opacity: 0.88;
+  transform: translateX(17px);
 }
 
 .toggle-switch:active .toggle-track {
-  transform: scale(0.985);
-}
-
-.toggle-switch:active .toggle-input + .toggle-track .toggle-thumb {
-  transform: translateX(0) scale(0.92);
-}
-
-.toggle-switch:active .toggle-input:checked + .toggle-track .toggle-thumb {
-  transform: translateX(18px) scale(0.92);
+  transform: scale(0.97);
 }
 
 .toggle-input:focus-visible + .toggle-track {
-  outline: 3px solid var(--accent-bg);
+  outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 
-.setting-row--select {
-  margin-top: 10px;
-}
-
+/* ---- Popup menus (select) ---- */
 .setting-select {
   appearance: none;
   -webkit-appearance: none;
-  width: 140px;
-  height: 30px;
-  padding: 0 28px 0 10px;
-  font-size: 12.5px;
+  min-width: 128px;
+  max-width: 168px;
+  height: 32px;
+  padding: 0 26px 0 10px;
+  font-size: 13px;
   font-family: inherit;
-  font-weight: 500;
+  font-weight: 400;
+  letter-spacing: -0.01em;
   color: var(--text-primary);
-  background: var(--surface-elevated);
-  border: 1px solid var(--border);
-  border-radius: 6px;
+  background-color: var(--control-fill);
+  border: none;
+  border-radius: var(--radius-control);
   cursor: pointer;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%236e6e73' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
-  background-position: right 10px center;
+  background-position: right 9px center;
   background-size: 10px 6px;
+  -webkit-app-region: no-drag;
 }
 
 #battery-threshold-select.setting-select {
-  width: 90px;
+  min-width: 72px;
+  width: 88px;
 }
 
-/* Longer labels: "Prevent display sleep" / "System only (...)" */
 #sleep-block-mode-select.setting-select {
-  width: 168px;
+  min-width: 156px;
+  max-width: 176px;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -424,122 +487,62 @@ body {
 }
 
 .setting-select:hover {
-  border-color: var(--accent);
+  background-color: var(--control-fill-elevated);
+}
+
+.setting-select:active {
+  transform: scale(0.98);
 }
 
 .setting-select:focus-visible {
-  outline: 3px solid var(--accent-bg);
+  outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 
 @media (prefers-reduced-motion: no-preference) {
   .setting-select {
-    transition: border-color 120ms ease;
-  }
-}
-
-/* ---- Number input (battery threshold) ---- */
-.setting-row--number {
-  margin-top: 10px;
-}
-
-.number-input-wrap {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-}
-
-.setting-number {
-  appearance: none;
-  -webkit-appearance: none;
-  width: 80px;
-  height: 30px;
-  padding: 0 26px 0 10px;
-  font-size: 12.5px;
-  font-family: inherit;
-  font-weight: 500;
-  color: var(--text-primary);
-  background: var(--surface-elevated);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-}
-
-.setting-number::-webkit-inner-spin-button,
-.setting-number::-webkit-outer-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
-}
-
-.setting-number:hover {
-  border-color: var(--accent);
-}
-
-.setting-number:focus-visible {
-  outline: 3px solid var(--accent-bg);
-  outline-offset: 2px;
-  border-color: var(--accent);
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  .setting-number {
     transition:
-      border-color 120ms ease,
-      outline-color 120ms ease;
+      background-color 120ms ease-out,
+      transform 100ms ease-out;
   }
-}
-
-.number-input-suffix {
-  position: absolute;
-  right: 10px;
-  top: 50%;
-  transform: translateY(-50%);
-  font-size: 11.5px;
-  color: var(--text-secondary);
-  pointer-events: none;
-  user-select: none;
 }
 
 /* ---- Shortcut recorder ---- */
-.setting-row--shortcut {
-  margin-top: 10px;
-}
-
 .setting-shortcut {
   appearance: none;
   -webkit-appearance: none;
-  min-width: 110px;
-  height: 30px;
+  min-width: 108px;
+  height: 32px;
   padding: 0 12px;
-  font-size: 12.5px;
-  font-family:
-    -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable", "Segoe UI",
-    system-ui, sans-serif;
-  font-weight: 600;
+  font-size: 13px;
+  font-family: inherit;
+  font-weight: 500;
+  letter-spacing: 0.02em;
   color: var(--text-primary);
-  background: var(--surface-elevated);
-  border: 1px solid var(--border);
-  border-radius: 6px;
+  background: var(--control-fill);
+  border: none;
+  border-radius: var(--radius-control);
   cursor: pointer;
-  letter-spacing: 0.04em;
   text-align: center;
   user-select: none;
+  -webkit-app-region: no-drag;
 }
 
 .setting-shortcut:hover {
-  border-color: var(--accent);
+  background: var(--control-fill-elevated);
+}
+
+.setting-shortcut:active {
+  transform: scale(0.97);
 }
 
 .setting-shortcut:focus-visible {
-  outline: 3px solid var(--accent-bg);
+  outline: 2px solid var(--accent);
   outline-offset: 2px;
-  border-color: var(--accent);
 }
 
 .setting-shortcut.recording {
   color: var(--accent);
-  border-color: var(--accent);
   background: var(--accent-bg);
   font-weight: 500;
   letter-spacing: 0;
@@ -548,8 +551,8 @@ body {
 @media (prefers-reduced-motion: no-preference) {
   .setting-shortcut {
     transition:
-      border-color 120ms ease,
-      background-color 120ms ease,
-      color 120ms ease;
+      background-color 120ms ease-out,
+      color 120ms ease-out,
+      transform 100ms ease-out;
   }
 }

@@ -153,6 +153,11 @@ describe("platform/window-chrome", () => {
         skipTaskbar: false,
         titleBarStyle: "hidden",
         backgroundMaterial: "mica",
+        titleBarOverlay: {
+          color: "#2c2c2e",
+          symbolColor: "#f5f5f7",
+          height: 40,
+        },
       });
     });
 

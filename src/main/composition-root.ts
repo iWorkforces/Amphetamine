@@ -4,7 +4,7 @@
  * No Partial overrides — tests use lower-level factories (KD-21).
  */
 import log from "electron-log";
-import { app, powerMonitor } from "electron/main";
+import { powerMonitor } from "electron/main";
 import type { AppSettings } from "../shared/types.js";
 import {
   initSettings,
@@ -81,12 +81,14 @@ export function createAppComposition(): AppComposition {
     getRepositoryUrl: () => getPackageInfo().repository,
     prepareDialogPresentation: () => {
       acquireUtilityForeground();
-      app.focus({ steal: true });
     },
     restoreTrayPresentation: () => {
       // Pair with prepareDialogPresentation acquire (dialog is not a BrowserWindow ref).
       // Utility windows keep their own refs so Dock stays while Settings/About open.
       releaseUtilityForeground();
+    },
+    notifyUser: (message) => {
+      userNotifier.notify(message);
     },
   });
 

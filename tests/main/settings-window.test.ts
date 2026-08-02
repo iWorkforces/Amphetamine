@@ -30,7 +30,10 @@ vi.mock("electron", () => ({
     this.focus = mockFocus;
     this.close = mockClose;
     this.show = mockShow;
+    this.hide = vi.fn();
+    this.destroy = vi.fn();
     this.isDestroyed = mockIsDestroyed;
+    this.isVisible = vi.fn().mockReturnValue(false);
     this.once = vi.fn().mockImplementation((event: string, cb: () => void) => {
       if (event === "ready-to-show") {
         // Simulate async ready-to-show
@@ -38,7 +41,12 @@ vi.mock("electron", () => ({
       }
     });
     this.on = vi.fn();
-    this.webContents = { on: vi.fn(), setWindowOpenHandler: vi.fn(), send: vi.fn() };
+    this.webContents = {
+      on: vi.fn(),
+      setWindowOpenHandler: vi.fn(),
+      send: vi.fn(),
+      executeJavaScript: vi.fn().mockResolvedValue(undefined),
+    };
     this.loadURL = vi.fn();
     this.loadFile = vi.fn();
   }),
@@ -98,11 +106,11 @@ describe("settings-window", () => {
   });
 
   describe("closeSettingsWindow", () => {
-    it("closes the settings window if open", async () => {
-      createSettingsWindow();
+    it("force-destroys the settings window if open", async () => {
+      const win = createSettingsWindow();
       await vi.advanceTimersByTimeAsync(10);
       closeSettingsWindow();
-      expect(mockClose).toHaveBeenCalled();
+      expect(win.destroy).toHaveBeenCalled();
     });
 
     it("is safe to call when no window exists", () => {

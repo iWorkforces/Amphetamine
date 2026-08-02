@@ -81,7 +81,7 @@ describe("renderer settings", () => {
   });
 
   describe("render", () => {
-    it("renders settings form with all controls", async () => {
+    it("renders settings form with all controls and sections", async () => {
       vi.resetModules();
       await import("../../src/renderer/settings/index.js");
       document.dispatchEvent(new Event("DOMContentLoaded"));
@@ -90,6 +90,50 @@ describe("renderer settings", () => {
       expect(document.getElementById("launch-at-login-toggle")).not.toBeNull();
       expect(document.getElementById("prevent-sleep-toggle")).not.toBeNull();
       expect(document.getElementById("session-duration-select")).not.toBeNull();
+      expect(document.getElementById("battery-threshold-select")).not.toBeNull();
+      expect(document.getElementById("sleep-block-mode-select")).not.toBeNull();
+      expect(document.getElementById("shortcut-input")).not.toBeNull();
+      expect(document.getElementById("section-general")?.textContent).toBe("General");
+      expect(document.getElementById("section-session")?.textContent).toBe("Session");
+      expect(document.getElementById("section-power")?.textContent).toBe("Power");
+      expect(SAVED_INDICATOR).toBe("Saved");
+      expect(SAVED_INDICATOR).not.toMatch(/[✓✔✅]/);
+    });
+
+    it("saves sleep block mode without starting a session", async () => {
+      vi.resetModules();
+      await import("../../src/renderer/settings/index.js");
+      document.dispatchEvent(new Event("DOMContentLoaded"));
+      await vi.advanceTimersByTimeAsync(0);
+
+      const select = document.getElementById("sleep-block-mode-select") as HTMLSelectElement;
+      select.value = "prevent-app-suspension";
+      select.dispatchEvent(new Event("change"));
+      await vi.advanceTimersByTimeAsync(350);
+
+      expect(mockApi.settings.set).toHaveBeenCalledWith({
+        sleepBlockMode: "prevent-app-suspension",
+      });
+      expect(mockApi.session.start).not.toHaveBeenCalled();
+    });
+
+    it("surfaces rejectedKeys from settings.set", async () => {
+      mockApi.settings.set.mockResolvedValueOnce({
+        settings: { ...defaultSettings },
+        rejectedKeys: ["shortcut"],
+      });
+      vi.resetModules();
+      await import("../../src/renderer/settings/index.js");
+      document.dispatchEvent(new Event("DOMContentLoaded"));
+      await vi.advanceTimersByTimeAsync(0);
+
+      const toggle = document.getElementById("launch-at-login-toggle") as HTMLInputElement;
+      toggle.checked = true;
+      toggle.dispatchEvent(new Event("change"));
+      await vi.advanceTimersByTimeAsync(350);
+
+      const errorEl = document.getElementById("settings-error-text");
+      expect(errorEl?.textContent).toContain("shortcut");
     });
 
     it("renders launch-at-login toggle checked when setting is true", async () => {
@@ -154,7 +198,7 @@ describe("renderer settings", () => {
   });
 
   describe("showSaveIndicator", () => {
-    it('shows "✓ Saved" indicator after successful save', async () => {
+    it('shows "Saved" indicator after successful save', async () => {
       vi.resetModules();
       await import("../../src/renderer/settings/index.js");
       document.dispatchEvent(new Event("DOMContentLoaded"));
