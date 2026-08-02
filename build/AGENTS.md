@@ -64,7 +64,7 @@ If changing release packaging, keep CI/CD/Beta and local package scripts intenti
 
 - `hardenedRuntime: false` is intentional. Re-enable only with notarization and JIT entitlements.
 - `notarize: false` by default. `notarize.cjs` requires `APPLE_ID`, `APPLE_TEAM_ID`, `APPLE_APP_PASSWORD`.
-- `LSUIElement: true` keeps the app tray-only; Settings and About temporarily show the Dock icon at runtime via refcounted `utility-presentation` (same path as updater dialogs).
+- `LSUIElement: true` keeps the app tray-only; Settings and About temporarily show the Dock icon at runtime via refcounted `utility-presentation` (same path as updater dialogs). User close hides (warm cache); quit force-destroys.
 - `dmg.sign: false`; local wrapper owns ad-hoc DMG signing for quarantine compatibility.
 - Windows signing is off by default; add Authenticode later via cert env vars.
 - Windows `win.target` includes **x64 and arm64** for NSIS + portable; CI packages one arch per job.

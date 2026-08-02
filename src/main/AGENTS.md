@@ -11,7 +11,7 @@ Main process owns app lifecycle, BrowserWindows, tray, typed IPC registration, a
 | `index.ts` | App lifecycle events only (ready, quit, single-instance, errors, benchmark entry) |
 | `app-shell.ts` | `createAppShell()` — process-graph root: windows + composition + IPC + tray + updater + quit cleanup |
 | `process/secure-web-preferences.ts` | Single `createSecureWebPreferences()` for all BrowserWindows (sandbox / contextIsolation / no nodeIntegration) |
-| `process/window-graph.ts` | Owns popover / settings / about BrowserWindows + registry + coalesced hide + `destroyAllWindows()` |
+| `process/window-graph.ts` | Owns popover / settings / about BrowserWindows + registry + coalesced hide + warm cache (hide-on-close) for Settings/About + `destroyAllWindows()` |
 | `composition-root.ts` | `createAppComposition()` — ports, session handle, reactions, user notifier, updater dialog presentation, `getIpcDeps` / `getTrayDeps` / `initUpdater`, ordered `cleanup()` |
 | `ipc.ts` | Typed handler registration; session handlers use injected `IpcDeps.sessionTimer` |
 | `ipc-utils.ts` | `validateSender`, `typedHandle`; allowlisted `index.html` / `settings.html` / `about.html` |
@@ -102,7 +102,11 @@ Do not register a second `before-quit` handler on settings or other modules.
 - Prefer `isDarwin()` / `isWin32()` from `platform/`.
 - Tray-only boot: `enterTrayOnlyMode()` (from AppShell).
 - Window chrome: `popoverWindowChrome` / `settingsWindowChrome` / `aboutWindowChrome` (applied inside WindowGraph).
-- Settings and About acquire/release **refcounted** utility foreground on show/close (`acquireUtilityForeground` / `releaseUtilityForeground`); Dock icon via `setUtilityDockIcon`.
+- Settings and About acquire/release **refcounted** utility foreground on show/hide (`acquireUtilityForeground` / `releaseUtilityForeground`); Dock icon via `setUtilityDockIcon`.
+- Settings/About use **hide-on-close warm cache**: first open creates+loads the BrowserWindow; user close hides (renderer stays warm); quit/composition `close*Window` force-destroys (`win.destroy()`, not hide).
+- `*WantsVisible` intent flag: late `ready-to-show` after user dismiss must not re-show; reopening sets intent true again.
+- Settings present path clears form focus after show (deferred `webContents.executeJavaScript` blur) so warm-cache reopen does not restore Launch at Login / last control.
+- `isSettingsWindowOpen()` means **visible** (not merely cached-and-hidden).
 - Login items: `buildLoginItemSettings()` — no `openAsHidden` on non-darwin.
 - Battery shell-outs only in `platform/battery-percent.ts`.
 
@@ -135,6 +139,8 @@ Do not register a second `before-quit` handler on settings or other modules.
 - Never create `BrowserWindow`s outside `process/window-graph` (except tests).
 - Never reintroduce inline `data:` About HTML; use the built `about.html` entry.
 - Never call `initAutoUpdater()` outside `UpdaterPort` / composition `initUpdater()`.
+- Never destroy Settings/About on user close (hide-on-close); only force-destroy on quit/composition cleanup.
+- Never present a utility window when `*WantsVisible` is false (dismiss-before-ready race).
 
 ## Commands
 

@@ -58,7 +58,7 @@ Shortcut defaults, reserved keys, and accelerator validation live in domain vali
 | Surface | macOS | Windows |
 |---------|-------|---------|
 | Popover | vibrancy popover, transparent, `skipTaskbar: true` | opaque frameless, `skipTaskbar: true` |
-| Settings / About | vibrancy under-window, `hiddenInset`, Dock via utility-presentation | mica material, taskbar visible (`skipTaskbar: false`) |
+| Settings / About | vibrancy under-window, `hiddenInset`, Dock via utility-presentation | mica + `titleBarOverlay` caption buttons, taskbar visible (`skipTaskbar: false`) |
 
 ## Battery percent
 

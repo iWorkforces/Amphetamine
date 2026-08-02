@@ -7,7 +7,7 @@ Main-process Vitest suites run in Node with Electron mocked (project aliases `el
 | Area | Typical files |
 |------|----------------|
 | Bootstrap / quit | `index.test.ts`, `app-shell.test.ts` |
-| Window graph | `window-graph.test.ts` (hide coalesce + utility acquire/release), `secure-web-preferences.test.ts`, `settings-window*.test.ts`, `about-window.test.ts` |
+| Window graph | `window-graph.test.ts` (popover hide coalesce, Settings/About warm cache, wantsVisible dismiss race, focus-clear, utility acquire/release), `secure-web-preferences.test.ts`, `settings-window*.test.ts`, `about-window.test.ts` |
 | Composition | `composition-root.test.ts` (session IPC fail-closed before init) |
 | Composition wiring | `composition-wiring.test.ts` (settings reactions / tray effective-active matrix) |
 | IPC / security | `ipc.test.ts`, `ipc-handlers.test.ts`, `security.test.ts`, `preload.test.ts` |
@@ -51,10 +51,14 @@ Pure use-case / domain tests live under `tests/application` and `tests/domain` (
 - `sleepBlockMode` recompute only when blocker active OR intent OR session; mode read from `getSettings()` (advance mock cache before subscriber).
 - About: shared secure prefs **with** preload; loads `/about.html`; github-only `window.open` via override after `hardenWebContents`; acquires utility foreground on ready-to-show (same as Settings).
 - Utility presentation: nested acquires keep Dock until last release; over-release is safe; dialog hooks pair with window refs.
+- Warm cache: user `close` → preventDefault + hide + release foreground; second open reuses one BrowserWindow (no recreate); `close*Window` / `destroyAllWindows` force-`destroy`.
+- Dismiss-before-ready: early present then hide then late `ready-to-show` must **not** re-show or re-acquire (`*WantsVisible`).
+- Settings present: deferred `executeJavaScript` blur so warm reopen does not focus a control.
+- `isSettingsWindowOpen` is true only when visible (hidden cache returns false).
 - AppShell: ready order tray-only → popover → composition → IPC → tray → `initUpdater` (skipped in benchmark).
 - Popover hide: blur/minimize bursts → one pending hide; show before expiry cancels hide.
 - Settings coalesce: rapid multi-field updates → fewer write/rename pairs than logical updates; flush awaits queue.
-- Updater: concurrent checks call `checkForUpdates` once; `setFeedURL` from package repository.
+- Updater: concurrent checks call `checkForUpdates` once; `setFeedURL` from package repository; HIG two-button layout + `noLink`; check-failed Esc dismisses (OK).
 
 ## Timer and async
 
