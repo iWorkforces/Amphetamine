@@ -254,7 +254,7 @@ Dependency rule: **domain** and **application** must not import `electron` or pr
 
 ## Contact
 
-Questions or issues? [kennydizi@ocworkforces.com](mailto:kennydizi@ocworkforces.com).
+Questions or issues? [chitrung09t2@gmail.com](mailto:chitrung09t2@gmail.com).
 
 ## License
 
