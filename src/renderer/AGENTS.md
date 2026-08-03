@@ -13,6 +13,7 @@ Electron renderer web context. Vanilla TypeScript only. Three built entries (Rsb
 | `env.d.ts` | `Window.api` type derived from preload `Api` |
 | `css.d.ts` | CSS module declarations |
 | `styles/main.css` | Popover styling, dark mode, reduced motion |
+| `styles/utility-tokens.css` | Shared Settings/About surface tokens (e.g. `--utility-window-bg`) |
 | `settings/` | Settings-window renderer; see `settings/AGENTS.md` |
 | `about/` | About-window renderer (package metadata + close) |
 
