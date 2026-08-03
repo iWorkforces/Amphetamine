@@ -69,4 +69,4 @@ bun run typecheck:layers
 - Process-graph suites: `app-shell.test.ts`, `window-graph.test.ts` (incl. hide coalesce, warm cache, wantsVisible, utility foreground), `secure-web-preferences.test.ts`, `utility-presentation.test.ts`, `composition-wiring.test.ts`, `composition-root.test.ts`.
 - Application suites cover session engine, sleep recompute/toggle, settings reactions/update/get, low-battery auto-stop (incl. optional `UserNotifierPort`), and port barrel compile.
 - Perf/coalesce suites: settings write batching, updater single-flight, renderer session-action identity, `merge-latest-yml.test.ts`, `build-production.test.ts`.
-- ~56 test files / 640+ tests (Vitest workspace).
+- **56** test files / **628** tests (Vitest workspace; refresh when the suite grows).

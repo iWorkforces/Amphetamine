@@ -94,7 +94,7 @@ Do not register a second `before-quit` handler on settings or other modules.
 
 - Icon = **effective** active (`getEffectiveActive`).
 - Menu checkbox = **user intent** (`getPreventSleep`) only.
-- Menu: Prevent Sleep, Settings, About, Check for Updates…, Quit (strings in `constants.ts`).
+- Menu: Prevent Sleep, **Cancel session** (when a session is running), Settings…, About Amphetamine, Check for Updates…, Quit (most labels in `constants.ts`).
 - Icons: `nativeImage.createFromPath()` only (asar-safe). Cleanup calls `tray.destroy()`.
 
 ## Platform

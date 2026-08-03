@@ -9,17 +9,18 @@ Separate Rsbuild renderer entry for the settings BrowserWindow. Vanilla TypeScri
 | `index.ts` | Form render, debounced saves, shortcut recording, shortcut-failure push |
 | `index.html` | CSP-protected shell |
 | `constants.ts` | All UI copy (sections, labels, options, indicators) |
-| `styles.css` | System Settings–style grouped lists, materials, controls |
+| `styles.css` | System Settings–style grouped lists, controls; imports shared utility tokens |
 | `env.d.ts` | Local ambient types if needed |
 
 ## Visual language
 
-- Native window vibrancy/mica provides blur; CSS only tints fills (no second `backdrop-filter`).
-- Grouped inset lists with hairline separators; edge-to-edge panel (no nested card chrome).
+- `#app` uses shared fixed dark surface `var(--utility-window-bg)` from `../styles/utility-tokens.css` (do not hardcode `#0D1117` here).
+- Adaptive tokens (`--group-bg`, text, controls) still respond to `prefers-color-scheme` / reduced transparency / contrast for inset groups and chrome.
+- Grouped inset lists with hairline separators; edge-to-edge panel (no nested card chrome). No second `backdrop-filter`.
 - Section headers: General / Session / Power. No emoji in labels. No footer copyright (About owns that).
 - Instant press feedback on toggles and controls (`:active` scale); open animation is opt-in (`.pre-animate` → `.ready`).
 - Escape closes the window (when not recording a shortcut). Windows uses `titleBarOverlay` caption buttons.
-- Respect `prefers-reduced-motion`, `prefers-reduced-transparency`, and `prefers-contrast`.
+- Respect `prefers-reduced-motion`, `prefers-reduced-transparency`, and `prefers-contrast` for controls and group materials.
 
 ## Warm cache (main WindowGraph)
 

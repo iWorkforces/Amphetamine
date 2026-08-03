@@ -4,7 +4,7 @@ A tray app that keeps your computer awake on **macOS** and **Windows**. Lives in
 
 > **One principle:** Do one thing and do it best.
 
-**Current version:** 1.10.6 · **Repo:** [iWorkforces/Amphetamine](https://github.com/iWorkforces/Amphetamine)
+**Current version:** 1.10.8 · **Repo:** [iWorkforces/Amphetamine](https://github.com/iWorkforces/Amphetamine)
 
 ## Features
 
@@ -14,8 +14,8 @@ A tray app that keeps your computer awake on **macOS** and **Windows**. Lives in
 - **Global Shortcut**: default `CommandOrControl+Shift+A` (⌘ on macOS, Ctrl on Windows); configurable via Settings with platform-aware reserved-key validation.
 - **Launch at Login**: optional OS login item / start-at-login (macOS uses `openAsHidden`; Windows uses `openAtLogin` only).
 - **Tray-Only UX**: macOS `LSUIElement` / accessory activation policy (no Dock by default); Windows notification-area tray. **Click** the tray icon for the context menu (Prevent sleep, Cancel session when active, Settings, About, Check for Updates, Quit). Settings and About appear in the Dock (macOS) or taskbar (Windows) only while open (shared refcount so one window closing does not hide the other).
-- **Settings Window**: launch at login, prevent-sleep default, sleep block mode, default session duration, battery threshold, and keyboard shortcut (recorder with platform labels).
-- **About Window**: built renderer entry with app metadata; repository link opens only the package GitHub URL.
+- **Settings Window**: System Settings–style grouped panel (General / Session / Power) for launch at login, prevent-sleep, sleep block mode, default session duration, battery threshold, and keyboard shortcut (platform-aware recorder). Shared fixed dark surface with About.
+- **About Window**: built renderer entry with product name, version, description, author copyright, and repository link (package GitHub URL only).
 - **Auto-Updater (hybrid)**: background checks via `electron-updater` (GitHub provider, feed from `package.json` repository) after startup and every 4 hours (backoff up to 24h). **Check for Updates** tries in-app download/install when the platform feed allows (macOS ZIP + `latest-mac.yml`; Windows EXE + `latest.yml`); otherwise opens the GitHub release page. Distinguishes missing update metadata from true network failures. Background checks do not auto-download.
 - **Secure IPC**: sandboxed preload `window.api` bridge; main handlers validate sender origin; **16** typed channels end-to-end; process-wide webContents hardening (deny unexpected navigation / window.open).
 - **Clean Architecture Lite**: pure `domain` → `application` (ports + use cases) → `infrastructure` / presentation (`main`, `preload`, `renderer`). Layer and sticky TypeScript guards in CI.
@@ -113,7 +113,7 @@ bun scripts/generate-app-icon.mjs       # build/icon.icns (mac) + build/icon.ico
 bun scripts/generate-coffee-tray-icons.mjs
 ```
 
-Outputs go to `dist/` (e.g. `Amphetamine-1.10.6-arm64.dmg`, `Amphetamine-1.10.6-x64.exe`, `Amphetamine-1.10.6-arm64.exe`, portable `*-portable.exe`).
+Outputs go to `dist/` (e.g. `Amphetamine-1.10.8-arm64.dmg`, `Amphetamine-1.10.8-x64.exe`, `Amphetamine-1.10.8-arm64.exe`, portable `*-portable.exe`).
 
 Local macOS helper:
 

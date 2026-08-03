@@ -52,8 +52,8 @@ Workflow definitions for lint/test/build, production release publishing, and dev
 - **Why not `workflow_run`?** GitHub only registers `workflow_run` listeners from workflow files on the **default branch** (`main`). `beta.yml` is develop-oriented and is not required on `main`, so a `workflow_run` listener would never fire.
 - Jobs: `lint` + `test` → **`prepare`** (version + beta N) → `package` / `package-windows` → **`release`**.
 - Packaging: mac arm64/x64 plus Windows x64/arm64 (`package` + `package-windows` matrix).
-- After `electron-builder`, basenames get a **`-beta-{N}`** suffix (e.g. `Amphetamine-1.10.2-arm64-beta-1.dmg`).
-  Tag uses a dot (`v1.10.2-beta.1`); filenames use a hyphen before N (`-beta-1`).
+- After `electron-builder`, basenames get a **`-beta-{N}`** suffix (e.g. `Amphetamine-1.10.8-arm64-beta-1.dmg`).
+  Tag uses a dot (`v1.10.8-beta.1`); filenames use a hyphen before N (`-beta-1`).
 - Artifacts: `dist-mac-beta-{arch}` and `dist-win-beta-{arch}` (`x64` / `arm64`) for 14 days.
 - **`prepare` job** (after lint/test) computes a single N for the run so tags and filenames match.
 - **`release` job** publishes a GitHub **prerelease** (not latest production):

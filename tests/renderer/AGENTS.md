@@ -39,7 +39,7 @@ Settings warm-cache focus clear and main hide-on-close are covered primarily in 
 - `window.api` mirrors preload shape for the entry under test.
 - Settings tests mock `settings.get` / `set` (`{ settings, rejectedKeys }`), `onSettingsChanged`, `onShortcutRegistrationFailed`.
 - Popover tests mock session status/pushes, `window.setHeight`, `app.getVersion`, settings/session/app methods as needed.
-- About UI (if tested): mock `app.getAbout()` returning `AboutInfo`.
+- About: mock `app.getAbout()` returning `AboutInfo` (author/copyright, repository open).
 - Do not mock `electron-log` for renderer (modules must not import it).
 
 ## Anti-Patterns

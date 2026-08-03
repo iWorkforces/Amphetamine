@@ -1,0 +1,8 @@
+/**
+ * Shared design tokens for Settings and About utility windows.
+ * Keep surface colors here so dialogs stay visually aligned.
+ */
+:root {
+  /* Fixed dark canvas (GitHub-style) for utility dialog surfaces. */
+  --utility-window-bg: #0D1117;
+}
