@@ -31,6 +31,7 @@ src/main/                 Composition root, IPC, tray, windows, process façades
   utils/                  broadcastToWindows, packageInfo guard
 src/preload/              sandboxed contextBridge API
 src/renderer/             popover + settings + about (built HTML entries)
+  styles/                 popover main.css + shared utility-tokens.css (Settings/About surface)
 src/shared/               IPC transport contracts; re-exports domain settings types
 src/assets/               checked-in generated PNGs consumed at runtime
 scripts/                  Bun tooling, icons, dev, benchmarks, sticky/layer guards
@@ -61,8 +62,9 @@ Dependency rule: **domain** and **application** must not import `electron` / `el
 | Login items | `src/main/auto-launch.ts` (`AutoLaunchPort` view) | Implemented in main (not infrastructure) |
 | Tray/menu | `src/main/tray.ts`, `src/assets/AGENTS.md` | Icon = effective active; checkbox = user intent |
 | Renderer popover | `src/renderer/index.ts` | Domain `isEffectivelyActive`; mode-stable session actions; chips start session only |
-| Settings UI | `src/renderer/settings/AGENTS.md` | Debounced saves, shortcut recorder, sleep mode; warm-cache reopen clears form focus |
-| About window | `src/renderer/about/`, WindowGraph `showAbout` | Built `about.html`; `app:get-about` (+ `author`); github.com allowlist; hide-on-close cache |
+| Settings UI | `src/renderer/settings/AGENTS.md` | System Settings groups; debounced saves; shortcut recorder; warm-cache focus clear |
+| About window | `src/renderer/about/`, WindowGraph `showAbout` | Built `about.html`; `app:get-about` (+ `author`); github allowlist; hide-on-close cache |
+| Utility surface color | `src/renderer/styles/utility-tokens.css` | Shared `--utility-window-bg` (`#0D1117`) for Settings + About `#app` fills |
 | Hybrid auto-updater | `src/infrastructure/updater/` (+ main IPC façade) | `setFeedURL` from package repo; single-flight checks; needs `latest-mac.yml` / `latest.yml` on release |
 | Utility Dock / dialogs | `src/main/platform/utility-presentation.ts` | Refcounted macOS foreground for Settings, About, and updater dialogs |
 | Benchmark mode | `src/infrastructure/benchmark/`, `src/renderer/benchmark-countdown.ts`, `scripts/benchmark-performance.ts` | Scenarios `idle` \| `active-session`; requires built `lib/` |
@@ -82,6 +84,7 @@ Dependency rule: **domain** and **application** must not import `electron` / `el
 | `[settings]` | File settings store |
 | `[sleep]` | Power-save blocker adapter |
 | `[battery]` | Battery monitor (detector only) |
+| `[low-battery]` | Application low-battery auto-stop use case (default tag) |
 | `[shortcut]` | Global shortcut adapter / register use case |
 | `[ipc]` | Sender validation and non-session IPC |
 | `[auto-launch]` | Login items |
@@ -157,18 +160,21 @@ bun run clean                  # remove lib/dist outputs
 
 ## Notes
 
+- **Version:** `1.10.8` in root `package.json` (release tags `v1.10.8`; beta `v1.10.8-beta.N`).
 - Effective sleep prevention is user `preventSleep` intent **OR** active session. Low-battery auto-stop disables both.
 - Tray icon reflects effective active state; tray menu checkbox reflects user intent only.
+- Tray menu: Prevent Sleep, **Cancel session** (only while a session is active), Settings…, About Amphetamine, Check for Updates…, Quit.
 - Popover is the primary control surface: prevent-sleep toggle, duration chips (start only; do not write preference), cancel session, Settings/Quit.
-- Settings duration select still starts a session **and** updates `defaultSessionDuration`.
+- Settings UI is System Settings–style grouped lists (General / Session / Power). Duration select still starts a session **and** updates `defaultSessionDuration`.
+- Settings and About share a fixed dark canvas via `styles/utility-tokens.css` (`--utility-window-bg: #0D1117` on `#app`). Do not re-hardcode that hex in entry stylesheets.
 - Sleep block mode defaults to `prevent-display-sleep`; `prevent-app-suspension` allows display sleep.
 - Login items: macOS uses `openAsHidden: true`; Windows uses `openAtLogin` without that flag.
 - Settings and About share refcounted macOS Dock presentation via `acquireUtilityForeground` / `releaseUtilityForeground` (`platform/utility-presentation`). Windows shows a taskbar button while open (`skipTaskbar: false` + `titleBarOverlay` caption buttons). Tray-only mode returns when the last utility ref is released.
 - Settings/About **warm cache**: first open creates+loads the BrowserWindow; user close **hides** (renderer stays warm); quit/composition `close*Window` force-**destroy**s. `*WantsVisible` blocks late `ready-to-show` after dismiss. Settings reopen clears control focus (no autofocus on Launch at Login).
-- Updater dialogs also acquire/release a utility foreground ref so `dialog.showMessageBox` is visible under tray-only activation policy; utility windows keep their own refs so Dock stays if Settings/About remain open.
+- Updater dialogs also acquire/release a utility foreground ref so `dialog.showMessageBox` is visible under tray-only activation policy; utility windows keep their own refs so Dock stays if Settings/About remain open. Multi-button alerts use `noLink: true` (Apple HIG); check-failed Esc dismisses OK, not Open Releases.
 - Low-battery auto-stop clears intent + cancels session and shows an OS notification via `UserNotifierPort` (`createOsUserNotifier`).
 - Popover hide on blur uses typed `window:hide`, not DOM `CustomEvent`.
-- About is a third built renderer (`about.html`) with shared preload; not inline `data:` HTML.
+- About is a third built renderer (`about.html`) with shared preload; not inline `data:` HTML. Copyright uses `AboutInfo.author` from package metadata.
 - `hardenWebContents` denies all `window.open`; About overrides with a package-repository allowlist on `github.com` that opens via `shell.openExternal`.
 - Auto-updater is hybrid: feed from package.json `repository` via `setFeedURL`; concurrent checks single-flight. **Check for Updates** tries in-app download/install when possible; falls back to the GitHub release page. Background checks do not auto-download.
 - GitHub Releases must publish **`latest-mac.yml`** (mac) and **`latest.yml`** (win) or macOS Check for Updates fails with a false network-error dialog. Repo: `iWorkforces/Amphetamine`.

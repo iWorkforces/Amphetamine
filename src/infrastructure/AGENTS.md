@@ -41,7 +41,8 @@ Implements application ports with Electron/Node. May import domain types and app
 - Concurrent tray/IPC/background checks share one in-flight `checkForUpdates()`; manual join upgrades user intent.
 - macOS needs **`latest-mac.yml`** on the GitHub release; Windows needs **`latest.yml`**. Missing feed → false “could not reach update server” dialog.
 - Background checks keep `autoDownload = false`; user-initiated path may download/install or open GitHub.
-- Native dialogs use injected `prepareDialogPresentation` / `restoreTrayPresentation` (composition pairs these with `acquireUtilityForeground` / `releaseUtilityForeground` so tray-only macOS can show message boxes). Multi-button dialogs set `noLink: true`. Check-failed Esc dismisses (OK), not Open Releases.
+- Native dialogs use injected `prepareDialogPresentation` / `restoreTrayPresentation` (composition pairs these with `acquireUtilityForeground` / `releaseUtilityForeground` so tray-only macOS can show message boxes).
+- Dialog layout follows Apple alert HIG: multi-button boxes set `noLink: true` (stacked buttons, not a link-style first action). Check-failed Esc dismisses (OK), not Open Releases.
 - Optional `notifyUser` surfaces Checking / Downloading OS notifications for user-initiated checks. Joining an in-flight background check settles feedback if events already ran without user intent.
 
 ## User notifications
