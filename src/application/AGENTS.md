@@ -70,7 +70,7 @@ Infrastructure `broadcast-notifier` maps these to `PUSH_CHANNELS`.
 - `reconcileSessionState` must remain a no-op regarding preference null (must not cancel live sessions).
 - Prefer factories (`createX(deps)`) matching existing style; no DI container.
 - Low-battery auto-stop may take optional `userNotifier` + `getLastKnownPercent`; production wires both from composition.
-- Log tags: prefer `[session]`, `[settings-reactions]`, `[shortcut]`, `[low-battery]` / `[composition]` (see root AGENTS.md). `[notify]` is used by the OS notification adapter.
+- Log tags: prefer `[session]`, `[settings-reactions]`, `[shortcut]`, `[low-battery]` (low-battery use case default), `[composition]` (see root AGENTS.md). `[notify]` is used by the OS notification adapter.
 
 ## Tests
 

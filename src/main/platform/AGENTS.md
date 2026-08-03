@@ -60,6 +60,8 @@ Shortcut defaults, reserved keys, and accelerator validation live in domain vali
 | Popover | vibrancy popover, transparent, `skipTaskbar: true` | opaque frameless, `skipTaskbar: true` |
 | Settings / About | vibrancy under-window, `hiddenInset`, Dock via utility-presentation | mica + `titleBarOverlay` caption buttons, taskbar visible (`skipTaskbar: false`) |
 
+Renderer CSS owns the fixed dark `#app` fill (`--utility-window-bg` in `src/renderer/styles/utility-tokens.css`); chrome helpers do not set that color.
+
 ## Battery percent
 
 - `null` means unavailable — monitor must not auto-stop.

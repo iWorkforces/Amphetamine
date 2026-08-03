@@ -1,3 +1,5 @@
+@import "../styles/utility-tokens.css";
+
 *,
 *::before,
 *::after {
@@ -109,8 +111,8 @@ body.platform-win32 #app.about {
   justify-content: center;
   /* Match settings titlebar clearance under traffic lights */
   padding: 52px 28px 24px;
-  /* Native vibrancy/mica; CSS only tints — no second backdrop-filter */
-  background: var(--bg);
+  /* Shared fixed surface; see utility-tokens.css (no second backdrop-filter) */
+  background: var(--utility-window-bg);
   opacity: 1;
   transform: none;
 }
