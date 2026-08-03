@@ -1,3 +1,5 @@
+@import "../styles/utility-tokens.css";
+
 *,
 *::before,
 *::after {
@@ -128,8 +130,8 @@ body {
 #app {
   width: 100%;
   height: 100%;
-  /* Native vibrancy/mica provides blur; CSS only tints (no second backdrop-filter). */
-  background: #0D1117;
+  /* Shared fixed surface; see utility-tokens.css (no second backdrop-filter). */
+  background: var(--utility-window-bg);
   overflow: hidden;
   display: flex;
   flex-direction: column;
