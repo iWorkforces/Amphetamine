@@ -34,7 +34,7 @@ Zero-runtime-dependency contracts shared by main, preload, renderer, scripts, an
 - `IpcChannelMap` maps every channel to request/response types.
 - Adding a **public** channel requires updates in: shared types, preload `api` + `WiredChannels`, main `registerIpcHandlers()` (or updater IPC), and tests.
 - Push-only channels still need response payload types (typed listeners/broadcasts).
-- **Private** utility-dialog channels (`utility-dialog:get-payload` / `respond` / `set-height`) stay out of `IPC_CHANNELS`; they are handled only by WindowGraph + the dedicated preload.
+- **Private** utility-dialog channels (`get-payload` / `respond` / `set-height` / push `apply`) stay out of `IPC_CHANNELS`; they are handled only by WindowGraph + the dedicated preload.
 
 ## Process-model note
 

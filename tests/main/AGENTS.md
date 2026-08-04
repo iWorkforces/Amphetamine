@@ -52,7 +52,7 @@ Pure use-case / domain tests live under `tests/application` and `tests/domain` (
 - About: shared secure prefs **with** preload; loads `/about.html`; github-only `window.open` via override after `hardenWebContents`; acquires utility foreground on ready-to-show (same as Settings).
 - Utility presentation: nested acquires keep Dock until last release; over-release is safe; utility dialog + Settings/About use independent foreground refs.
 - Warm cache (Settings/About): user `close` → preventDefault + hide + release foreground; second open reuses one BrowserWindow (no recreate); `close*Window` / `destroyAllWindows` force-`destroy`.
-- Utility dialog: destroy-on-close (not warm-cached); single-flight; `showUserDialog` mocked in hybrid updater tests (payload/button HIG), not native MessageBox.
+- Utility dialog: hide-on-close warm cache + `apply` re-present; single-flight; `showUserDialog` mocked in hybrid updater tests (payload/button HIG), not native MessageBox.
 - Dismiss-before-ready: early present then hide then late `ready-to-show` must **not** re-show or re-acquire (`*WantsVisible`).
 - Settings present: deferred `executeJavaScript` blur so warm reopen does not focus a control.
 - `isSettingsWindowOpen` is true only when visible (hidden cache returns false).

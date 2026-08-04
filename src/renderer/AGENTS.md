@@ -60,17 +60,17 @@ Electron renderer web context. Vanilla TypeScript only. Four built entries (Rsbu
 ## Utility dialog (updater alerts)
 
 - Built entry `utility-dialog.html` (Rsbuild env `utility-dialog`); dedicated preload `lib/preload/utility-dialog.cjs` exposing `window.utilityDialogApi` only (not `window.api`).
-- Presented by WindowGraph `presentUtilityDialog` for hybrid updater dialogs (up-to-date, check failed, install ready, unpackaged). Destroy-on-close; single-flight in main.
-- Opaque dark surface (`--utility-window-bg`) + coffee-brown icon aurora; system Close chrome (traffic lights / caption). Content height shrink-wraps via `setHeight` after layout.
-- **Info-only** (single button, e.g. OK): hide the action row; dismiss via system Close / Esc → `cancelId`. Multi-button: secondary left / primary right; Esc → `cancelId`; Enter → `defaultId` when no button focused.
-- Private IPC (not in public `IPC_CHANNELS` budget): `utility-dialog:get-payload` / `utility-dialog:respond` / `utility-dialog:set-height`.
+- Presented by WindowGraph `presentUtilityDialog` for hybrid updater dialogs (up-to-date, check failed, install ready, unpackaged). **Hide-on-close warm cache** (re-apply payload via `onApply`); single-flight in main; quit force-destroys.
+- Opaque dark surface (`--utility-window-bg`) + single-layer coffee-brown aurora; system Close chrome. Content height shrink-wraps via `setHeight` after layout (opacity-only open animation).
+- **Info-only** (single button, e.g. OK): hide the action row; dismiss via system Close / Esc / Enter → `cancelId`. Multi-button: secondary left / primary right; Esc → `cancelId`; Enter → `defaultId` when no button focused.
+- Private IPC (not in public `IPC_CHANNELS` budget): `get-payload` / `respond` / `set-height` / push `apply`.
 - Always assign message/detail/button labels with `textContent` (never `innerHTML`).
 
 ## Utility window surface
 
 - Settings, About, and utility-dialog `@import` `styles/utility-tokens.css` and paint `#app` with `var(--utility-window-bg)`.
 - Keep the hex only in `utility-tokens.css` so utility surfaces stay aligned.
-- All three also `@import` `styles/icon-aurora.css` for the hero/app icon wash; stage size (80px About / 72px utility-dialog / 48px Settings) stays local to each entry stylesheet.
+- All three also `@import` `styles/icon-aurora.css` (single blurred gradient layer; Settings uses `icon-aurora--static`). Stage size (80px About / 72px utility-dialog / 48px Settings) is local. Pause with `.is-paused` when `document.hidden`.
 - Respect `prefers-reduced-motion` / `prefers-reduced-transparency` / `prefers-contrast` on the shared aurora (and local chrome).
 
 ## Countdown

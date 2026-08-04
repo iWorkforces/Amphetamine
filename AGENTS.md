@@ -51,7 +51,7 @@ Dependency rule: **domain** and **application** must not import `electron` / `el
 | Domain pure rules | `src/domain/` | `isEffectivelyActive`, duration validation, threshold, `PerfTimestamp` |
 | Application use cases | `src/application/` | Session engine, recompute/toggle sleep, settings reactions, low-battery, shortcut |
 | Port interfaces | `src/application/ports/` | Closed budget of **12** ports; see `ports/index.ts` |
-| Process graph / windows | `src/main/app-shell.ts`, `src/main/process/` | AppShell ready/quit; WindowGraph owns all BrowserWindows; Settings/About **hide-on-close warm cache**; utility dialog **destroy-on-close** |
+| Process graph / windows | `src/main/app-shell.ts`, `src/main/process/` | AppShell ready/quit; WindowGraph owns all BrowserWindows; Settings/About/utility-dialog **hide-on-close warm cache** |
 | Main→renderer push | `MainToRendererNotifierPort` + `broadcast-notifier` | Application publishes `AppPushEvent`; adapter maps to `PUSH_CHANNELS` |
 | OS user notifications | `UserNotifierPort` + `os-user-notifier` | Low-battery feedback via Electron `Notification` (not a renderer push) |
 | Wire app / quit | `src/main/app-shell.ts`, `src/main/index.ts` | AppShell owns ready/quit graph; composition before IPC; quit: flush → tray → composition → destroy windows |
@@ -65,8 +65,8 @@ Dependency rule: **domain** and **application** must not import `electron` / `el
 | Settings UI | `src/renderer/settings/AGENTS.md` | System Settings groups; debounced saves; shortcut recorder; warm-cache focus clear |
 | About window | `src/renderer/about/`, WindowGraph `showAbout` | Built `about.html`; `app:get-about` (+ `author`); coffee-brown icon aurora; github allowlist; hide-on-close cache |
 | Utility surface color | `src/renderer/styles/utility-tokens.css` | Shared `--utility-window-bg` (`#0D1117`) for Settings + About + utility-dialog `#app` fills |
-| Icon aurora | `src/renderer/styles/icon-aurora.css` | Shared coffee-brown wash (ring/halo/blobs/sparks) behind About + Settings + utility-dialog icons |
-| Utility dialog | `src/renderer/utility-dialog/`, WindowGraph `presentUtilityDialog` | Aurora alert for Check for Updates (and related); dedicated preload; single-flight; destroy-on-close |
+| Icon aurora | `src/renderer/styles/icon-aurora.css` | Single-layer coffee-brown wash (static on Settings; breathe on About/dialog); pause when hidden |
+| Utility dialog | `src/renderer/utility-dialog/`, WindowGraph `presentUtilityDialog` | Aurora alert for Check for Updates; dedicated preload; single-flight; **hide-on-close warm cache** |
 | Hybrid auto-updater | `src/infrastructure/updater/` (+ main IPC façade) | `showUserDialog` inject; `setFeedURL` from package repo; single-flight checks; needs `latest-mac.yml` / `latest.yml` on release |
 | Utility Dock / dialogs | `src/main/platform/utility-presentation.ts` | Refcounted macOS foreground for Settings, About, and utility dialogs |
 | Benchmark mode | `src/infrastructure/benchmark/`, `src/renderer/benchmark-countdown.ts`, `scripts/benchmark-performance.ts` | Scenarios `idle` \| `active-session`; requires built `lib/` |
@@ -173,7 +173,7 @@ bun run clean                  # remove lib/dist outputs
 - Login items: macOS uses `openAsHidden: true`; Windows uses `openAtLogin` without that flag.
 - Settings and About share refcounted macOS Dock presentation via `acquireUtilityForeground` / `releaseUtilityForeground` (`platform/utility-presentation`). Windows shows a taskbar button while open (`skipTaskbar: false` + `titleBarOverlay` caption buttons). Tray-only mode returns when the last utility ref is released.
 - Settings/About **warm cache**: first open creates+loads the BrowserWindow; user close **hides** (renderer stays warm); quit/composition `close*Window` force-**destroy**s. `*WantsVisible` blocks late `ready-to-show` after dismiss. Settings reopen clears control focus (no autofocus on Launch at Login).
-- Updater dialogs use WindowGraph `presentUtilityDialog` (built `utility-dialog.html` + coffee-brown icon aurora + opaque `#0D1117` chrome). Own utility-foreground ref; destroy-on-close (not warm-cached); single-flight. Info-only alerts (up-to-date / unpackaged) hide the in-content OK row — dismiss via system Close / Esc. Multi-button alerts follow HIG left-secondary / right-primary; check-failed Esc dismisses OK, not Open Releases. Content height shrink-wraps via private `set-height` IPC.
+- Updater dialogs use WindowGraph `presentUtilityDialog` (built `utility-dialog.html` + coffee-brown icon aurora + opaque `#0D1117` chrome). Own utility-foreground ref; **hide-on-close warm cache** (re-apply payload via `utility-dialog:apply`); single-flight. Info-only alerts hide the OK row — dismiss via system Close / Esc / Enter. Multi-button alerts follow HIG left-secondary / right-primary; check-failed Esc dismisses OK, not Open Releases. Content height shrink-wraps via private `set-height` IPC.
 - Low-battery auto-stop clears intent + cancels session and shows an OS notification via `UserNotifierPort` (`createOsUserNotifier`).
 - Popover hide on blur uses typed `window:hide`, not DOM `CustomEvent`.
 - About is a built renderer (`about.html`) with shared preload; not inline `data:` HTML. Copyright uses `AboutInfo.author` from package metadata. App icon sits over a shared coffee-brown aurora wash (`styles/icon-aurora.css`; palette from `generate-app-icon.mjs`).

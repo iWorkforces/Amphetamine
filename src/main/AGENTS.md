@@ -11,7 +11,7 @@ Main process owns app lifecycle, BrowserWindows, tray, typed IPC registration, a
 | `index.ts` | App lifecycle events only (ready, quit, single-instance, errors, benchmark entry) |
 | `app-shell.ts` | `createAppShell()` — process-graph root: windows + composition + IPC + tray + updater + quit cleanup |
 | `process/secure-web-preferences.ts` | Single `createSecureWebPreferences()` for all BrowserWindows (sandbox / contextIsolation / no nodeIntegration) |
-| `process/window-graph.ts` | Owns popover / settings / about / utility-dialog BrowserWindows + registry + coalesced hide + warm cache (hide-on-close) for Settings/About + single-flight destroy-on-close `presentUtilityDialog` + `closeUtilityDialogWindow` + `destroyAllWindows()` |
+| `process/window-graph.ts` | Owns popover / settings / about / utility-dialog BrowserWindows + registry + coalesced hide + **hide-on-close warm cache** for Settings/About/utility-dialog + single-flight `presentUtilityDialog` + `closeUtilityDialogWindow` + `destroyAllWindows()` |
 | `composition-root.ts` | `createAppComposition()` — ports, session handle, reactions, user notifier, `showUserDialog` → `presentUtilityDialog`, `getIpcDeps` / `getTrayDeps` / `initUpdater`, ordered `cleanup()` |
 | `ipc.ts` | Typed handler registration; session handlers use injected `IpcDeps.sessionTimer` |
 | `ipc-utils.ts` | `validateSender`, `typedHandle`; public allowlist `index.html` / `settings.html` / `about.html` (utility-dialog is **not** public-IPC allowlisted) |
@@ -103,9 +103,9 @@ Do not register a second `before-quit` handler on settings or other modules.
 - Tray-only boot: `enterTrayOnlyMode()` (from AppShell).
 - Window chrome: `popoverWindowChrome` / `settingsWindowChrome` / `aboutWindowChrome` / `utilityDialogWindowChrome` (applied inside WindowGraph). Utility dialog chrome is **opaque** (`backgroundColor: #0D1117`, no vibrancy/mica) with system Close (hiddenInset / titleBarOverlay).
 - Settings, About, and utility dialog acquire/release **refcounted** utility foreground (`acquireUtilityForeground` / `releaseUtilityForeground`); Dock icon via `setUtilityDockIcon`.
-- Settings/About use **hide-on-close warm cache**: first open creates+loads the BrowserWindow; user close hides (renderer stays warm); quit/composition `close*Window` force-destroys (`win.destroy()`, not hide).
-- Utility dialog is **destroy-on-close** (not warm-cached), **single-flight** (concurrent `presentUtilityDialog` joins the in-flight promise), and shrink-wraps height via private `utility-dialog:set-height`.
-- `*WantsVisible` intent flag (Settings/About): late `ready-to-show` after user dismiss must not re-show; reopening sets intent true again.
+- Settings/About/utility-dialog use **hide-on-close warm cache**: first open creates+loads the BrowserWindow; user close hides (renderer stays warm); quit/`close*Window` force-destroys (`win.destroy()`, not hide).
+- Utility dialog is **single-flight** (concurrent `presentUtilityDialog` joins the in-flight promise). Re-present pushes payload via `utility-dialog:apply` (no reload), shrink-wraps height via `set-height`.
+- `*WantsVisible` intent flag (Settings/About/utility-dialog): late `ready-to-show` after user dismiss must not re-show; reopening sets intent true again.
 - Settings present path clears form focus after show (deferred `webContents.executeJavaScript` blur) so warm-cache reopen does not restore Launch at Login / last control.
 - `isSettingsWindowOpen()` means **visible** (not merely cached-and-hidden).
 - Login items: `buildLoginItemSettings()` — no `openAsHidden` on non-darwin.
@@ -141,8 +141,8 @@ Do not register a second `before-quit` handler on settings or other modules.
 - Never reintroduce inline `data:` About HTML; use the built `about.html` entry.
 - Never call `initAutoUpdater()` outside `UpdaterPort` / composition `initUpdater()`.
 - Never destroy Settings/About on user close (hide-on-close); only force-destroy on quit/composition cleanup.
-- Never warm-cache the utility dialog (always destroy-on-close).
-- Never present a Settings/About window when `*WantsVisible` is false (dismiss-before-ready race).
+- Never destroy the utility dialog on user dismiss (hide-on-close); only force-destroy on quit / `closeUtilityDialogWindow`.
+- Never present a Settings/About/utility-dialog window when wantsVisible is false (dismiss-before-ready race).
 - Never reintroduce native `dialog.showMessageBox` for updater UX (use `presentUtilityDialog` / `showUserDialog`).
 
 ## Commands
