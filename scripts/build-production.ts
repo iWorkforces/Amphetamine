@@ -35,9 +35,11 @@ const TARGETS: readonly BuildTarget[] = [
 const REQUIRED_OUTPUTS = [
   "lib/main/index.cjs",
   "lib/preload/index.cjs",
+  "lib/preload/utility-dialog.cjs",
   "lib/renderer/index.html",
   "lib/renderer/settings.html",
   "lib/renderer/about.html",
+  "lib/renderer/utility-dialog.html",
 ] as const;
 
 type ChildHandle = {

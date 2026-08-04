@@ -8,10 +8,10 @@ Renderer Vitest suites run in jsdom and assert DOM behavior for vanilla TypeScri
 |------|------|
 | `index.test.ts` | Popover render, status/timer, controls, pushes, effective-active OR matrix, session-action identity, hide dedupe, benchmark API mock |
 | `settings.test.ts` | Settings form, sections, debounced save, rejectedKeys, sleep mode, shortcut-failure subscription |
-| `about.test.ts` | About metadata fill, copyright/author, OK/Escape close, icon open (aurora stage DOM), getAbout failure visibility |
+| `about.test.ts` | About metadata fill, copyright/author, OK/Escape close, icon open (aurora stage DOM: ring/halo/blobs/sparks), getAbout failure visibility |
 | `delegation.test.ts` | Event delegation on `#app` |
 
-Settings warm-cache focus clear and main hide-on-close are covered primarily in `tests/main/window-graph.test.ts` (main process).
+Settings warm-cache focus clear and main hide-on-close are covered primarily in `tests/main/window-graph.test.ts` (main process). Utility-dialog renderer behavior is currently exercised via main hybrid-updater mocks (`showUserDialog`); add dedicated `utility-dialog` renderer tests when expanding that surface.
 
 ## Setup
 

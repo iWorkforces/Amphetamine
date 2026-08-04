@@ -22,8 +22,7 @@ describe("createElectronUpdaterPort", () => {
   it("configures hybrid deps and delegates lifecycle", async () => {
     const publish = vi.fn();
     const getRepositoryUrl = vi.fn().mockReturnValue("https://github.com/org/repo");
-    const prepareDialogPresentation = vi.fn();
-    const restoreTrayPresentation = vi.fn();
+    const showUserDialog = vi.fn().mockResolvedValue({ response: 0, checkboxChecked: false });
     const { createElectronUpdaterPort } = await import(
       "../../src/infrastructure/updater/electron-updater-port.js"
     );
@@ -31,8 +30,7 @@ describe("createElectronUpdaterPort", () => {
       { publish },
       {
         getRepositoryUrl,
-        prepareDialogPresentation,
-        restoreTrayPresentation,
+        showUserDialog,
       },
     );
     expect(mockConfigure).toHaveBeenCalled();

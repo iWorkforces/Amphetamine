@@ -4,7 +4,7 @@ A tray app that keeps your computer awake on **macOS** and **Windows**. Lives in
 
 > **One principle:** Do one thing and do it best.
 
-**Current version:** 1.10.9 · **Repo:** [iWorkforces/Amphetamine](https://github.com/iWorkforces/Amphetamine)
+**Current version:** 1.11.0 · **Repo:** [iWorkforces/Amphetamine](https://github.com/iWorkforces/Amphetamine)
 
 ## Features
 
@@ -113,7 +113,7 @@ bun scripts/generate-app-icon.mjs       # build/icon.icns (mac) + build/icon.ico
 bun scripts/generate-coffee-tray-icons.mjs
 ```
 
-Outputs go to `dist/` (e.g. `Amphetamine-1.10.9-arm64.dmg`, `Amphetamine-1.10.9-x64.exe`, `Amphetamine-1.10.9-arm64.exe`, portable `*-portable.exe`).
+Outputs go to `dist/` (e.g. `Amphetamine-1.11.0-arm64.dmg`, `Amphetamine-1.11.0-x64.exe`, `Amphetamine-1.11.0-arm64.exe`, portable `*-portable.exe`).
 
 Local macOS helper:
 
@@ -238,7 +238,7 @@ Dependency rule: **domain** and **application** must not import `electron` or pr
 | Architecture | Clean Architecture Lite (`domain` → `application` → `infrastructure` / presentation) |
 | Build | Rslib (main + preload), Rsbuild (renderer); parallel production via `scripts/build-production.ts` |
 | Package manager | Bun 1.3.14 (`engines`: Bun ≥ 1.3.14, Node `>=26 <27`) |
-| Test | Vitest `^4.1.10` workspace — **55** files, **627** tests |
+| Test | Vitest `^4.1.10` workspace — **56** files, **640** tests |
 | Lint / format | ESLint 10 flat + Prettier 3 |
 | UI | Vanilla TypeScript (no UI framework) |
 | Logging / updates | `electron-log`, `electron-updater` (GitHub provider) |

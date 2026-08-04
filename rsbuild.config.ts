@@ -29,6 +29,15 @@ export default defineConfig({
         template: './src/renderer/about/index.html',
       },
     },
+    'utility-dialog': {
+      source: {
+        entry: { 'utility-dialog': './src/renderer/utility-dialog/index.ts' },
+        tsconfigPath: './src/renderer/tsconfig.json',
+      },
+      html: {
+        template: './src/renderer/utility-dialog/index.html',
+      },
+    },
   },
   output: {
     distPath: { root: './lib/renderer' },

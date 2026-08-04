@@ -22,8 +22,8 @@ Developer-only Bun/Node scripts. Runtime app code must not import from here. Scr
 
 1. Start `bun x rslib build --watch -c rslib.config.ts`.
 2. Start `bun x rslib build --watch -c rslib.config.preload.ts`.
-3. Start `bun x rsbuild dev --port 5173` (popover + settings + about environments).
-4. Wait for `lib/main/index.cjs` and `lib/preload/index.cjs`.
+3. Start `bun x rsbuild dev --port 5173` (popover + settings + about + utility-dialog environments).
+4. Wait for `lib/main/index.cjs` and `lib/preload/index.cjs` (preload multi-entry also builds `utility-dialog.cjs`).
 5. TCP-connect to `localhost:5173` before Electron launch.
 6. Launch `bun x electron . --disable-gpu-sandbox --log-level=3` with `DEV_SERVER_URL`.
 7. Kill child processes on Electron exit or signals.
@@ -35,7 +35,7 @@ Developer-only Bun/Node scripts. Runtime app code must not import from here. Scr
 - Spawns main (rslib), preload (rslib), and renderer (rsbuild) **concurrently** with `NODE_ENV=production`.
 - Prefixes child stdout/stderr with `[main]` / `[preload]` / `[renderer]`.
 - On first nonzero exit: SIGTERM remaining siblings, then exit nonzero.
-- Verifies outputs: `lib/main/index.cjs`, `lib/preload/index.cjs`, `lib/renderer/{index,settings,about}.html`.
+- Verifies outputs: `lib/main/index.cjs`, `lib/preload/index.cjs`, `lib/preload/utility-dialog.cjs`, `lib/renderer/{index,settings,about,utility-dialog}.html`.
 - Windows-safe (no POSIX job-control syntax). Focused scripts `build:main` / `build:preload` / `build:renderer` remain for single-target builds.
 
 ## Sticky Typecheck Guard

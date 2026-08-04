@@ -9,7 +9,7 @@ Tray-only Electron app for **macOS and Windows**. Prevents system sleep through 
 | Runtime | Bun 1.3.14+ / Node `>=26 <27` |
 | TypeScript | Dual: native **7.x** (`@typescript/native` owns workspace `tsc`) for typecheck; **6.x** (`typescript@6`) for the JS API / ESLint until 7.1 programmatic API lands |
 | Electron | `^43.2.0` (package pin; do not downgrade below patched 43.x) |
-| Build | Rslib main/preload to CJS + Rsbuild renderer (popover + settings + about) |
+| Build | Rslib main/preload to CJS + Rsbuild renderer (popover + settings + about + utility-dialog) |
 | Test | Vitest 4 workspace: domain + application + main (Node) + renderer (jsdom) |
 | Lint | ESLint 10 flat; sticky type-safety rules as errors for `src/` |
 | Layers | Clean Architecture Lite: `domain` → `application` → `infrastructure` / presentation (`main`, `preload`, `renderer`) |
@@ -29,10 +29,10 @@ src/main/                 Composition root, IPC, tray, windows, process façades
   composition-root.ts     createAppComposition — wire ports, use cases, reactions
   platform/               OS adapters + utility-presentation; public entry platform/index.ts
   utils/                  broadcastToWindows, packageInfo guard
-src/preload/              sandboxed contextBridge API
-src/renderer/             popover + settings + about (built HTML entries)
-  styles/                 popover main.css + utility-tokens.css + icon-aurora.css (Settings/About)
-src/shared/               IPC transport contracts; re-exports domain settings types
+src/preload/              sandboxed contextBridge API (public `api` + utility-dialog preload)
+src/renderer/             popover + settings + about + utility-dialog (built HTML entries)
+  styles/                 popover main.css + utility-tokens.css + icon-aurora.css (utility surfaces)
+src/shared/               IPC transport contracts; utility-dialog private channels; domain re-exports
 src/assets/               checked-in generated PNGs consumed at runtime
 scripts/                  Bun tooling, icons, dev, benchmarks, sticky/layer guards
 build/                    electron-builder resources, entitlements, fuses
@@ -51,7 +51,7 @@ Dependency rule: **domain** and **application** must not import `electron` / `el
 | Domain pure rules | `src/domain/` | `isEffectivelyActive`, duration validation, threshold, `PerfTimestamp` |
 | Application use cases | `src/application/` | Session engine, recompute/toggle sleep, settings reactions, low-battery, shortcut |
 | Port interfaces | `src/application/ports/` | Closed budget of **12** ports; see `ports/index.ts` |
-| Process graph / windows | `src/main/app-shell.ts`, `src/main/process/` | AppShell ready/quit; WindowGraph owns all BrowserWindows; Settings/About **hide-on-close warm cache** |
+| Process graph / windows | `src/main/app-shell.ts`, `src/main/process/` | AppShell ready/quit; WindowGraph owns all BrowserWindows; Settings/About/utility-dialog **hide-on-close warm cache** |
 | Main→renderer push | `MainToRendererNotifierPort` + `broadcast-notifier` | Application publishes `AppPushEvent`; adapter maps to `PUSH_CHANNELS` |
 | OS user notifications | `UserNotifierPort` + `os-user-notifier` | Low-battery feedback via Electron `Notification` (not a renderer push) |
 | Wire app / quit | `src/main/app-shell.ts`, `src/main/index.ts` | AppShell owns ready/quit graph; composition before IPC; quit: flush → tray → composition → destroy windows |
@@ -64,10 +64,11 @@ Dependency rule: **domain** and **application** must not import `electron` / `el
 | Renderer popover | `src/renderer/index.ts` | Domain `isEffectivelyActive`; mode-stable session actions; chips start session only |
 | Settings UI | `src/renderer/settings/AGENTS.md` | System Settings groups; debounced saves; shortcut recorder; warm-cache focus clear |
 | About window | `src/renderer/about/`, WindowGraph `showAbout` | Built `about.html`; `app:get-about` (+ `author`); coffee-brown icon aurora; github allowlist; hide-on-close cache |
-| Utility surface color | `src/renderer/styles/utility-tokens.css` | Shared `--utility-window-bg` (`#0D1117`) for Settings + About `#app` fills |
-| Icon aurora | `src/renderer/styles/icon-aurora.css` | Shared coffee-brown wash behind About + Settings hero icons (palette from app icon) |
-| Hybrid auto-updater | `src/infrastructure/updater/` (+ main IPC façade) | `setFeedURL` from package repo; single-flight checks; needs `latest-mac.yml` / `latest.yml` on release |
-| Utility Dock / dialogs | `src/main/platform/utility-presentation.ts` | Refcounted macOS foreground for Settings, About, and updater dialogs |
+| Utility surface color | `src/renderer/styles/utility-tokens.css` | Shared `--utility-window-bg` (`#0D1117`) for Settings + About + utility-dialog `#app` fills |
+| Icon aurora | `src/renderer/styles/icon-aurora.css` | Single-layer coffee-brown wash (static on Settings; breathe on About/dialog); pause when hidden |
+| Utility dialog | `src/renderer/utility-dialog/`, WindowGraph `presentUtilityDialog` | Aurora alert for Check for Updates; dedicated preload; single-flight; **hide-on-close warm cache** |
+| Hybrid auto-updater | `src/infrastructure/updater/` (+ main IPC façade) | `showUserDialog` inject; `setFeedURL` from package repo; single-flight checks; needs `latest-mac.yml` / `latest.yml` on release |
+| Utility Dock / dialogs | `src/main/platform/utility-presentation.ts` | Refcounted macOS foreground for Settings, About, and utility dialogs |
 | Benchmark mode | `src/infrastructure/benchmark/`, `src/renderer/benchmark-countdown.ts`, `scripts/benchmark-performance.ts` | Scenarios `idle` \| `active-session`; requires built `lib/` |
 | Platform OS gates | `src/main/platform/` | Prefer `isDarwin` / `isWin32` |
 | Test mocking | `tests/AGENTS.md` (+ main/renderer) | Domain/application pure; main mocks Electron |
@@ -100,7 +101,7 @@ Dependency rule: **domain** and **application** must not import `electron` / `el
 - Type-safe IPC: `typedHandle()` in main, typed `invoke<K>()` in preload, exhaustive `WiredChannels` check.
 - Main/infrastructure import Electron via `electron/main` (and `electron/common` for `shell`/`nativeImage`); preload uses `electron`.
 - Application never imports `IPC_CHANNELS`; publish `AppPushEvent` through `MainToRendererNotifierPort`.
-- Process graph: AppShell owns lifecycle; WindowGraph is the sole BrowserWindow factory (popover/settings/about).
+- Process graph: AppShell owns lifecycle; WindowGraph is the sole BrowserWindow factory (popover/settings/about/utility-dialog).
 - Side effects isolated via ports and factory deps (`SessionTimerDeps`, `BatteryDeps`, `TrayDeps`, `IpcDeps`, port interfaces).
 - Settings validation uses domain `VALIDATORS` for disk load and partial merge.
 - Session **preference** is `defaultSessionDuration`; live session state is engine handle + `SESSION_STATUS*` pushes only.
@@ -161,25 +162,26 @@ bun run clean                  # remove lib/dist outputs
 
 ## Notes
 
-- **Version:** `1.10.9` in root `package.json` (release tags `v1.10.9`; beta `v1.10.9-beta.N`).
+- **Version:** `1.11.0` in root `package.json` (release tags `v1.11.0`; beta `v1.11.0-beta.N`).
 - Effective sleep prevention is user `preventSleep` intent **OR** active session. Low-battery auto-stop disables both.
 - Tray icon reflects effective active state; tray menu checkbox reflects user intent only.
 - Tray menu: Prevent Sleep, **Cancel session** (only while a session is active), Settings…, About Amphetamine, Check for Updates…, Quit.
 - Popover is the primary control surface: prevent-sleep toggle, duration chips (start only; do not write preference), cancel session, Settings/Quit.
 - Settings UI is System Settings–style grouped lists (General / Session / Power). Duration select still starts a session **and** updates `defaultSessionDuration`. Hero icon uses the shared coffee-brown aurora (`styles/icon-aurora.css`).
-- Settings and About share a fixed dark canvas via `styles/utility-tokens.css` (`--utility-window-bg: #0D1117` on `#app`). Do not re-hardcode that hex in entry stylesheets.
+- Settings, About, and the updater utility dialog share a fixed dark canvas via `styles/utility-tokens.css` (`--utility-window-bg: #0D1117` on `#app`). Do not re-hardcode that hex in entry stylesheets.
 - Sleep block mode defaults to `prevent-display-sleep`; `prevent-app-suspension` allows display sleep.
 - Login items: macOS uses `openAsHidden: true`; Windows uses `openAtLogin` without that flag.
 - Settings and About share refcounted macOS Dock presentation via `acquireUtilityForeground` / `releaseUtilityForeground` (`platform/utility-presentation`). Windows shows a taskbar button while open (`skipTaskbar: false` + `titleBarOverlay` caption buttons). Tray-only mode returns when the last utility ref is released.
 - Settings/About **warm cache**: first open creates+loads the BrowserWindow; user close **hides** (renderer stays warm); quit/composition `close*Window` force-**destroy**s. `*WantsVisible` blocks late `ready-to-show` after dismiss. Settings reopen clears control focus (no autofocus on Launch at Login).
-- Updater dialogs also acquire/release a utility foreground ref so `dialog.showMessageBox` is visible under tray-only activation policy; utility windows keep their own refs so Dock stays if Settings/About remain open. Multi-button alerts use `noLink: true` (Apple HIG); check-failed Esc dismisses OK, not Open Releases.
+- Updater dialogs use WindowGraph `presentUtilityDialog` (built `utility-dialog.html` + coffee-brown icon aurora + opaque `#0D1117` chrome). Own utility-foreground ref; **hide-on-close warm cache** (re-apply payload via `utility-dialog:apply`); single-flight. Info-only alerts hide the OK row — dismiss via system Close / Esc / Enter. Multi-button alerts follow HIG left-secondary / right-primary; check-failed Esc dismisses OK, not Open Releases. Content height shrink-wraps via private `set-height` IPC.
 - Low-battery auto-stop clears intent + cancels session and shows an OS notification via `UserNotifierPort` (`createOsUserNotifier`).
 - Popover hide on blur uses typed `window:hide`, not DOM `CustomEvent`.
-- About is a third built renderer (`about.html`) with shared preload; not inline `data:` HTML. Copyright uses `AboutInfo.author` from package metadata. App icon sits over a shared coffee-brown aurora wash (`styles/icon-aurora.css`; palette from `generate-app-icon.mjs`).
+- About is a built renderer (`about.html`) with shared preload; not inline `data:` HTML. Copyright uses `AboutInfo.author` from package metadata. App icon sits over a shared coffee-brown aurora wash (`styles/icon-aurora.css`; palette from `generate-app-icon.mjs`).
+- Utility dialog is a fourth built renderer (`utility-dialog.html`) with dedicated preload (`lib/preload/utility-dialog.cjs`); private channels in `shared/utility-dialog.ts` (not in public `IPC_CHANNELS` budget of 16).
 - `hardenWebContents` denies all `window.open`; About overrides with a package-repository allowlist on `github.com` that opens via `shell.openExternal`.
-- Auto-updater is hybrid: feed from package.json `repository` via `setFeedURL`; concurrent checks single-flight. **Check for Updates** tries in-app download/install when possible; falls back to the GitHub release page. Background checks do not auto-download.
+- Auto-updater is hybrid: feed from package.json `repository` via `setFeedURL`; concurrent checks single-flight. **Check for Updates** tries in-app download/install when possible; falls back to the GitHub release page. Background checks do not auto-download. Presentation via injected `showUserDialog` (no native `dialog.showMessageBox`).
 - GitHub Releases must publish **`latest-mac.yml`** (mac) and **`latest.yml`** (win) or macOS Check for Updates fails with a false network-error dialog. Repo: `iWorkforces/Amphetamine`.
 - Electron pin is `^43.2.0` in package.json; do not downgrade below the patched 43.x line referenced by security comments.
 - Runtime deps are only `electron-log` and `electron-updater`; externalized in Rslib. Renderer must not import `electron-log`.
-- Production Rslib/Rsbuild builds drop console output. `bun run build` runs targets in parallel.
+- Production Rslib/Rsbuild builds drop console output. `bun run build` runs targets in parallel (outputs include `utility-dialog.html` + `utility-dialog.cjs`).
 - Develop pushes/merges: CI lint/test; **Beta** workflow packages `*-beta-{N}.*` and publishes prerelease tag `vX.Y.Z-beta.N`.
