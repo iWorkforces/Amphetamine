@@ -28,9 +28,15 @@ function setupDom(): void {
     <div id="app" class="about" role="dialog" aria-labelledby="product-name">
       <div class="icon-aurora-stage app-icon-stage">
         <div class="icon-aurora" aria-hidden="true">
+          <span class="aurora-ring"></span>
+          <span class="aurora-halo"></span>
           <span class="aurora-blob aurora-blob-a"></span>
           <span class="aurora-blob aurora-blob-b"></span>
           <span class="aurora-blob aurora-blob-c"></span>
+          <span class="aurora-blob aurora-blob-d"></span>
+          <span class="aurora-spark aurora-spark-1"></span>
+          <span class="aurora-spark aurora-spark-2"></span>
+          <span class="aurora-spark aurora-spark-3"></span>
         </div>
         <img id="app-icon" class="app-icon" alt="" role="button" tabindex="0" aria-label="View source on GitHub" />
       </div>

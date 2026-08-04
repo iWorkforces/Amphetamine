@@ -199,8 +199,8 @@ body.platform-win32 .settings-titlebar {
 }
 
 .icon-aurora-stage.settings-hero-icon-stage .icon-aurora {
-  inset: -42%;
-  filter: blur(12px) saturate(1.15);
+  inset: -52%;
+  filter: blur(13px) saturate(1.28) brightness(1.04);
 }
 
 @media (prefers-reduced-transparency: reduce) {
@@ -226,8 +226,9 @@ body.platform-win32 .settings-titlebar {
   box-shadow:
     0 1px 2px rgba(0, 0, 0, 0.06),
     0 4px 12px rgba(0, 0, 0, 0.08),
+    0 0 16px color-mix(in srgb, #a86b4a 24%, transparent),
     /* subtle warm rim that ties icon to aurora */
-    0 0 0 1px color-mix(in srgb, #4a2c2a 35%, transparent);
+    0 0 0 1px color-mix(in srgb, #4a2c2a 40%, transparent);
 }
 
 .settings-hero-text {
