@@ -31,7 +31,7 @@ src/main/                 Composition root, IPC, tray, windows, process façades
   utils/                  broadcastToWindows, packageInfo guard
 src/preload/              sandboxed contextBridge API
 src/renderer/             popover + settings + about (built HTML entries)
-  styles/                 popover main.css + shared utility-tokens.css (Settings/About surface)
+  styles/                 popover main.css + utility-tokens.css + icon-aurora.css (Settings/About)
 src/shared/               IPC transport contracts; re-exports domain settings types
 src/assets/               checked-in generated PNGs consumed at runtime
 scripts/                  Bun tooling, icons, dev, benchmarks, sticky/layer guards
@@ -63,8 +63,9 @@ Dependency rule: **domain** and **application** must not import `electron` / `el
 | Tray/menu | `src/main/tray.ts`, `src/assets/AGENTS.md` | Icon = effective active; checkbox = user intent |
 | Renderer popover | `src/renderer/index.ts` | Domain `isEffectivelyActive`; mode-stable session actions; chips start session only |
 | Settings UI | `src/renderer/settings/AGENTS.md` | System Settings groups; debounced saves; shortcut recorder; warm-cache focus clear |
-| About window | `src/renderer/about/`, WindowGraph `showAbout` | Built `about.html`; `app:get-about` (+ `author`); github allowlist; hide-on-close cache |
+| About window | `src/renderer/about/`, WindowGraph `showAbout` | Built `about.html`; `app:get-about` (+ `author`); coffee-brown icon aurora; github allowlist; hide-on-close cache |
 | Utility surface color | `src/renderer/styles/utility-tokens.css` | Shared `--utility-window-bg` (`#0D1117`) for Settings + About `#app` fills |
+| Icon aurora | `src/renderer/styles/icon-aurora.css` | Shared coffee-brown wash behind About + Settings hero icons (palette from app icon) |
 | Hybrid auto-updater | `src/infrastructure/updater/` (+ main IPC façade) | `setFeedURL` from package repo; single-flight checks; needs `latest-mac.yml` / `latest.yml` on release |
 | Utility Dock / dialogs | `src/main/platform/utility-presentation.ts` | Refcounted macOS foreground for Settings, About, and updater dialogs |
 | Benchmark mode | `src/infrastructure/benchmark/`, `src/renderer/benchmark-countdown.ts`, `scripts/benchmark-performance.ts` | Scenarios `idle` \| `active-session`; requires built `lib/` |
@@ -160,12 +161,12 @@ bun run clean                  # remove lib/dist outputs
 
 ## Notes
 
-- **Version:** `1.10.8` in root `package.json` (release tags `v1.10.8`; beta `v1.10.8-beta.N`).
+- **Version:** `1.10.9` in root `package.json` (release tags `v1.10.9`; beta `v1.10.9-beta.N`).
 - Effective sleep prevention is user `preventSleep` intent **OR** active session. Low-battery auto-stop disables both.
 - Tray icon reflects effective active state; tray menu checkbox reflects user intent only.
 - Tray menu: Prevent Sleep, **Cancel session** (only while a session is active), Settings…, About Amphetamine, Check for Updates…, Quit.
 - Popover is the primary control surface: prevent-sleep toggle, duration chips (start only; do not write preference), cancel session, Settings/Quit.
-- Settings UI is System Settings–style grouped lists (General / Session / Power). Duration select still starts a session **and** updates `defaultSessionDuration`.
+- Settings UI is System Settings–style grouped lists (General / Session / Power). Duration select still starts a session **and** updates `defaultSessionDuration`. Hero icon uses the shared coffee-brown aurora (`styles/icon-aurora.css`).
 - Settings and About share a fixed dark canvas via `styles/utility-tokens.css` (`--utility-window-bg: #0D1117` on `#app`). Do not re-hardcode that hex in entry stylesheets.
 - Sleep block mode defaults to `prevent-display-sleep`; `prevent-app-suspension` allows display sleep.
 - Login items: macOS uses `openAsHidden: true`; Windows uses `openAtLogin` without that flag.
@@ -174,7 +175,7 @@ bun run clean                  # remove lib/dist outputs
 - Updater dialogs also acquire/release a utility foreground ref so `dialog.showMessageBox` is visible under tray-only activation policy; utility windows keep their own refs so Dock stays if Settings/About remain open. Multi-button alerts use `noLink: true` (Apple HIG); check-failed Esc dismisses OK, not Open Releases.
 - Low-battery auto-stop clears intent + cancels session and shows an OS notification via `UserNotifierPort` (`createOsUserNotifier`).
 - Popover hide on blur uses typed `window:hide`, not DOM `CustomEvent`.
-- About is a third built renderer (`about.html`) with shared preload; not inline `data:` HTML. Copyright uses `AboutInfo.author` from package metadata.
+- About is a third built renderer (`about.html`) with shared preload; not inline `data:` HTML. Copyright uses `AboutInfo.author` from package metadata. App icon sits over a shared coffee-brown aurora wash (`styles/icon-aurora.css`; palette from `generate-app-icon.mjs`).
 - `hardenWebContents` denies all `window.open`; About overrides with a package-repository allowlist on `github.com` that opens via `shell.openExternal`.
 - Auto-updater is hybrid: feed from package.json `repository` via `setFeedURL`; concurrent checks single-flight. **Check for Updates** tries in-app download/install when possible; falls back to the GitHub release page. Background checks do not auto-download.
 - GitHub Releases must publish **`latest-mac.yml`** (mac) and **`latest.yml`** (win) or macOS Check for Updates fails with a false network-error dialog. Repo: `iWorkforces/Amphetamine`.

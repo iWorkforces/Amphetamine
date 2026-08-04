@@ -14,6 +14,7 @@ Electron renderer web context. Vanilla TypeScript only. Three built entries (Rsb
 | `css.d.ts` | CSS module declarations |
 | `styles/main.css` | Popover styling, dark mode, reduced motion |
 | `styles/utility-tokens.css` | Shared Settings/About surface tokens (e.g. `--utility-window-bg`) |
+| `styles/icon-aurora.css` | Shared coffee-brown aurora wash behind About/Settings app icons |
 | `settings/` | Settings-window renderer; see `settings/AGENTS.md` |
 | `about/` | About-window renderer (package metadata + close) |
 
@@ -52,12 +53,14 @@ Electron renderer web context. Vanilla TypeScript only. Three built entries (Rsb
 - OK / Escape uses `window.close()` → main **hide-on-close** warm cache (same as Settings); quit force-destroys.
 - Safe visibility: shell materializes even if `getAbout` fails (fallback copy).
 - Hero icon: bundled `settings-hero-icon.png` via `import.meta.url` (not a main-process data URI).
+- Icon sits in `.icon-aurora-stage` with shared coffee-brown aurora (`styles/icon-aurora.css`); decorative blobs are `aria-hidden`.
 - No separate `constants.ts`; copy comes from `AboutInfo` + static HTML structure.
 
 ## Utility window surface
 
 - Settings and About both `@import` `styles/utility-tokens.css` and paint `#app` with `var(--utility-window-bg)`.
 - Keep the hex only in `utility-tokens.css` so the two dialogs stay aligned.
+- Both also `@import` `styles/icon-aurora.css` for the hero/app icon wash; stage size (80px About / 48px Settings) stays local to each entry stylesheet.
 
 ## Countdown
 

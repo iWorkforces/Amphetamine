@@ -4,7 +4,7 @@ A tray app that keeps your computer awake on **macOS** and **Windows**. Lives in
 
 > **One principle:** Do one thing and do it best.
 
-**Current version:** 1.10.8 · **Repo:** [iWorkforces/Amphetamine](https://github.com/iWorkforces/Amphetamine)
+**Current version:** 1.10.9 · **Repo:** [iWorkforces/Amphetamine](https://github.com/iWorkforces/Amphetamine)
 
 ## Features
 
@@ -113,7 +113,7 @@ bun scripts/generate-app-icon.mjs       # build/icon.icns (mac) + build/icon.ico
 bun scripts/generate-coffee-tray-icons.mjs
 ```
 
-Outputs go to `dist/` (e.g. `Amphetamine-1.10.8-arm64.dmg`, `Amphetamine-1.10.8-x64.exe`, `Amphetamine-1.10.8-arm64.exe`, portable `*-portable.exe`).
+Outputs go to `dist/` (e.g. `Amphetamine-1.10.9-arm64.dmg`, `Amphetamine-1.10.9-x64.exe`, `Amphetamine-1.10.9-arm64.exe`, portable `*-portable.exe`).
 
 Local macOS helper:
 
