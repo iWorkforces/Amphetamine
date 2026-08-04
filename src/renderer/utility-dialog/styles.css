@@ -1,0 +1,212 @@
+@import "../styles/utility-tokens.css";
+@import "../styles/icon-aurora.css";
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  --text-primary: #f5f5f7;
+  --text-secondary: #a1a1a6;
+  --control-fill: rgba(120, 120, 128, 0.28);
+  --control-fill-hover: rgba(120, 120, 128, 0.38);
+  --control-fill-active: rgba(120, 120, 128, 0.48);
+  --accent: #0a84ff;
+  --accent-label: #ffffff;
+  --radius-icon: 22%;
+  font-family:
+    -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Segoe UI Variable",
+    "Segoe UI", "Helvetica Neue", sans-serif;
+  font-size: 13px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+@media (prefers-contrast: more) {
+  :root {
+    --text-secondary: #ebebf5;
+  }
+
+  button {
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.45);
+  }
+}
+
+html,
+body {
+  width: 100%;
+  /* Fill the BrowserWindow; native backgroundColor matches this surface. */
+  height: 100%;
+  overflow: hidden;
+  background: var(--utility-window-bg);
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  color: var(--text-primary);
+  -webkit-app-region: drag;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: default;
+  background: var(--utility-window-bg);
+}
+
+#app.utility-dialog {
+  width: 100%;
+  /* Grow with content for shrink-wrap measure; paint same solid as window chrome. */
+  height: auto;
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  /* Room for system traffic lights / caption Close (hiddenInset / titleBarOverlay) */
+  padding: 48px 28px 20px;
+  background: var(--utility-window-bg);
+  overflow: visible;
+  opacity: 1;
+  transform: none;
+}
+
+body.platform-win32 #app.utility-dialog {
+  padding-top: 48px;
+}
+
+/* Info-only alerts: no OK row — dismiss via system Close / Esc */
+#app.utility-dialog.no-actions {
+  padding-bottom: 28px;
+}
+
+#app.utility-dialog.no-actions .dialog-detail {
+  margin-bottom: 0;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  #app.utility-dialog.pre-animate {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+
+  #app.utility-dialog.ready {
+    opacity: 1;
+    transform: scale(1);
+    transition:
+      opacity 280ms cubic-bezier(0.22, 1, 0.36, 1),
+      transform 320ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+}
+
+.icon-aurora-stage.dialog-icon-stage {
+  width: 72px;
+  height: 72px;
+  margin-bottom: 14px;
+}
+
+.dialog-icon {
+  position: relative;
+  z-index: 1;
+  width: 72px;
+  height: 72px;
+  border-radius: var(--radius-icon);
+  box-shadow:
+    0 2px 6px rgba(0, 0, 0, 0.08),
+    0 10px 28px rgba(0, 0, 0, 0.12),
+    0 0 22px color-mix(in srgb, #a86b4a 28%, transparent),
+    0 0 0 1px color-mix(in srgb, #4a2c2a 40%, transparent);
+}
+
+.dialog-message {
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.022em;
+  line-height: 1.2;
+  margin-bottom: 8px;
+  text-align: center;
+  max-width: 300px;
+}
+
+.dialog-detail {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-secondary);
+  max-width: 300px;
+  text-align: center;
+  line-height: 1.45;
+  letter-spacing: 0;
+  margin-bottom: 14px;
+}
+
+.dialog-actions {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  -webkit-app-region: no-drag;
+}
+
+button {
+  appearance: none;
+  -webkit-appearance: none;
+  border: none;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  min-width: 84px;
+  padding: 6px 18px;
+  border-radius: 6px;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+  line-height: 1.3;
+}
+
+button.dialog-btn-secondary {
+  background: var(--control-fill);
+  color: var(--text-primary);
+}
+
+button.dialog-btn-primary {
+  background: var(--accent);
+  color: var(--accent-label);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  button {
+    transition:
+      filter 100ms ease-out,
+      transform 100ms ease-out,
+      background-color 100ms ease-out;
+  }
+}
+
+button:hover {
+  filter: brightness(1.06);
+}
+
+button.dialog-btn-secondary:hover {
+  background: var(--control-fill-hover);
+  filter: none;
+}
+
+button:active {
+  filter: brightness(0.94);
+  transform: scale(0.97);
+}
+
+button.dialog-btn-secondary:active {
+  background: var(--control-fill-active);
+}
+
+button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}

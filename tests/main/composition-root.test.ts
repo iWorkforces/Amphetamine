@@ -116,6 +116,11 @@ vi.mock("../../src/main/utils/packageInfo.js", () => ({
 vi.mock("../../src/main/platform/index.js", () => ({
   enterForegroundMode: vi.fn(),
   enterTrayOnlyMode: vi.fn(),
+  acquireUtilityForeground: vi.fn(),
+  releaseUtilityForeground: vi.fn(),
+}));
+vi.mock("../../src/main/process/window-graph.js", () => ({
+  presentUtilityDialog: vi.fn().mockResolvedValue({ response: 0, checkboxChecked: false }),
 }));
 
 describe("createAppComposition", () => {

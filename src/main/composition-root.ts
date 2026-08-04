@@ -31,7 +31,7 @@ import type { TrayDeps } from "./tray.js";
 import { createSettingsWindow, closeSettingsWindow } from "./settings-window.js";
 import { closeAboutWindow } from "./about-window.js";
 import { registerAutoUpdaterIpc } from "./auto-updater.js";
-import { acquireUtilityForeground, releaseUtilityForeground } from "./platform/index.js";
+import { presentUtilityDialog } from "./process/window-graph.js";
 import { getPackageInfo } from "./utils/packageInfo.js";
 import { createRecomputeSleepPrevention } from "../application/sleep/recompute-sleep-prevention.js";
 import { createTogglePreventSleep } from "../application/sleep/toggle-prevent-sleep.js";
@@ -79,14 +79,8 @@ export function createAppComposition(): AppComposition {
   let lastBatteryPercent: number | null = null;
   const updaterPort = createElectronUpdaterPort(notifier, {
     getRepositoryUrl: () => getPackageInfo().repository,
-    prepareDialogPresentation: () => {
-      acquireUtilityForeground();
-    },
-    restoreTrayPresentation: () => {
-      // Pair with prepareDialogPresentation acquire (dialog is not a BrowserWindow ref).
-      // Utility windows keep their own refs so Dock stays while Settings/About open.
-      releaseUtilityForeground();
-    },
+    // Aurora utility dialog (WindowGraph) — acquires/releases its own foreground ref.
+    showUserDialog: (options) => presentUtilityDialog(options),
     notifyUser: (message) => {
       userNotifier.notify(message);
     },

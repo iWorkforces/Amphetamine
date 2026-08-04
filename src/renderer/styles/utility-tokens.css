@@ -1,6 +1,6 @@
 /**
- * Shared design tokens for Settings and About utility windows.
- * Keep surface colors here so dialogs stay visually aligned.
+ * Shared design tokens for Settings, About, and utility-dialog surfaces.
+ * Keep surface colors here so utility windows stay visually aligned.
  */
 :root {
   /* Fixed dark canvas (GitHub-style) for utility dialog surfaces. */

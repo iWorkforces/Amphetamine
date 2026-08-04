@@ -15,7 +15,11 @@ const mockSetWindowOpenHandler = vi.fn();
 const mockHarden = vi.fn();
 
 vi.mock("electron", () => ({
-  app: { isPackaged: false },
+  app: { isPackaged: false, focus: vi.fn() },
+  ipcMain: {
+    handle: vi.fn(),
+    removeHandler: vi.fn(),
+  },
   BrowserWindow: vi.fn(function (this: Record<string, unknown>) {
     this.focus = mockFocus;
     this.show = mockShow;
@@ -29,6 +33,7 @@ vi.mock("electron", () => ({
     this.once = mockOnce;
     this.on = mockOn;
     this.webContents = {
+      id: 1,
       setWindowOpenHandler: mockSetWindowOpenHandler,
       on: vi.fn(),
       send: vi.fn(),
@@ -68,7 +73,9 @@ vi.mock("../../src/main/platform/index.js", () => ({
   popoverWindowChrome: () => ({ skipTaskbar: true }),
   settingsWindowChrome: () => ({ skipTaskbar: false }),
   aboutWindowChrome: () => ({ skipTaskbar: true }),
+  utilityDialogWindowChrome: () => ({ skipTaskbar: false, titleBarStyle: "hidden" }),
   appIconFileName: () => "icon.icns",
+  isDarwin: () => false,
   enterForegroundMode: vi.fn(),
   enterTrayOnlyMode: vi.fn(),
   setDockIcon: vi.fn(),

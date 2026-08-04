@@ -8,6 +8,7 @@ import { BrowserWindow, screen } from "electron/main";
 import { nativeImage, shell } from "electron/common";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { app, ipcMain, type IpcMainInvokeEvent } from "electron/main";
 import {
   ABOUT_WINDOW_HEIGHT,
   ABOUT_WINDOW_WIDTH,
@@ -18,10 +19,22 @@ import {
   MAIN_WINDOW_WIDTH,
   SETTINGS_WINDOW_HEIGHT,
   SETTINGS_WINDOW_WIDTH,
+  UTILITY_DIALOG_HEIGHT,
+  UTILITY_DIALOG_MAX_HEIGHT,
+  UTILITY_DIALOG_MIN_HEIGHT,
+  UTILITY_DIALOG_WIDTH,
 } from "../constants.js";
 import { hardenWebContents } from "../security.js";
 import { broadcastToWindows } from "../utils/broadcast.js";
 import { IPC_CHANNELS } from "../../shared/types.js";
+import {
+  UTILITY_DIALOG_GET_PAYLOAD,
+  UTILITY_DIALOG_RESPOND,
+  UTILITY_DIALOG_SET_HEIGHT,
+  type UtilityDialogOptions,
+  type UtilityDialogPayload,
+  type UtilityDialogResult,
+} from "../../shared/utility-dialog.js";
 import {
   aboutWindowChrome,
   appIconFileName,
@@ -30,6 +43,7 @@ import {
   setUtilityDockIcon,
   popoverWindowChrome,
   settingsWindowChrome,
+  utilityDialogWindowChrome,
 } from "../platform/index.js";
 import { createSecureWebPreferences } from "./secure-web-preferences.js";
 import { getPackageInfo } from "../utils/packageInfo.js";
@@ -39,6 +53,11 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 /** Preload CJS path relative to compiled main process modules. */
 export function getPreloadScriptPath(): string {
   return path.join(__dirname, "..", "preload", "index.cjs");
+}
+
+/** Dedicated sandboxed preload for the aurora utility dialog. */
+export function getUtilityDialogPreloadPath(): string {
+  return path.join(__dirname, "..", "preload", "utility-dialog.cjs");
 }
 
 function getWindowIconPath(): string {
@@ -539,12 +558,228 @@ export function closeAboutWindow(): void {
   });
 }
 
+// --- Aurora utility dialog (updater alerts; single-flight, destroy-on-close) ---
+
+let utilityDialogWindow: BrowserWindow | null = null;
+let utilityDialogHeldForeground = false;
+/** In-flight presentation; concurrent callers await the same result. */
+let utilityDialogInFlight: Promise<UtilityDialogResult> | null = null;
+let utilityDialogPayload: UtilityDialogPayload | null = null;
+let utilityDialogResolve: ((result: UtilityDialogResult) => void) | null = null;
+let utilityDialogHandlersRegistered = false;
+
+function normalizeUtilityDialogOptions(options: UtilityDialogOptions): UtilityDialogPayload {
+  const buttons =
+    options.buttons.length > 0 ? options.buttons.slice(0, 3) : (["OK"] as string[]);
+  const lastIndex = buttons.length - 1;
+  const defaultId =
+    typeof options.defaultId === "number" &&
+    Number.isInteger(options.defaultId) &&
+    options.defaultId >= 0 &&
+    options.defaultId < buttons.length
+      ? options.defaultId
+      : lastIndex;
+  const cancelId =
+    typeof options.cancelId === "number" &&
+    Number.isInteger(options.cancelId) &&
+    options.cancelId >= 0 &&
+    options.cancelId < buttons.length
+      ? options.cancelId
+      : 0;
+  return {
+    title: options.title,
+    message: options.message,
+    detail: options.detail,
+    buttons,
+    defaultId,
+    cancelId,
+  };
+}
+
+function isUtilityDialogSender(event: IpcMainInvokeEvent): boolean {
+  const win = utilityDialogWindow;
+  if (win === null || win.isDestroyed()) {
+    return false;
+  }
+  return event.sender.id === win.webContents.id;
+}
+
+function finishUtilityDialog(response: number): void {
+  const payload = utilityDialogPayload;
+  const resolve = utilityDialogResolve;
+  const win = utilityDialogWindow;
+
+  utilityDialogResolve = null;
+  utilityDialogPayload = null;
+  utilityDialogInFlight = null;
+
+  if (utilityDialogHandlersRegistered) {
+    ipcMain.removeHandler(UTILITY_DIALOG_GET_PAYLOAD);
+    ipcMain.removeHandler(UTILITY_DIALOG_RESPOND);
+    ipcMain.removeHandler(UTILITY_DIALOG_SET_HEIGHT);
+    utilityDialogHandlersRegistered = false;
+  }
+
+  if (utilityDialogHeldForeground) {
+    releaseUtilityForeground();
+    utilityDialogHeldForeground = false;
+  }
+
+  utilityDialogWindow = null;
+  if (win !== null && !win.isDestroyed()) {
+    win.destroy();
+  }
+
+  if (resolve !== null) {
+    const safeResponse =
+      payload !== null &&
+      Number.isInteger(response) &&
+      response >= 0 &&
+      response < payload.buttons.length
+        ? response
+        : (payload?.cancelId ?? 0);
+    resolve({ response: safeResponse, checkboxChecked: false });
+  }
+}
+
+function clampUtilityDialogHeight(height: number): number {
+  if (!Number.isFinite(height)) {
+    return UTILITY_DIALOG_HEIGHT;
+  }
+  return Math.min(
+    UTILITY_DIALOG_MAX_HEIGHT,
+    Math.max(UTILITY_DIALOG_MIN_HEIGHT, Math.ceil(height)),
+  );
+}
+
+function registerUtilityDialogHandlers(win: BrowserWindow): void {
+  if (utilityDialogHandlersRegistered) {
+    return;
+  }
+  ipcMain.handle(UTILITY_DIALOG_GET_PAYLOAD, (event) => {
+    if (!isUtilityDialogSender(event) || utilityDialogPayload === null) {
+      throw new Error("[utility-dialog] No active dialog payload");
+    }
+    return utilityDialogPayload;
+  });
+  ipcMain.handle(UTILITY_DIALOG_RESPOND, (event, response: unknown) => {
+    if (!isUtilityDialogSender(event)) {
+      throw new Error("[utility-dialog] Invalid sender");
+    }
+    const index = typeof response === "number" ? response : Number.NaN;
+    finishUtilityDialog(index);
+  });
+  ipcMain.handle(UTILITY_DIALOG_SET_HEIGHT, (event, height: unknown) => {
+    if (!isUtilityDialogSender(event)) {
+      throw new Error("[utility-dialog] Invalid sender");
+    }
+    if (win.isDestroyed()) {
+      return;
+    }
+    const next = clampUtilityDialogHeight(typeof height === "number" ? height : Number.NaN);
+    // Content size = client area (no chrome chrome); width stays fixed.
+    win.setContentSize(UTILITY_DIALOG_WIDTH, next, false);
+  });
+  utilityDialogHandlersRegistered = true;
+}
+
+/**
+ * Present a single-flight aurora utility dialog (Check for Updates, etc.).
+ * Acquires utility foreground for the lifetime of the dialog; destroy-on-close
+ * (not warm-cached). Concurrent calls share the in-flight promise.
+ */
+export function presentUtilityDialog(
+  options: UtilityDialogOptions,
+): Promise<UtilityDialogResult> {
+  if (utilityDialogInFlight !== null) {
+    return utilityDialogInFlight;
+  }
+
+  const payload = normalizeUtilityDialogOptions(options);
+  utilityDialogPayload = payload;
+
+  utilityDialogInFlight = new Promise<UtilityDialogResult>((resolve) => {
+    utilityDialogResolve = resolve;
+
+    ensureUtilityDockIcon();
+    if (!utilityDialogHeldForeground) {
+      acquireUtilityForeground();
+      utilityDialogHeldForeground = true;
+    }
+
+    const win = new BrowserWindow({
+      width: UTILITY_DIALOG_WIDTH,
+      height: UTILITY_DIALOG_HEIGHT,
+      resizable: false,
+      minimizable: false,
+      maximizable: false,
+      fullscreenable: false,
+      closable: true,
+      alwaysOnTop: true,
+      show: false,
+      icon: getWindowIconPath(),
+      ...utilityDialogWindowChrome(),
+      webPreferences: createSecureWebPreferences({
+        preload: getUtilityDialogPreloadPath(),
+      }),
+    });
+
+    hardenWebContents(win);
+    utilityDialogWindow = win;
+    registerUtilityDialogHandlers(win);
+
+    win.once("ready-to-show", () => {
+      if (win.isDestroyed() || utilityDialogWindow !== win) {
+        return;
+      }
+      win.show();
+      win.focus();
+      try {
+        app.focus({ steal: true });
+      } catch {
+        // focus can fail in headless / test environments
+      }
+    });
+
+    win.on("closed", () => {
+      if (utilityDialogWindow === win) {
+        // System Close (traffic light / caption) or OS dismiss → cancel response.
+        finishUtilityDialog(payload.cancelId);
+      }
+    });
+
+    if (isDev) {
+      void win.loadURL(`${getDevServerUrl()}/utility-dialog.html`);
+    } else {
+      void win.loadFile(path.join(__dirname, "..", "renderer", "utility-dialog.html"));
+    }
+  });
+
+  return utilityDialogInFlight;
+}
+
+/**
+ * Force-destroy an open utility dialog (quit / composition cleanup).
+ * Resolves any waiter with the cancel button index.
+ */
+export function closeUtilityDialogWindow(): void {
+  if (utilityDialogPayload !== null) {
+    finishUtilityDialog(utilityDialogPayload.cancelId);
+    return;
+  }
+  if (utilityDialogWindow !== null && !utilityDialogWindow.isDestroyed()) {
+    utilityDialogWindow.destroy();
+  }
+  utilityDialogWindow = null;
+}
+
 /**
  * Destroy all tracked windows. Used on quit after composition cleanup.
  * Utility windows and popover use destroy() so hide-on-close cannot prevent teardown.
  */
 export function destroyAllWindows(): void {
   cancelPendingPopoverHide();
+  closeUtilityDialogWindow();
   closeSettingsWindow();
   closeAboutWindow();
   if (popoverWindow !== null && !popoverWindow.isDestroyed()) {
