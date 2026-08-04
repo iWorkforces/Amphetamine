@@ -1,12 +1,15 @@
 # Preload — Context Bridge
 
-Sandboxed Electron preload. Exposes the only renderer API through `contextBridge.exposeInMainWorld("api", api)`. Security-critical: no Node APIs to renderer.
+Sandboxed Electron preloads. Public renderers get `window.api` only; the utility dialog gets a separate minimal bridge. Security-critical: no Node APIs or raw `ipcRenderer` to any renderer.
 
-## File
+## Files
 
-| File | Role |
-|------|------|
-| `index.ts` | Typed `window.api`, `invoke<K>()`, push subscriptions, benchmark env helper, channel exhaustiveness |
+| File | Role | Build output |
+|------|------|----------------|
+| `index.ts` | Typed `window.api`, `invoke<K>()`, push subscriptions, benchmark env helper, channel exhaustiveness | `lib/preload/index.cjs` |
+| `utility-dialog.ts` | Aurora utility dialog only: `window.utilityDialogApi` | `lib/preload/utility-dialog.cjs` |
+
+Both entries are produced by multi-entry Rslib (`rslib.config.preload.ts`, filename `[name].cjs`).
 
 ## API shape
 
@@ -33,6 +36,17 @@ onXxx: (callback: (data: T) => void) => {
 
 Always return unsubscribe. Payload types from `IpcChannelMap` / push responses.
 
+## Utility dialog API (`utilityDialogApi`)
+
+| Method | Channel | Notes |
+|--------|---------|-------|
+| `getPayload()` | `utility-dialog:get-payload` | Invoke; main validates webContents id |
+| `respond(index)` | `utility-dialog:respond` | Invoke; settles dialog promise |
+| `setHeight(px)` | `utility-dialog:set-height` | Invoke; main clamps height then `setContentSize` |
+| `os` | (sync) | `process.platform` for optional body class |
+
+Channel name literals live in `src/shared/utility-dialog.ts` — **not** in public `IPC_CHANNELS`.
+
 ## Type safety
 
 - Exported `Api` derived from concrete `api` object.
@@ -44,6 +58,7 @@ Always return unsubscribe. Payload types from `IpcChannelMap` / push responses.
 ## Anti-Patterns
 
 - Never expose `ipcRenderer`, `shell`, `fs`, full `process`, or arbitrary channel names.
+- Never put utility-dialog private channels on public `window.api`.
 - Never disable `contextIsolation` to simplify renderer code.
 - Never add a push listener without cleanup return.
-- Never make renderer import Electron; extend preload instead.
+- Never make renderer import Electron; extend the appropriate preload instead.

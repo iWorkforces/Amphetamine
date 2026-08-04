@@ -18,7 +18,7 @@ Implementation files remain importable for focused unit tests (e.g. `battery-per
 | `os.ts` | Pure identity: `isDarwin`, `isWin32`, `resolvePlatformId`, `isSupportedPlatform` |
 | `shell.ts` | Activation policy, Dock icon, login-item settings builders |
 | `utility-presentation.ts` | Refcounted Dock / foreground for Settings, About, and updater dialogs |
-| `window-chrome.ts` | BrowserWindow chrome fragments (popover / settings / about) + `appIconFileName` |
+| `window-chrome.ts` | BrowserWindow chrome fragments (popover / settings / about / utility-dialog) + `appIconFileName` |
 | `battery-percent.ts` | Charge percent: pmset (darwin) / PowerShell CIM (win32) |
 
 Shortcut defaults, reserved keys, and accelerator validation live in domain validators + application shortcut registration; settings UI labels use preload `platform.os`.
@@ -39,10 +39,10 @@ Shortcut defaults, reserved keys, and accelerator validation live in domain vali
 |---------|-----------|-----|
 | Tray-only boot | `app-shell.ts` | `enterTrayOnlyMode()` |
 | Settings / About Dock + foreground | WindowGraph show/close | `setUtilityDockIcon` + `acquireUtilityForeground` on ready-to-show; `releaseUtilityForeground` on closed |
-| Popover / settings / about chrome | `process/window-graph.ts` | `*WindowChrome()` |
+| Popover / settings / about / utility-dialog chrome | `process/window-graph.ts` | `*WindowChrome()` / `utilityDialogWindowChrome()` |
 | Login items | `auto-launch.ts` | `buildLoginItemSettings` |
 | Battery % | `battery-monitor.ts` | `getBatteryPercent` |
-| Updater dialog presentation | composition → hybrid updater hooks | `acquireUtilityForeground` + `app.focus` / `releaseUtilityForeground` |
+| Updater dialog presentation | composition → `presentUtilityDialog` | WindowGraph acquires/releases utility foreground for the dialog lifetime |
 | App / window icons | WindowGraph | `appIconFileName`, `settings-hero-icon.png` |
 
 ## Utility foreground (refcounted)
@@ -50,7 +50,7 @@ Shortcut defaults, reserved keys, and accelerator validation live in domain vali
 - `utility-presentation.ts` holds a refcount so closing one utility (or finishing a dialog) does not force tray-only while another still needs Dock presentation.
 - `setUtilityDockIcon` caches the Dock image applied on the first acquire.
 - Pair acquire/release carefully: WindowGraph only releases if the window actually acquired (`heldForeground` flag) so closed-before-ready cannot drop another surface's ref.
-- Dialog path (composition) acquires once around `showMessageBox` and releases in `finally`; utility windows keep independent refs.
+- Updater dialog path (WindowGraph `presentUtilityDialog`) acquires/releases its own utility foreground ref for the dialog lifetime; Settings/About keep independent refs.
 - Test seam: `resetUtilityForegroundForTests()`.
 
 ## Window chrome summary
@@ -59,8 +59,9 @@ Shortcut defaults, reserved keys, and accelerator validation live in domain vali
 |---------|-------|---------|
 | Popover | vibrancy popover, transparent, `skipTaskbar: true` | opaque frameless, `skipTaskbar: true` |
 | Settings / About | vibrancy under-window, `hiddenInset`, Dock via utility-presentation | mica + `titleBarOverlay` caption buttons, taskbar visible (`skipTaskbar: false`) |
+| Utility dialog | **opaque** `backgroundColor: #0D1117`, `hiddenInset` (system Close), no vibrancy | opaque `#0D1117` + matching `titleBarOverlay`, no mica |
 
-Renderer CSS owns the fixed dark `#app` fill (`--utility-window-bg` in `src/renderer/styles/utility-tokens.css`); chrome helpers do not set that color.
+Renderer CSS owns the fixed dark `#app` fill (`--utility-window-bg` in `src/renderer/styles/utility-tokens.css`). Utility-dialog chrome **also** sets native `backgroundColor` to the same hex so shrink-wrapped content does not leave transparent/vibrancy edges.
 
 ## Battery percent
 

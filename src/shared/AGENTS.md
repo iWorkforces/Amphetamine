@@ -7,6 +7,7 @@ Zero-runtime-dependency contracts shared by main, preload, renderer, scripts, an
 | File | Role |
 |------|------|
 | `types.ts` | `IPC_CHANNELS`, `PUSH_CHANNELS`, `IpcChannelMap`, session/updater/about wire DTOs; re-exports domain `AppSettings` / `DEFAULT_SETTINGS` / `PerfTimestamp` / `SleepBlockMode` / `asPerf` |
+| `utility-dialog.ts` | Private utility-dialog channel names + `UtilityDialogOptions` / payload / result types (not part of public `IPC_CHANNELS` budget) |
 | `settings-validators.ts` | Re-export of domain settings validation |
 | `benchmark-types.ts` | Benchmark env name, renderer counter types/defaults, runtime guard |
 
@@ -31,8 +32,9 @@ Zero-runtime-dependency contracts shared by main, preload, renderer, scripts, an
 
 - `PUSH_CHANNELS` is the main→renderer push subset (5 channels).
 - `IpcChannelMap` maps every channel to request/response types.
-- Adding a channel requires updates in: shared types, preload `api` + `WiredChannels`, main `registerIpcHandlers()` (or updater IPC), and tests.
+- Adding a **public** channel requires updates in: shared types, preload `api` + `WiredChannels`, main `registerIpcHandlers()` (or updater IPC), and tests.
 - Push-only channels still need response payload types (typed listeners/broadcasts).
+- **Private** utility-dialog channels (`utility-dialog:get-payload` / `respond` / `set-height`) stay out of `IPC_CHANNELS`; they are handled only by WindowGraph + the dedicated preload.
 
 ## Process-model note
 
@@ -59,12 +61,13 @@ Application code must not import channel literals; it publishes semantic `AppPus
 - Legacy disk key: `sessionDuration` → `defaultSessionDuration` via `migrateRawSettingsRecord`.
 - Shortcut reserved combos and win32 Cmd→CommandOrControl normalization live in domain validators.
 
-## Session / updater / about wire DTOs
+## Session / updater / about / utility-dialog wire DTOs
 
 - `SessionStatusResponse`: 3-arm union (stopped / timed / indefinite).
 - `SessionStartResponse`: ok/fail (`invalid-duration`, `Duration cannot exceed 24 hours`, `rejected`).
 - `AutoUpdaterStatus`: checking / available / not-available / downloaded / downloading / errors.
 - `AboutInfo`: `productName`, `version`, `description`, `repository`, `author` (`app:get-about`).
+- `UtilityDialogOptions` / `UtilityDialogPayload` / `UtilityDialogResult`: aurora alert contract (`utility-dialog.ts`).
 - `PerfTimestamp` is branded via domain `asPerf(n)`.
 
 ## Benchmark Contract

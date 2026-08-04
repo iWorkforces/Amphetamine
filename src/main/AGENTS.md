@@ -2,7 +2,7 @@
 
 Main process owns app lifecycle, BrowserWindows, tray, typed IPC registration, and the composition root. Business rules live under `application/` and `domain/`; OS/Electron I/O adapters under `infrastructure/` (with thin façades here for stable import paths).
 
-**Process graph:** `AppShell` is the topology root (ready/quit order). `process/window-graph` is the **only** production factory for popover, settings, and about `BrowserWindow`s. Renderers talk only through preload `window.api`.
+**Process graph:** `AppShell` is the topology root (ready/quit order). `process/window-graph` is the **only** production factory for popover, settings, about, and utility-dialog `BrowserWindow`s. Public renderers talk through preload `window.api`; the utility dialog uses a dedicated preload (`utilityDialogApi`).
 
 ## Files
 
@@ -11,10 +11,10 @@ Main process owns app lifecycle, BrowserWindows, tray, typed IPC registration, a
 | `index.ts` | App lifecycle events only (ready, quit, single-instance, errors, benchmark entry) |
 | `app-shell.ts` | `createAppShell()` — process-graph root: windows + composition + IPC + tray + updater + quit cleanup |
 | `process/secure-web-preferences.ts` | Single `createSecureWebPreferences()` for all BrowserWindows (sandbox / contextIsolation / no nodeIntegration) |
-| `process/window-graph.ts` | Owns popover / settings / about BrowserWindows + registry + coalesced hide + warm cache (hide-on-close) for Settings/About + `destroyAllWindows()` |
-| `composition-root.ts` | `createAppComposition()` — ports, session handle, reactions, user notifier, updater dialog presentation, `getIpcDeps` / `getTrayDeps` / `initUpdater`, ordered `cleanup()` |
+| `process/window-graph.ts` | Owns popover / settings / about / utility-dialog BrowserWindows + registry + coalesced hide + warm cache (hide-on-close) for Settings/About + single-flight destroy-on-close `presentUtilityDialog` + `closeUtilityDialogWindow` + `destroyAllWindows()` |
+| `composition-root.ts` | `createAppComposition()` — ports, session handle, reactions, user notifier, `showUserDialog` → `presentUtilityDialog`, `getIpcDeps` / `getTrayDeps` / `initUpdater`, ordered `cleanup()` |
 | `ipc.ts` | Typed handler registration; session handlers use injected `IpcDeps.sessionTimer` |
-| `ipc-utils.ts` | `validateSender`, `typedHandle`; allowlisted `index.html` / `settings.html` / `about.html` |
+| `ipc-utils.ts` | `validateSender`, `typedHandle`; public allowlist `index.html` / `settings.html` / `about.html` (utility-dialog is **not** public-IPC allowlisted) |
 | `tray.ts` | Tray icon/menu; Check for Updates; destroy on cleanup |
 | `settings.ts` | Façade over `infrastructure/settings` (`SettingsStorePort`); `flushSettingsWriteChain()` |
 | `sleep-prevention.ts` | Façade over `infrastructure/sleep` (`SleepBlockerPort`) |
@@ -62,8 +62,8 @@ Do not register a second `before-quit` handler on settings or other modules.
 - Application → renderer pushes use `AppPushEvent` via `MainToRendererNotifierPort` (not raw `IPC_CHANNELS`).
 - OS user feedback uses `UserNotifierPort` (`createOsUserNotifier`) — not a push channel.
 - `getTrayDeps().checkForUpdates` → `UpdaterPort.checkNow()`.
-- Updater port is configured with UI hooks (`prepareDialogPresentation` / `restoreTrayPresentation` → acquire/release utility foreground + `app.focus`) and `getRepositoryUrl` at composition construct time (`setFeedURL` uses that repo).
-- `cleanup()` order: settings/about windows → unsubscribe reactions → battery → session → sleep stop → shortcut unregister → updater stop.
+- Updater port is configured with `showUserDialog` → WindowGraph `presentUtilityDialog` (aurora alert + own utility-foreground ref) and `getRepositoryUrl` at composition construct time (`setFeedURL` uses that repo). Optional `notifyUser` for Checking/Downloading OS notifications.
+- `cleanup()` order: settings/about windows → unsubscribe reactions → battery → session → sleep stop → shortcut unregister → updater stop. Utility dialog is torn down by AppShell `destroyAllWindows()` (not composition).
 
 ## Popover hide coalescing
 
@@ -75,11 +75,11 @@ Do not register a second `before-quit` handler on settings or other modules.
 
 - Use `typedHandle()` for invoke channels (validates sender).
 - Raw `ipcMain.on()` only with explicit `validateSender()`.
-- Packaged senders: exact-match NFC-normalized `lib/renderer/{index,settings,about}.html`; dev: `DEV_ORIGINS`.
+- Packaged public senders: exact-match NFC-normalized `lib/renderer/{index,settings,about}.html`; dev: `DEV_ORIGINS`. Utility-dialog private IPC uses webContents-id binding (not URL allowlist).
 - Renderer pushes: `broadcastToWindows<K>()`; skip destroyed windows.
-- `hardenWebContents` blocks off-allowlist navigation and **denies all** `window.open` by default.
+- `hardenWebContents` blocks off-allowlist navigation and **denies all** `window.open` by default (popover, settings, about, utility-dialog).
 - About external links: WindowGraph overrides `setWindowOpenHandler` to allowlist the package repository URL (and paths under it on `github.com`) via `shell.openExternal` (still returns `deny` so no popup BrowserWindow).
-- All three windows use shared preload via `createSecureWebPreferences({ preload })`.
+- Popover / Settings / About use shared preload via `createSecureWebPreferences({ preload: index.cjs })`. Utility dialog uses dedicated `utility-dialog.cjs` preload.
 
 ## Timing and state
 
@@ -101,10 +101,11 @@ Do not register a second `before-quit` handler on settings or other modules.
 
 - Prefer `isDarwin()` / `isWin32()` from `platform/`.
 - Tray-only boot: `enterTrayOnlyMode()` (from AppShell).
-- Window chrome: `popoverWindowChrome` / `settingsWindowChrome` / `aboutWindowChrome` (applied inside WindowGraph).
-- Settings and About acquire/release **refcounted** utility foreground on show/hide (`acquireUtilityForeground` / `releaseUtilityForeground`); Dock icon via `setUtilityDockIcon`.
+- Window chrome: `popoverWindowChrome` / `settingsWindowChrome` / `aboutWindowChrome` / `utilityDialogWindowChrome` (applied inside WindowGraph). Utility dialog chrome is **opaque** (`backgroundColor: #0D1117`, no vibrancy/mica) with system Close (hiddenInset / titleBarOverlay).
+- Settings, About, and utility dialog acquire/release **refcounted** utility foreground (`acquireUtilityForeground` / `releaseUtilityForeground`); Dock icon via `setUtilityDockIcon`.
 - Settings/About use **hide-on-close warm cache**: first open creates+loads the BrowserWindow; user close hides (renderer stays warm); quit/composition `close*Window` force-destroys (`win.destroy()`, not hide).
-- `*WantsVisible` intent flag: late `ready-to-show` after user dismiss must not re-show; reopening sets intent true again.
+- Utility dialog is **destroy-on-close** (not warm-cached), **single-flight** (concurrent `presentUtilityDialog` joins the in-flight promise), and shrink-wraps height via private `utility-dialog:set-height`.
+- `*WantsVisible` intent flag (Settings/About): late `ready-to-show` after user dismiss must not re-show; reopening sets intent true again.
 - Settings present path clears form focus after show (deferred `webContents.executeJavaScript` blur) so warm-cache reopen does not restore Launch at Login / last control.
 - `isSettingsWindowOpen()` means **visible** (not merely cached-and-hidden).
 - Login items: `buildLoginItemSettings()` — no `openAsHidden` on non-darwin.
@@ -140,7 +141,9 @@ Do not register a second `before-quit` handler on settings or other modules.
 - Never reintroduce inline `data:` About HTML; use the built `about.html` entry.
 - Never call `initAutoUpdater()` outside `UpdaterPort` / composition `initUpdater()`.
 - Never destroy Settings/About on user close (hide-on-close); only force-destroy on quit/composition cleanup.
-- Never present a utility window when `*WantsVisible` is false (dismiss-before-ready race).
+- Never warm-cache the utility dialog (always destroy-on-close).
+- Never present a Settings/About window when `*WantsVisible` is false (dismiss-before-ready race).
+- Never reintroduce native `dialog.showMessageBox` for updater UX (use `presentUtilityDialog` / `showUserDialog`).
 
 ## Commands
 
