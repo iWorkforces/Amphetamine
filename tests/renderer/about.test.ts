@@ -26,7 +26,14 @@ const mockApi = {
 function setupDom(): void {
   document.body.innerHTML = `
     <div id="app" class="about" role="dialog" aria-labelledby="product-name">
-      <img id="app-icon" class="app-icon" alt="" role="button" tabindex="0" aria-label="View source on GitHub" />
+      <div class="icon-aurora-stage app-icon-stage">
+        <div class="icon-aurora" aria-hidden="true">
+          <span class="aurora-blob aurora-blob-a"></span>
+          <span class="aurora-blob aurora-blob-b"></span>
+          <span class="aurora-blob aurora-blob-c"></span>
+        </div>
+        <img id="app-icon" class="app-icon" alt="" role="button" tabindex="0" aria-label="View source on GitHub" />
+      </div>
       <h1 id="product-name">Amphetamine</h1>
       <div id="version" class="version"></div>
       <div id="description" class="description"></div>
