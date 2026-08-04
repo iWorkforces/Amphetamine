@@ -108,6 +108,16 @@ async function bootstrap(): Promise<void> {
   });
 
   closeBtn.focus();
+
+  // Pause aurora while the warm-cache window is hidden.
+  const auroraStage = document.querySelector(".icon-aurora-stage");
+  if (auroraStage instanceof HTMLElement) {
+    const syncPause = (): void => {
+      auroraStage.classList.toggle("is-paused", document.visibilityState !== "visible");
+    };
+    document.addEventListener("visibilitychange", syncPause);
+    syncPause();
+  }
 }
 
 void bootstrap().catch((err: unknown) => {

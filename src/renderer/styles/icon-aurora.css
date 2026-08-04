@@ -1,358 +1,115 @@
 /**
  * Soft aurora wash behind app icons (coffee-brown palette from generate-app-icon.mjs).
- * Pair with a sized stage element + the icon as a later sibling (z-index stacking).
  *
- * Markup:
- *   <div class="icon-aurora-stage" style or class for width/height>
- *     <div class="icon-aurora" aria-hidden="true">
- *       <span class="aurora-ring"></span>
- *       <span class="aurora-halo"></span>
- *       <span class="aurora-blob aurora-blob-a"></span>
- *       <span class="aurora-blob aurora-blob-b"></span>
- *       <span class="aurora-blob aurora-blob-c"></span>
- *       <span class="aurora-blob aurora-blob-d"></span>
- *       <span class="aurora-spark aurora-spark-1"></span>
- *       <span class="aurora-spark aurora-spark-2"></span>
- *       <span class="aurora-spark aurora-spark-3"></span>
- *     </div>
+ * Performance: a **single** blurred layer with static multi-stop gradients.
+ * Only the outer layer may breathe (opacity/scale). Do not animate descendants
+ * under `filter: blur()` — that forces per-frame re-filter of the subtree.
+ *
+ * Markup (full / lite):
+ *   <div class="icon-aurora-stage …">
+ *     <div class="icon-aurora" aria-hidden="true"></div>
  *     <img class="…" />
  *   </div>
+ *
+ * Settings compact (static, no animation):
+ *   <div class="icon-aurora-stage …">
+ *     <div class="icon-aurora icon-aurora--static" aria-hidden="true"></div>
+ *     <img class="…" />
+ *   </div>
+ *
+ * Pause while hidden (warm cache):
+ *   stage.classList.toggle("is-paused", document.hidden)
  */
 
 .icon-aurora-stage {
   position: relative;
   display: grid;
   place-items: center;
-  /* Let the glow breathe past the icon bounds without shifting layout */
   overflow: visible;
   flex-shrink: 0;
 }
 
 .icon-aurora {
   position: absolute;
-  /* Larger than the icon so the wash frames it */
   inset: -56%;
   z-index: 0;
   pointer-events: none;
-  /* Soften hard blob edges into a single luminous field */
-  filter: blur(20px) saturate(1.28) brightness(1.04);
-  opacity: var(--aurora-opacity, 0.95);
-  will-change: transform, opacity;
-  transform-origin: center center;
-}
-
-/* Slow outer ring — warm conic sheen that orbits the icon */
-.aurora-ring {
-  position: absolute;
-  inset: 6%;
   border-radius: 50%;
-  background: conic-gradient(
-    from 0deg,
-    color-mix(in srgb, var(--aurora-ember) 0%, transparent) 0deg,
-    color-mix(in srgb, var(--aurora-ember) 55%, transparent) 55deg,
-    color-mix(in srgb, var(--aurora-cream) 35%, transparent) 110deg,
-    color-mix(in srgb, var(--aurora-warm) 45%, transparent) 170deg,
-    color-mix(in srgb, var(--aurora-deep) 20%, transparent) 230deg,
-    color-mix(in srgb, var(--aurora-ember) 50%, transparent) 300deg,
-    color-mix(in srgb, var(--aurora-ember) 0%, transparent) 360deg
-  );
-  opacity: 0.55;
-  mix-blend-mode: screen;
-  /* Mask center so only a soft corona remains */
-  -webkit-mask-image: radial-gradient(circle, transparent 42%, #000 58%, #000 72%, transparent 88%);
-  mask-image: radial-gradient(circle, transparent 42%, #000 58%, #000 72%, transparent 88%);
-}
-
-/* Broad ambient halo under the blobs */
-.aurora-halo {
-  position: absolute;
-  inset: 8%;
-  border-radius: 50%;
-  background: radial-gradient(
-    circle at 50% 48%,
-    color-mix(in srgb, var(--aurora-ember) 42%, transparent) 0%,
-    color-mix(in srgb, var(--aurora-warm) 28%, transparent) 38%,
-    color-mix(in srgb, var(--aurora-deep) 18%, transparent) 62%,
-    transparent 78%
-  );
-  opacity: 0.7;
-}
-
-.aurora-blob,
-.aurora-ring,
-.aurora-halo,
-.aurora-spark {
   /* Coffee-icon palette: #4A2C2A, #2C1810 + warm cream / ember */
   --aurora-warm: #4a2c2a;
   --aurora-deep: #2c1810;
   --aurora-cream: #e8e0d8;
   --aurora-ember: #a86b4a;
   --aurora-glow: #c4895e;
-  --aurora-mist: #f5f0eb;
+  /* One precomposed wash — no child DOM, no nested filters */
+  background:
+    radial-gradient(
+      ellipse 70% 65% at 38% 38%,
+      color-mix(in srgb, var(--aurora-warm) 88%, transparent) 0%,
+      color-mix(in srgb, var(--aurora-ember) 42%, transparent) 42%,
+      transparent 72%
+    ),
+    radial-gradient(
+      ellipse 68% 72% at 62% 58%,
+      color-mix(in srgb, var(--aurora-deep) 90%, transparent) 0%,
+      color-mix(in srgb, var(--aurora-ember) 38%, transparent) 48%,
+      transparent 74%
+    ),
+    radial-gradient(
+      circle at 50% 48%,
+      color-mix(in srgb, var(--aurora-cream) 38%, transparent) 0%,
+      color-mix(in srgb, var(--aurora-glow) 28%, transparent) 36%,
+      transparent 68%
+    );
+  filter: blur(18px) saturate(1.22) brightness(1.03);
+  opacity: var(--aurora-opacity, 0.92);
+  transform-origin: center center;
 }
 
-.aurora-blob {
-  position: absolute;
-  border-radius: 50%;
-}
-
-.aurora-blob-a {
-  width: 74%;
-  height: 70%;
-  top: 4%;
-  left: 2%;
-  background: radial-gradient(
-    ellipse at 38% 38%,
-    color-mix(in srgb, var(--aurora-warm) 92%, transparent) 0%,
-    color-mix(in srgb, var(--aurora-ember) 48%, transparent) 42%,
-    color-mix(in srgb, var(--aurora-warm) 22%, transparent) 62%,
-    transparent 78%
-  );
-  opacity: 0.98;
-}
-
-.aurora-blob-b {
-  width: 72%;
-  height: 76%;
-  right: -2%;
-  bottom: 0%;
-  background: radial-gradient(
-    ellipse at 58% 55%,
-    color-mix(in srgb, var(--aurora-deep) 92%, transparent) 0%,
-    color-mix(in srgb, var(--aurora-ember) 48%, transparent) 44%,
-    color-mix(in srgb, var(--aurora-deep) 20%, transparent) 64%,
-    transparent 78%
-  );
-  opacity: 0.9;
-}
-
-.aurora-blob-c {
-  width: 56%;
-  height: 52%;
-  top: 26%;
-  left: 22%;
-  background: radial-gradient(
-    circle at 50% 50%,
-    color-mix(in srgb, var(--aurora-cream) 52%, transparent) 0%,
-    color-mix(in srgb, var(--aurora-glow) 32%, transparent) 36%,
-    color-mix(in srgb, var(--aurora-warm) 22%, transparent) 58%,
-    transparent 74%
-  );
-  opacity: 0.62;
-  mix-blend-mode: screen;
-}
-
-.aurora-blob-d {
-  width: 48%;
-  height: 46%;
-  top: 12%;
-  right: 8%;
-  background: radial-gradient(
-    ellipse at 45% 40%,
-    color-mix(in srgb, var(--aurora-glow) 55%, transparent) 0%,
-    color-mix(in srgb, var(--aurora-ember) 30%, transparent) 45%,
-    transparent 72%
-  );
-  opacity: 0.7;
-  mix-blend-mode: screen;
-}
-
-/* Tiny specular sparks — subtle glitter inside the wash */
-.aurora-spark {
-  position: absolute;
-  width: 14%;
-  height: 14%;
-  border-radius: 50%;
-  background: radial-gradient(
-    circle,
-    color-mix(in srgb, var(--aurora-mist) 80%, transparent) 0%,
-    color-mix(in srgb, var(--aurora-glow) 35%, transparent) 40%,
-    transparent 70%
-  );
-  mix-blend-mode: screen;
-  opacity: 0.45;
-  filter: blur(1px);
-}
-
-.aurora-spark-1 {
-  top: 22%;
-  left: 28%;
-}
-
-.aurora-spark-2 {
-  top: 48%;
-  right: 24%;
-  width: 11%;
-  height: 11%;
-}
-
-.aurora-spark-3 {
-  bottom: 26%;
-  left: 42%;
-  width: 9%;
-  height: 9%;
+/* Compact Settings stage: static field, lighter blur (no infinite animation). */
+.icon-aurora.icon-aurora--static {
+  filter: blur(12px) saturate(1.15);
+  opacity: var(--aurora-opacity, 0.88);
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  .icon-aurora {
-    animation: icon-aurora-breathe 8s ease-in-out infinite alternate;
+  .icon-aurora:not(.icon-aurora--static) {
+    animation: icon-aurora-breathe 9s ease-in-out infinite alternate;
   }
+}
 
-  .aurora-ring {
-    animation: icon-aurora-spin 22s linear infinite;
-  }
-
-  .aurora-halo {
-    animation: icon-aurora-halo-pulse 10s ease-in-out infinite alternate;
-  }
-
-  .aurora-blob-a {
-    animation: icon-aurora-drift-a 11s ease-in-out infinite alternate;
-  }
-
-  .aurora-blob-b {
-    animation: icon-aurora-drift-b 13s ease-in-out infinite alternate;
-  }
-
-  .aurora-blob-c {
-    animation: icon-aurora-drift-c 9.5s ease-in-out infinite alternate;
-  }
-
-  .aurora-blob-d {
-    animation: icon-aurora-drift-d 12s ease-in-out infinite alternate;
-  }
-
-  .aurora-spark-1 {
-    animation: icon-aurora-spark 4.5s ease-in-out infinite alternate;
-  }
-
-  .aurora-spark-2 {
-    animation: icon-aurora-spark 5.5s ease-in-out infinite alternate-reverse;
-    animation-delay: -1.2s;
-  }
-
-  .aurora-spark-3 {
-    animation: icon-aurora-spark 6.2s ease-in-out infinite alternate;
-    animation-delay: -2.4s;
-  }
+/* Warm-cache / background tab: stop compositor work while not visible. */
+.icon-aurora-stage.is-paused .icon-aurora {
+  animation-play-state: paused !important;
 }
 
 @keyframes icon-aurora-breathe {
   from {
-    opacity: 0.82;
-    transform: scale(0.94) rotate(-2deg);
-  }
-
-  to {
-    opacity: 1;
-    transform: scale(1.06) rotate(2deg);
-  }
-}
-
-@keyframes icon-aurora-spin {
-  from {
-    transform: rotate(0deg);
-  }
-
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@keyframes icon-aurora-halo-pulse {
-  from {
-    opacity: 0.55;
+    opacity: 0.8;
     transform: scale(0.96);
   }
 
   to {
-    opacity: 0.85;
-    transform: scale(1.08);
-  }
-}
-
-@keyframes icon-aurora-drift-a {
-  from {
-    transform: translate3d(-7%, -5%, 0) scale(1) rotate(-4deg);
-  }
-
-  to {
-    transform: translate3d(9%, 7%, 0) scale(1.1) rotate(5deg);
-  }
-}
-
-@keyframes icon-aurora-drift-b {
-  from {
-    transform: translate3d(6%, 5%, 0) scale(1.06) rotate(3deg);
-  }
-
-  to {
-    transform: translate3d(-8%, -6%, 0) scale(0.94) rotate(-4deg);
-  }
-}
-
-@keyframes icon-aurora-drift-c {
-  from {
-    transform: translate3d(0, 4%, 0) scale(0.92);
-    opacity: 0.42;
-  }
-
-  to {
-    transform: translate3d(-5%, -7%, 0) scale(1.14);
-    opacity: 0.78;
-  }
-}
-
-@keyframes icon-aurora-drift-d {
-  from {
-    transform: translate3d(4%, -3%, 0) scale(0.96) rotate(6deg);
-    opacity: 0.5;
-  }
-
-  to {
-    transform: translate3d(-6%, 5%, 0) scale(1.12) rotate(-8deg);
-    opacity: 0.85;
-  }
-}
-
-@keyframes icon-aurora-spark {
-  from {
-    opacity: 0.18;
-    transform: scale(0.7) translate3d(0, 0, 0);
-  }
-
-  to {
-    opacity: 0.85;
-    transform: scale(1.25) translate3d(8%, -10%, 0);
+    opacity: 1;
+    transform: scale(1.05);
   }
 }
 
 @media (prefers-reduced-transparency: reduce) {
   .icon-aurora {
-    filter: blur(12px) saturate(1);
+    filter: blur(10px) saturate(1);
     opacity: 0.55;
   }
 
-  .aurora-blob-c,
-  .aurora-blob-d,
-  .aurora-ring {
-    mix-blend-mode: normal;
-    opacity: 0.3;
-  }
-
-  .aurora-spark {
-    opacity: 0.15;
+  .icon-aurora.icon-aurora--static {
+    filter: blur(8px) saturate(1);
+    opacity: 0.5;
   }
 }
 
 @media (prefers-contrast: more) {
   .icon-aurora {
     opacity: 0.4;
-    filter: blur(10px);
-  }
-
-  .aurora-ring,
-  .aurora-spark {
-    opacity: 0.15;
+    filter: blur(8px);
   }
 }

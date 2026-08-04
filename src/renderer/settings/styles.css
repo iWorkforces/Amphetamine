@@ -192,7 +192,7 @@ body.platform-win32 .settings-titlebar {
   overflow: visible;
 }
 
-/* 48px hero stage + shared aurora (icon-aurora.css); slightly tighter blur for scale */
+/* 48px hero stage + static shared aurora (no infinite animation; see icon-aurora--static) */
 .icon-aurora-stage.settings-hero-icon-stage {
   width: 48px;
   height: 48px;
@@ -200,19 +200,6 @@ body.platform-win32 .settings-titlebar {
 
 .icon-aurora-stage.settings-hero-icon-stage .icon-aurora {
   inset: -52%;
-  filter: blur(13px) saturate(1.28) brightness(1.04);
-}
-
-@media (prefers-reduced-transparency: reduce) {
-  .icon-aurora-stage.settings-hero-icon-stage .icon-aurora {
-    filter: blur(8px) saturate(1);
-  }
-}
-
-@media (prefers-contrast: more) {
-  .icon-aurora-stage.settings-hero-icon-stage .icon-aurora {
-    filter: blur(7px);
-  }
 }
 
 .settings-hero-icon {
@@ -430,7 +417,7 @@ body.platform-win32 .settings-titlebar {
   height: 25px;
   background: var(--toggle-off);
   border-radius: 100px;
-  will-change: background-color, box-shadow, transform;
+
 }
 
 @media (prefers-reduced-motion: no-preference) {
@@ -457,7 +444,6 @@ body.platform-win32 .settings-titlebar {
   background: #ffffff;
   box-shadow: var(--toggle-thumb-shadow);
   transform: translateX(0);
-  will-change: transform;
 }
 
 @media (prefers-reduced-motion: no-preference) {
