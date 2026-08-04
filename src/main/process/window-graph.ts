@@ -28,6 +28,7 @@ import { hardenWebContents } from "../security.js";
 import { broadcastToWindows } from "../utils/broadcast.js";
 import { IPC_CHANNELS } from "../../shared/types.js";
 import {
+  UTILITY_DIALOG_APPLY,
   UTILITY_DIALOG_GET_PAYLOAD,
   UTILITY_DIALOG_RESPOND,
   UTILITY_DIALOG_SET_HEIGHT,
@@ -558,10 +559,23 @@ export function closeAboutWindow(): void {
   });
 }
 
-// --- Aurora utility dialog (updater alerts; single-flight, destroy-on-close) ---
+// --- Aurora utility dialog (updater alerts; single-flight, hide-on-close warm cache) ---
+//
+// First present creates + loads the BrowserWindow (slow). User dismiss hides and keeps
+// the renderer warm so the next present is apply-payload + show/focus only (fast).
+// Quit / destroyAllWindows force-destroys via closeUtilityDialogWindow.
 
 let utilityDialogWindow: BrowserWindow | null = null;
 let utilityDialogHeldForeground = false;
+/** When true, close is allowed to destroy (quit / composition cleanup). */
+let utilityDialogAllowDestroy = false;
+/**
+ * User intent to have the dialog visible. Cleared on hide/finish.
+ * Guards late ready-to-show so a dismiss before first paint cannot re-show.
+ */
+let utilityDialogWantsVisible = false;
+/** True after first did-finish-load / ready-to-show so re-present can skip load. */
+let utilityDialogShellReady = false;
 /** In-flight presentation; concurrent callers await the same result. */
 let utilityDialogInFlight: Promise<UtilityDialogResult> | null = null;
 let utilityDialogPayload: UtilityDialogPayload | null = null;
@@ -604,30 +618,98 @@ function isUtilityDialogSender(event: IpcMainInvokeEvent): boolean {
   return event.sender.id === win.webContents.id;
 }
 
-function finishUtilityDialog(response: number): void {
-  const payload = utilityDialogPayload;
-  const resolve = utilityDialogResolve;
-  const win = utilityDialogWindow;
-
-  utilityDialogResolve = null;
-  utilityDialogPayload = null;
-  utilityDialogInFlight = null;
-
-  if (utilityDialogHandlersRegistered) {
-    ipcMain.removeHandler(UTILITY_DIALOG_GET_PAYLOAD);
-    ipcMain.removeHandler(UTILITY_DIALOG_RESPOND);
-    ipcMain.removeHandler(UTILITY_DIALOG_SET_HEIGHT);
-    utilityDialogHandlersRegistered = false;
+function clampUtilityDialogHeight(height: number): number {
+  if (!Number.isFinite(height)) {
+    return UTILITY_DIALOG_HEIGHT;
   }
+  return Math.min(
+    UTILITY_DIALOG_MAX_HEIGHT,
+    Math.max(UTILITY_DIALOG_MIN_HEIGHT, Math.ceil(height)),
+  );
+}
 
+function releaseUtilityDialogForeground(): void {
   if (utilityDialogHeldForeground) {
     releaseUtilityForeground();
     utilityDialogHeldForeground = false;
   }
+}
 
-  utilityDialogWindow = null;
-  if (win !== null && !win.isDestroyed()) {
-    win.destroy();
+function acquireUtilityDialogForeground(): void {
+  ensureUtilityDockIcon();
+  if (!utilityDialogHeldForeground) {
+    acquireUtilityForeground();
+    utilityDialogHeldForeground = true;
+  }
+}
+
+/**
+ * Push payload into the warm renderer and reset content height for re-measure.
+ * No-ops if the shell is gone or not yet ready.
+ */
+function applyUtilityDialogPayload(win: BrowserWindow): void {
+  if (win.isDestroyed() || utilityDialogPayload === null) {
+    return;
+  }
+  try {
+    win.setContentSize(UTILITY_DIALOG_WIDTH, UTILITY_DIALOG_HEIGHT, false);
+  } catch {
+    // Size can fail if the window is mid-destroy.
+  }
+  if (!win.webContents.isDestroyed()) {
+    win.webContents.send(UTILITY_DIALOG_APPLY, utilityDialogPayload);
+  }
+}
+
+function showUtilityDialogWindow(win: BrowserWindow): void {
+  if (win.isDestroyed() || !utilityDialogWantsVisible) {
+    return;
+  }
+  acquireUtilityDialogForeground();
+  applyUtilityDialogPayload(win);
+  if (!win.isVisible()) {
+    win.show();
+  }
+  win.focus();
+  try {
+    app.focus({ steal: true });
+  } catch {
+    // focus can fail in headless / test environments
+  }
+}
+
+/**
+ * Settle an in-flight presentation and hide (warm) or destroy (quit).
+ * Safe to call twice: second call no-ops resolve.
+ */
+function finishUtilityDialog(response: number): void {
+  const payload = utilityDialogPayload;
+  const resolve = utilityDialogResolve;
+  const win = utilityDialogWindow;
+  const destroying = utilityDialogAllowDestroy;
+
+  utilityDialogResolve = null;
+  utilityDialogInFlight = null;
+  utilityDialogWantsVisible = false;
+  // Keep last payload only until hide completes; clear so getPayload fails when idle.
+  utilityDialogPayload = null;
+
+  releaseUtilityDialogForeground();
+
+  if (destroying) {
+    if (utilityDialogHandlersRegistered) {
+      ipcMain.removeHandler(UTILITY_DIALOG_GET_PAYLOAD);
+      ipcMain.removeHandler(UTILITY_DIALOG_RESPOND);
+      ipcMain.removeHandler(UTILITY_DIALOG_SET_HEIGHT);
+      utilityDialogHandlersRegistered = false;
+    }
+    utilityDialogShellReady = false;
+    utilityDialogWindow = null;
+    if (win !== null && !win.isDestroyed()) {
+      win.destroy();
+    }
+  } else if (win !== null && !win.isDestroyed() && win.isVisible()) {
+    win.hide();
   }
 
   if (resolve !== null) {
@@ -642,17 +724,7 @@ function finishUtilityDialog(response: number): void {
   }
 }
 
-function clampUtilityDialogHeight(height: number): number {
-  if (!Number.isFinite(height)) {
-    return UTILITY_DIALOG_HEIGHT;
-  }
-  return Math.min(
-    UTILITY_DIALOG_MAX_HEIGHT,
-    Math.max(UTILITY_DIALOG_MIN_HEIGHT, Math.ceil(height)),
-  );
-}
-
-function registerUtilityDialogHandlers(win: BrowserWindow): void {
+function registerUtilityDialogHandlers(): void {
   if (utilityDialogHandlersRegistered) {
     return;
   }
@@ -673,20 +745,101 @@ function registerUtilityDialogHandlers(win: BrowserWindow): void {
     if (!isUtilityDialogSender(event)) {
       throw new Error("[utility-dialog] Invalid sender");
     }
-    if (win.isDestroyed()) {
+    const win = utilityDialogWindow;
+    if (win === null || win.isDestroyed()) {
       return;
     }
     const next = clampUtilityDialogHeight(typeof height === "number" ? height : Number.NaN);
-    // Content size = client area (no chrome chrome); width stays fixed.
     win.setContentSize(UTILITY_DIALOG_WIDTH, next, false);
   });
   utilityDialogHandlersRegistered = true;
 }
 
+function createUtilityDialogShell(): BrowserWindow {
+  const win = new BrowserWindow({
+    width: UTILITY_DIALOG_WIDTH,
+    height: UTILITY_DIALOG_HEIGHT,
+    resizable: false,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    closable: true,
+    alwaysOnTop: true,
+    show: false,
+    icon: getWindowIconPath(),
+    ...utilityDialogWindowChrome(),
+    webPreferences: createSecureWebPreferences({
+      preload: getUtilityDialogPreloadPath(),
+    }),
+  });
+
+  hardenWebContents(win);
+  utilityDialogWindow = win;
+  utilityDialogShellReady = false;
+  registerUtilityDialogHandlers();
+
+  win.once("ready-to-show", () => {
+    if (win.isDestroyed() || utilityDialogWindow !== win) {
+      return;
+    }
+    utilityDialogShellReady = true;
+    // May no-op if the user dismissed before first paint.
+    showUtilityDialogWindow(win);
+  });
+
+  // User close (traffic light / caption) → hide + settle cancel (warm cache).
+  win.on("close", (event) => {
+    if (utilityDialogAllowDestroy) {
+      return;
+    }
+    event.preventDefault();
+    if (utilityDialogInFlight !== null) {
+      const cancelId = utilityDialogPayload?.cancelId ?? 0;
+      finishUtilityDialog(cancelId);
+    } else if (!win.isDestroyed() && win.isVisible()) {
+      win.hide();
+      releaseUtilityDialogForeground();
+      utilityDialogWantsVisible = false;
+    }
+  });
+
+  win.on("closed", () => {
+    if (utilityDialogWindow === win) {
+      utilityDialogWindow = null;
+    }
+    utilityDialogShellReady = false;
+    utilityDialogWantsVisible = false;
+    releaseUtilityDialogForeground();
+    // If destroy raced past finish, settle any waiter.
+    if (utilityDialogResolve !== null) {
+      const resolve = utilityDialogResolve;
+      const cancelId = utilityDialogPayload?.cancelId ?? 0;
+      utilityDialogResolve = null;
+      utilityDialogInFlight = null;
+      utilityDialogPayload = null;
+      resolve({ response: cancelId, checkboxChecked: false });
+    }
+    if (utilityDialogHandlersRegistered) {
+      ipcMain.removeHandler(UTILITY_DIALOG_GET_PAYLOAD);
+      ipcMain.removeHandler(UTILITY_DIALOG_RESPOND);
+      ipcMain.removeHandler(UTILITY_DIALOG_SET_HEIGHT);
+      utilityDialogHandlersRegistered = false;
+    }
+  });
+
+  if (isDev) {
+    void win.loadURL(`${getDevServerUrl()}/utility-dialog.html`);
+  } else {
+    void win.loadFile(path.join(__dirname, "..", "renderer", "utility-dialog.html"));
+  }
+
+  return win;
+}
+
 /**
  * Present a single-flight aurora utility dialog (Check for Updates, etc.).
- * Acquires utility foreground for the lifetime of the dialog; destroy-on-close
- * (not warm-cached). Concurrent calls share the in-flight promise.
+ * First open creates + loads the shell; later opens re-apply payload + show (warm cache).
+ * Concurrent calls share the in-flight promise.
  */
 export function presentUtilityDialog(
   options: UtilityDialogOptions,
@@ -697,61 +850,34 @@ export function presentUtilityDialog(
 
   const payload = normalizeUtilityDialogOptions(options);
   utilityDialogPayload = payload;
+  utilityDialogWantsVisible = true;
 
   utilityDialogInFlight = new Promise<UtilityDialogResult>((resolve) => {
     utilityDialogResolve = resolve;
 
-    ensureUtilityDockIcon();
-    if (!utilityDialogHeldForeground) {
-      acquireUtilityForeground();
-      utilityDialogHeldForeground = true;
-    }
-
-    const win = new BrowserWindow({
-      width: UTILITY_DIALOG_WIDTH,
-      height: UTILITY_DIALOG_HEIGHT,
-      resizable: false,
-      minimizable: false,
-      maximizable: false,
-      fullscreenable: false,
-      closable: true,
-      alwaysOnTop: true,
-      show: false,
-      icon: getWindowIconPath(),
-      ...utilityDialogWindowChrome(),
-      webPreferences: createSecureWebPreferences({
-        preload: getUtilityDialogPreloadPath(),
-      }),
-    });
-
-    hardenWebContents(win);
-    utilityDialogWindow = win;
-    registerUtilityDialogHandlers(win);
-
-    win.once("ready-to-show", () => {
-      if (win.isDestroyed() || utilityDialogWindow !== win) {
+    try {
+      const existing = utilityDialogWindow;
+      if (existing !== null && !existing.isDestroyed() && utilityDialogShellReady) {
+        showUtilityDialogWindow(existing);
         return;
       }
-      win.show();
-      win.focus();
-      try {
-        app.focus({ steal: true });
-      } catch {
-        // focus can fail in headless / test environments
-      }
-    });
 
-    win.on("closed", () => {
-      if (utilityDialogWindow === win) {
-        // System Close (traffic light / caption) or OS dismiss → cancel response.
-        finishUtilityDialog(payload.cancelId);
+      if (existing !== null && !existing.isDestroyed()) {
+        // Shell still loading; ready-to-show will call showUtilityDialogWindow.
+        acquireUtilityDialogForeground();
+        return;
       }
-    });
 
-    if (isDev) {
-      void win.loadURL(`${getDevServerUrl()}/utility-dialog.html`);
-    } else {
-      void win.loadFile(path.join(__dirname, "..", "renderer", "utility-dialog.html"));
+      createUtilityDialogShell();
+      // Acquire early so tray-only apps surface Dock while the shell loads.
+      acquireUtilityDialogForeground();
+    } catch {
+      utilityDialogResolve = null;
+      utilityDialogInFlight = null;
+      utilityDialogPayload = null;
+      utilityDialogWantsVisible = false;
+      releaseUtilityDialogForeground();
+      resolve({ response: payload.cancelId, checkboxChecked: false });
     }
   });
 
@@ -759,18 +885,34 @@ export function presentUtilityDialog(
 }
 
 /**
- * Force-destroy an open utility dialog (quit / composition cleanup).
+ * Force-destroy the utility dialog shell (quit / composition cleanup).
  * Resolves any waiter with the cancel button index.
  */
 export function closeUtilityDialogWindow(): void {
-  if (utilityDialogPayload !== null) {
-    finishUtilityDialog(utilityDialogPayload.cancelId);
-    return;
+  utilityDialogAllowDestroy = true;
+  utilityDialogWantsVisible = false;
+
+  if (utilityDialogInFlight !== null) {
+    const cancelId = utilityDialogPayload?.cancelId ?? 0;
+    finishUtilityDialog(cancelId);
+  } else {
+    releaseUtilityDialogForeground();
+    if (utilityDialogHandlersRegistered) {
+      ipcMain.removeHandler(UTILITY_DIALOG_GET_PAYLOAD);
+      ipcMain.removeHandler(UTILITY_DIALOG_RESPOND);
+      ipcMain.removeHandler(UTILITY_DIALOG_SET_HEIGHT);
+      utilityDialogHandlersRegistered = false;
+    }
+    const win = utilityDialogWindow;
+    utilityDialogWindow = null;
+    utilityDialogShellReady = false;
+    utilityDialogPayload = null;
+    if (win !== null && !win.isDestroyed()) {
+      win.destroy();
+    }
   }
-  if (utilityDialogWindow !== null && !utilityDialogWindow.isDestroyed()) {
-    utilityDialogWindow.destroy();
-  }
-  utilityDialogWindow = null;
+
+  utilityDialogAllowDestroy = false;
 }
 
 /**

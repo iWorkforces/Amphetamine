@@ -1,6 +1,7 @@
 /**
  * Aurora utility dialog renderer — Check for Updates and similar alerts.
  * Privileged access via window.utilityDialogApi (dedicated preload).
+ * Supports warm-cache re-present via onApply (no full page reload).
  */
 import "./styles.css";
 import type { UtilityDialogPayload } from "../../shared/utility-dialog.js";
@@ -13,6 +14,7 @@ declare global {
       getPayload: () => Promise<UtilityDialogPayload>;
       respond: (response: number) => Promise<void>;
       setHeight: (height: number) => Promise<void>;
+      onApply: (callback: (payload: UtilityDialogPayload) => void) => () => void;
       os: string;
     };
   }
@@ -37,7 +39,9 @@ function prefersReducedMotion(): boolean {
   }
 }
 
+/** Opacity-only open (no scale) so height shrink-wrap does not fight transform. */
 function startOpenAnimation(root: HTMLElement): void {
+  root.classList.remove("pre-animate", "ready");
   if (prefersReducedMotion()) {
     root.classList.add("ready");
     return;
@@ -54,7 +58,7 @@ function startOpenAnimation(root: HTMLElement): void {
   } else {
     finish();
   }
-  window.setTimeout(finish, 500);
+  window.setTimeout(finish, 400);
 }
 
 function clampIndex(index: number, length: number, fallback: number): number {
@@ -66,8 +70,8 @@ function clampIndex(index: number, length: number, fallback: number): number {
 }
 
 /**
- * Measure intrinsic content height (not min-height: 100% stretch) and shrink-wrap.
- * Uses a temporary height:auto override so we don't measure the current window size.
+ * Measure intrinsic content height and shrink-wrap.
+ * Single rAF; does not wait on icon (stage size is reserved in CSS).
  */
 function reportContentHeight(root: HTMLElement): void {
   const measure = (): void => {
@@ -75,7 +79,6 @@ function reportContentHeight(root: HTMLElement): void {
     const prevHeight = root.style.height;
     root.style.minHeight = "0";
     root.style.height = "auto";
-    // Force layout with unconstrained height.
     const height = Math.ceil(root.scrollHeight);
     root.style.minHeight = prevMinHeight;
     root.style.height = prevHeight;
@@ -87,46 +90,32 @@ function reportContentHeight(root: HTMLElement): void {
     });
   };
   if (typeof requestAnimationFrame === "function") {
-    requestAnimationFrame(() => {
-      requestAnimationFrame(measure);
-    });
+    requestAnimationFrame(measure);
   } else {
     measure();
   }
 }
 
-async function bootstrap(): Promise<void> {
+function bootstrap(): void {
   if (window.utilityDialogApi.os === "win32") {
     document.body.classList.add("platform-win32");
   }
 
   const root = requireEl<HTMLDivElement>("app");
-  startOpenAnimation(root);
-
   const icon = requireEl<HTMLImageElement>("dialog-icon");
   const messageEl = requireEl<HTMLHeadingElement>("dialog-message");
   const detailEl = requireEl<HTMLParagraphElement>("dialog-detail");
   const actionsEl = requireEl<HTMLDivElement>("dialog-actions");
+  const auroraStage = document.querySelector(".icon-aurora-stage");
 
   icon.src = heroIcon;
+  // Icon is decorative for layout; height measure does not wait on decode.
 
-  const payload = await window.utilityDialogApi.getPayload();
-  document.title = payload.title;
-  messageEl.textContent = payload.message;
-  detailEl.textContent = payload.detail;
-
-  const buttons = payload.buttons.length > 0 ? payload.buttons : ["OK"];
-  const defaultId = clampIndex(payload.defaultId, buttons.length, buttons.length - 1);
-  const cancelId = clampIndex(payload.cancelId, buttons.length, 0);
-
-  /**
-   * Single dismiss-only alerts (OK / Check for Updates info): no in-content button.
-   * System Close traffic light / caption + Esc close the window (main maps to cancelId).
-   * Multi-button alerts (Open Releases, Restart, …) keep their action row.
-   */
-  const showActionButtons = buttons.length > 1;
-
+  let defaultId = 0;
+  let cancelId = 0;
+  let showActionButtons = false;
   let responded = false;
+
   const respond = (index: number): void => {
     if (responded) return;
     responded = true;
@@ -135,24 +124,53 @@ async function bootstrap(): Promise<void> {
     });
   };
 
-  const buttonEls: HTMLButtonElement[] = [];
-  if (showActionButtons) {
-    buttons.forEach((label, index) => {
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.textContent = label;
-      const isPrimary = index === defaultId;
-      btn.className = isPrimary ? "dialog-btn-primary" : "dialog-btn-secondary";
-      btn.addEventListener("click", () => {
-        respond(index);
+  const applyPayload = (payload: UtilityDialogPayload): void => {
+    responded = false;
+    document.title = payload.title;
+    messageEl.textContent = payload.message;
+    detailEl.textContent = payload.detail;
+
+    const buttons = payload.buttons.length > 0 ? payload.buttons : ["OK"];
+    defaultId = clampIndex(payload.defaultId, buttons.length, buttons.length - 1);
+    cancelId = clampIndex(payload.cancelId, buttons.length, 0);
+    showActionButtons = buttons.length > 1;
+
+    // Wipe previous action row (warm-cache re-present).
+    actionsEl.replaceChildren();
+    root.classList.remove("no-actions");
+    actionsEl.hidden = false;
+
+    if (showActionButtons) {
+      buttons.forEach((label, index) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.textContent = label;
+        btn.className =
+          index === defaultId ? "dialog-btn-primary" : "dialog-btn-secondary";
+        btn.addEventListener("click", () => {
+          respond(index);
+        });
+        actionsEl.appendChild(btn);
       });
-      actionsEl.appendChild(btn);
-      buttonEls.push(btn);
-    });
-  } else {
-    actionsEl.hidden = true;
-    root.classList.add("no-actions");
-  }
+      const focusTarget =
+        actionsEl.children[defaultId] ?? actionsEl.children[0];
+      if (focusTarget instanceof HTMLButtonElement) {
+        focusTarget.focus();
+      }
+    } else {
+      actionsEl.hidden = true;
+      root.classList.add("no-actions");
+      // Focus the dialog surface for screen readers (info-only, no action row).
+      if (!root.hasAttribute("tabindex")) {
+        root.tabIndex = -1;
+      }
+      root.focus({ preventScroll: true });
+    }
+
+    // Height first, then fade in (avoids empty chrome + resize fighting scale).
+    reportContentHeight(root);
+    startOpenAnimation(root);
+  };
 
   window.addEventListener("keydown", (e: KeyboardEvent) => {
     if (e.key === "Escape") {
@@ -160,7 +178,12 @@ async function bootstrap(): Promise<void> {
       respond(cancelId);
       return;
     }
-    if (e.key === "Enter" && showActionButtons) {
+    if (e.key === "Enter") {
+      if (!showActionButtons) {
+        e.preventDefault();
+        respond(cancelId);
+        return;
+      }
       const active = document.activeElement;
       if (active instanceof HTMLButtonElement && actionsEl.contains(active)) {
         return;
@@ -170,38 +193,37 @@ async function bootstrap(): Promise<void> {
     }
   });
 
-  if (showActionButtons) {
-    const focusTarget = buttonEls[defaultId] ?? buttonEls[0];
-    focusTarget?.focus();
+  // Pause aurora paint work while the warm shell is hidden.
+  if (auroraStage instanceof HTMLElement) {
+    const syncPause = (): void => {
+      auroraStage.classList.toggle("is-paused", document.visibilityState !== "visible");
+    };
+    document.addEventListener("visibilitychange", syncPause);
+    syncPause();
   }
 
-  // After icon + text (+ optional buttons) paint, size the window to the content.
-  if (icon.complete) {
-    reportContentHeight(root);
-  } else {
-    icon.addEventListener(
-      "load",
-      () => {
-        reportContentHeight(root);
-      },
-      { once: true },
-    );
-    // Fallback if load never fires (cached broken path, etc.).
-    window.setTimeout(() => {
-      reportContentHeight(root);
-    }, 120);
-  }
+  // Warm-cache re-present: main pushes a fresh payload without reloading.
+  window.utilityDialogApi.onApply(applyPayload);
+
+  // First paint: pull payload if main already stored one (race with APPLY).
+  void window.utilityDialogApi
+    .getPayload()
+    .then(applyPayload)
+    .catch(() => {
+      // Idle warm shell may have no payload yet — wait for onApply.
+    });
 }
 
-void bootstrap().catch((err: unknown) => {
+try {
+  bootstrap();
+} catch (err: unknown) {
   console.error("[utility-dialog] bootstrap failed:", err);
   const root = document.getElementById("app");
   if (root !== null) {
     root.classList.remove("pre-animate");
     root.classList.add("ready");
   }
-  // Best-effort dismiss so the main process is never stuck waiting.
   void window.utilityDialogApi.respond(0).catch(() => {
     // Preload may be unavailable if bootstrap failed very early.
   });
-});
+}

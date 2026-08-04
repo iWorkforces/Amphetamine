@@ -7,11 +7,17 @@
 /** Invoke: renderer fetches the dialog payload for the active presentation. */
 export const UTILITY_DIALOG_GET_PAYLOAD = "utility-dialog:get-payload" as const;
 
-/** Invoke: renderer returns the chosen button index and closes the dialog. */
+/** Invoke: renderer returns the chosen button index and dismisses the dialog. */
 export const UTILITY_DIALOG_RESPOND = "utility-dialog:respond" as const;
 
 /** Invoke: renderer reports content height so the window can shrink-wrap. */
 export const UTILITY_DIALOG_SET_HEIGHT = "utility-dialog:set-height" as const;
+
+/**
+ * Main → renderer push: re-apply payload on warm-cache reopen (no full reload).
+ * Not an invoke; preload listens with `onApply`.
+ */
+export const UTILITY_DIALOG_APPLY = "utility-dialog:apply" as const;
 
 /** Options for a single-flight aurora utility dialog (1–3 buttons). */
 export interface UtilityDialogOptions {

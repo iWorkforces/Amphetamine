@@ -88,18 +88,15 @@ body.platform-win32 #app.utility-dialog {
   margin-bottom: 0;
 }
 
+/* Opacity-only open so setContentSize does not fight a scale transform. */
 @media (prefers-reduced-motion: no-preference) {
   #app.utility-dialog.pre-animate {
     opacity: 0;
-    transform: scale(0.98);
   }
 
   #app.utility-dialog.ready {
     opacity: 1;
-    transform: scale(1);
-    transition:
-      opacity 280ms cubic-bezier(0.22, 1, 0.36, 1),
-      transform 320ms cubic-bezier(0.22, 1, 0.36, 1);
+    transition: opacity 180ms cubic-bezier(0.22, 1, 0.36, 1);
   }
 }
 
