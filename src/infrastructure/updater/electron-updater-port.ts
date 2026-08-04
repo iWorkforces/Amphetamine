@@ -27,8 +27,8 @@ export function createElectronUpdaterPort(
       notifier.publish(event);
     },
     getRepositoryUrl: options.getRepositoryUrl,
-    prepareDialogPresentation: options.prepareDialogPresentation,
-    restoreTrayPresentation: options.restoreTrayPresentation,
+    showUserDialog: options.showUserDialog,
+    ...(options.notifyUser !== undefined ? { notifyUser: options.notifyUser } : {}),
   });
   return {
     init: () => {

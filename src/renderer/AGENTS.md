@@ -1,6 +1,6 @@
 # Renderer Process — UI Layer
 
-Electron renderer web context. Vanilla TypeScript only. Three built entries (Rsbuild environments): **popover**, **settings**, **about**.
+Electron renderer web context. Vanilla TypeScript only. Four built entries (Rsbuild environments): **popover**, **settings**, **about**, **utility-dialog**.
 
 ## Files
 
@@ -13,10 +13,11 @@ Electron renderer web context. Vanilla TypeScript only. Three built entries (Rsb
 | `env.d.ts` | `Window.api` type derived from preload `Api` |
 | `css.d.ts` | CSS module declarations |
 | `styles/main.css` | Popover styling, dark mode, reduced motion |
-| `styles/utility-tokens.css` | Shared Settings/About surface tokens (e.g. `--utility-window-bg`) |
-| `styles/icon-aurora.css` | Shared coffee-brown aurora wash behind About/Settings app icons |
+| `styles/utility-tokens.css` | Shared Settings/About/utility-dialog surface tokens (e.g. `--utility-window-bg`) |
+| `styles/icon-aurora.css` | Shared coffee-brown aurora wash (ring, halo, blobs, sparks) behind app icons |
 | `settings/` | Settings-window renderer; see `settings/AGENTS.md` |
 | `about/` | About-window renderer (package metadata + close) |
+| `utility-dialog/` | Aurora alert dialog (Check for Updates + other main-owned alerts) |
 
 ## Popover flow
 
@@ -53,14 +54,24 @@ Electron renderer web context. Vanilla TypeScript only. Three built entries (Rsb
 - OK / Escape uses `window.close()` → main **hide-on-close** warm cache (same as Settings); quit force-destroys.
 - Safe visibility: shell materializes even if `getAbout` fails (fallback copy).
 - Hero icon: bundled `settings-hero-icon.png` via `import.meta.url` (not a main-process data URI).
-- Icon sits in `.icon-aurora-stage` with shared coffee-brown aurora (`styles/icon-aurora.css`); decorative blobs are `aria-hidden`.
+- Icon sits in `.icon-aurora-stage` with shared coffee-brown aurora (`styles/icon-aurora.css`); decorative ring/halo/blobs/sparks are `aria-hidden`.
 - No separate `constants.ts`; copy comes from `AboutInfo` + static HTML structure.
+
+## Utility dialog (updater alerts)
+
+- Built entry `utility-dialog.html` (Rsbuild env `utility-dialog`); dedicated preload `lib/preload/utility-dialog.cjs` exposing `window.utilityDialogApi` only (not `window.api`).
+- Presented by WindowGraph `presentUtilityDialog` for hybrid updater dialogs (up-to-date, check failed, install ready, unpackaged). **Hide-on-close warm cache** (re-apply payload via `onApply`); single-flight in main; quit force-destroys.
+- Opaque dark surface (`--utility-window-bg`) + single-layer coffee-brown aurora; system Close chrome. Content height shrink-wraps via `setHeight` after layout (opacity-only open animation).
+- **Info-only** (single button, e.g. OK): hide the action row; dismiss via system Close / Esc / Enter → `cancelId`. Multi-button: secondary left / primary right; Esc → `cancelId`; Enter → `defaultId` when no button focused.
+- Private IPC (not in public `IPC_CHANNELS` budget): `get-payload` / `respond` / `set-height` / push `apply`.
+- Always assign message/detail/button labels with `textContent` (never `innerHTML`).
 
 ## Utility window surface
 
-- Settings and About both `@import` `styles/utility-tokens.css` and paint `#app` with `var(--utility-window-bg)`.
-- Keep the hex only in `utility-tokens.css` so the two dialogs stay aligned.
-- Both also `@import` `styles/icon-aurora.css` for the hero/app icon wash; stage size (80px About / 48px Settings) stays local to each entry stylesheet.
+- Settings, About, and utility-dialog `@import` `styles/utility-tokens.css` and paint `#app` with `var(--utility-window-bg)`.
+- Keep the hex only in `utility-tokens.css` so utility surfaces stay aligned.
+- All three also `@import` `styles/icon-aurora.css` (single blurred gradient layer; Settings uses `icon-aurora--static`). Stage size (80px About / 72px utility-dialog / 48px Settings) is local. Pause with `.is-paused` when `document.hidden`.
+- Respect `prefers-reduced-motion` / `prefers-reduced-transparency` / `prefers-contrast` on the shared aurora (and local chrome).
 
 ## Countdown
 
@@ -85,6 +96,8 @@ Electron renderer web context. Vanilla TypeScript only. Three built entries (Rsb
 - Never hardcode UI strings; use `constants.ts` (or about static copy in HTML carefully).
 - Never update `defaultSessionDuration` from popover chips (settings window owns preference).
 - Never duplicate settings-window rules; see `settings/AGENTS.md`.
+- Never import shared preload `window.api` into the utility-dialog entry (dedicated preload only).
+- Never re-hardcode `#0D1117` outside `styles/utility-tokens.css`.
 
 ## Commands
 

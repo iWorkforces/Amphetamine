@@ -9,6 +9,12 @@ export const SETTINGS_WINDOW_WIDTH = 520;
 export const SETTINGS_WINDOW_HEIGHT = 640;
 export const ABOUT_WINDOW_WIDTH = 340;
 export const ABOUT_WINDOW_HEIGHT = 380;
+/** Aurora utility alert (updater dialogs); width fixed, height shrink-wraps content. */
+export const UTILITY_DIALOG_WIDTH = 360;
+/** Initial height before renderer measures content (avoids a zero-size flash). */
+export const UTILITY_DIALOG_HEIGHT = 280;
+export const UTILITY_DIALOG_MIN_HEIGHT = 200;
+export const UTILITY_DIALOG_MAX_HEIGHT = 520;
 
 // === IPC Popover Height Bounds ===
 export const MIN_POPOVER_HEIGHT = 220;

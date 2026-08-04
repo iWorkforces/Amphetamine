@@ -115,6 +115,44 @@ export function aboutWindowChrome(
   };
 }
 
+/** Matches renderer `--utility-window-bg` (utility-tokens.css) for opaque window fill. */
+const UTILITY_SURFACE_BG = "#0D1117";
+
+/**
+ * Aurora utility alert (updater dialogs).
+ * System Close like About, but **opaque** surface (no vibrancy/mica bleed at edges).
+ * Single-button (OK-only) alerts hide the in-content button and dismiss via Close / Esc.
+ */
+export function utilityDialogWindowChrome(
+  platform: ProcessPlatform = process.platform,
+): WindowChromeOptions {
+  if (isDarwin(platform)) {
+    return {
+      skipTaskbar: false,
+      titleBarStyle: "hiddenInset",
+      // Solid fill — vibrancy under a shrink-wrapped webview leaves unpainted edges.
+      backgroundColor: UTILITY_SURFACE_BG,
+    };
+  }
+  if (isWin32(platform)) {
+    return {
+      skipTaskbar: false,
+      titleBarStyle: "hidden",
+      backgroundColor: UTILITY_SURFACE_BG,
+      titleBarOverlay: {
+        color: UTILITY_SURFACE_BG,
+        symbolColor: "#f5f5f7",
+        height: 40,
+      },
+    };
+  }
+  return {
+    skipTaskbar: false,
+    titleBarStyle: "hidden",
+    backgroundColor: UTILITY_SURFACE_BG,
+  };
+}
+
 /**
  * Packaged/dev app icon filename under `build/` (or resources).
  * Windows `.ico` lands in Wave 4 packaging; callers should only use Dock paths on darwin.

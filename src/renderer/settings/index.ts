@@ -177,11 +177,7 @@ function buildSettingsForm(): string {
     </div>
     <div class="settings-hero">
       <div class="icon-aurora-stage settings-hero-icon-stage">
-        <div class="icon-aurora" aria-hidden="true">
-          <span class="aurora-blob aurora-blob-a"></span>
-          <span class="aurora-blob aurora-blob-b"></span>
-          <span class="aurora-blob aurora-blob-c"></span>
-        </div>
+        <div class="icon-aurora icon-aurora--static" aria-hidden="true"></div>
         <img class="settings-hero-icon" src="${heroIcon}" alt="" />
       </div>
       <div class="settings-hero-text">

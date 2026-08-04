@@ -9,6 +9,7 @@ import {
   popoverWindowChrome,
   settingsWindowChrome,
   aboutWindowChrome,
+  utilityDialogWindowChrome,
   appIconFileName,
   type PlatformId,
 } from "../../src/main/platform/index.js";
@@ -171,6 +172,26 @@ describe("platform/window-chrome", () => {
     it("mirrors settings chrome policy per platform", () => {
       expect(aboutWindowChrome("darwin")).toEqual(settingsWindowChrome("darwin"));
       expect(aboutWindowChrome("win32")).toEqual(settingsWindowChrome("win32"));
+    });
+  });
+
+  describe("utilityDialogWindowChrome", () => {
+    it("uses solid utility surface (no vibrancy) with system Close chrome", () => {
+      expect(utilityDialogWindowChrome("darwin")).toEqual({
+        skipTaskbar: false,
+        titleBarStyle: "hiddenInset",
+        backgroundColor: "#0D1117",
+      });
+      expect(utilityDialogWindowChrome("win32")).toEqual({
+        skipTaskbar: false,
+        titleBarStyle: "hidden",
+        backgroundColor: "#0D1117",
+        titleBarOverlay: {
+          color: "#0D1117",
+          symbolColor: "#f5f5f7",
+          height: 40,
+        },
+      });
     });
   });
 

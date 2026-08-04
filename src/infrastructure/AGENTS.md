@@ -15,7 +15,7 @@ Implements application ports with Electron/Node. May import domain types and app
 | `settings/dialog-save-failure.ts` | `SettingsSaveFailurePort` | `dialog.showErrorBox` |
 | `sleep/power-save-blocker.ts` | `SleepBlockerPort` | **sole** `powerSaveBlocker` owner |
 | `shortcut/electron-global-shortcut.ts` | `GlobalShortcutPort` | register / unregisterAll |
-| `updater/hybrid-auto-updater.ts` | hybrid policy | electron-updater events; `setFeedURL` from package repo; single-flight checks; dialog presentation hooks |
+| `updater/hybrid-auto-updater.ts` | hybrid policy | electron-updater events; `setFeedURL` from package repo; single-flight checks; injected `showUserDialog` + optional `notifyUser` |
 | `updater/auto-updater-utils.ts` | pure helpers | `deriveReleaseUrlBase`, `parseGitHubRepoIdentity`, `categorizeUpdaterError` |
 | `updater/electron-updater-port.ts` | `UpdaterPort` | `configureHybridAutoUpdater` + lifecycle; **no main imports** |
 | `benchmark/` | harness | scenarios + battery counters; see local `AGENTS.md` |
@@ -41,9 +41,10 @@ Implements application ports with Electron/Node. May import domain types and app
 - Concurrent tray/IPC/background checks share one in-flight `checkForUpdates()`; manual join upgrades user intent.
 - macOS needs **`latest-mac.yml`** on the GitHub release; Windows needs **`latest.yml`**. Missing feed → false “could not reach update server” dialog.
 - Background checks keep `autoDownload = false`; user-initiated path may download/install or open GitHub.
-- Native dialogs use injected `prepareDialogPresentation` / `restoreTrayPresentation` (composition pairs these with `acquireUtilityForeground` / `releaseUtilityForeground` so tray-only macOS can show message boxes).
-- Dialog layout follows Apple alert HIG: multi-button boxes set `noLink: true` (stacked buttons, not a link-style first action). Check-failed Esc dismisses (OK), not Open Releases.
+- Updater user dialogs use injected `showUserDialog` (composition wires WindowGraph `presentUtilityDialog` — aurora BrowserWindow with its own utility-foreground ref). No native `dialog.showMessageBox`.
+- Dialog button layout follows Apple alert HIG: secondary left, primary right (`twoButtonAlert`). Check-failed Esc / system Close maps to OK (`cancelOnPrimary`), not Open Releases. Info-only dialogs (up-to-date / unpackaged) pass a single OK button; the renderer hides the action row and dismisses via Close / Esc.
 - Optional `notifyUser` surfaces Checking / Downloading OS notifications for user-initiated checks. Joining an in-flight background check settles feedback if events already ran without user intent.
+- Updater must not import `src/main/*` (dialog presentation is injected).
 
 ## User notifications
 
@@ -57,8 +58,8 @@ Implements application ports with Electron/Node. May import domain types and app
 - Never call `powerSaveBlocker` outside `sleep/power-save-blocker.ts`.
 - Platform shell-outs stay under `main/platform` (not moved out of main).
 - Main façades (`settings.ts`, `sleep-prevention.ts`, `auto-updater.ts`, `global-shortcut.ts`, …) may re-export or wrap these adapters for stable paths.
-- Prefer construction-time injection of ports over module-level mutable globals (updater notifier + UI hooks via `configureHybridAutoUpdater`).
-- Updater must not import `src/main/*`. Benchmark may import main for measurement-only seams (`getBatteryBenchmarkCounters`, dynamic tray/settings) — do not expand that exception.
+- Prefer construction-time injection of ports over module-level mutable globals (`configureHybridAutoUpdater` with `publish` / `getRepositoryUrl` / `showUserDialog` / optional `notifyUser`).
+- Benchmark may import main for measurement-only seams (`getBatteryBenchmarkCounters`, dynamic tray/settings) — do not expand that exception.
 
 ## Log tags
 

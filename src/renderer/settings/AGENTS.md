@@ -14,10 +14,10 @@ Separate Rsbuild renderer entry for the settings BrowserWindow. Vanilla TypeScri
 
 ## Visual language
 
-- `#app` uses shared fixed dark surface `var(--utility-window-bg)` from `../styles/utility-tokens.css` (do not hardcode `#0D1117` here).
-- Adaptive tokens (`--group-bg`, text, controls) still respond to `prefers-color-scheme` / reduced transparency / contrast for inset groups and chrome.
+- `#app` uses shared fixed dark surface `var(--utility-window-bg)` from `../styles/utility-tokens.css` (do not hardcode `#0D1117` here). Matches About and the updater utility dialog.
+- Adaptive tokens (`--group-bg`, text, controls) still respond to `prefers-color-scheme` / reduced transparency / contrast for inset groups and chrome (on top of the fixed dark canvas).
 - Grouped inset lists with hairline separators; edge-to-edge panel (no nested card chrome). No second `backdrop-filter`.
-- Identity strip: 48px hero icon in `.icon-aurora-stage` with shared coffee-brown aurora (`../styles/icon-aurora.css`); tighter local blur for compact scale.
+- Identity strip: 48px hero icon in `.icon-aurora-stage` with **static** shared coffee-brown aurora (`icon-aurora--static` — no infinite animation).
 - Section headers: General / Session / Power. No emoji in labels. No footer copyright (About owns that).
 - Instant press feedback on toggles and controls (`:active` scale); open animation is opt-in (`.pre-animate` → `.ready`).
 - Escape closes the window (when not recording a shortcut). Windows uses `titleBarOverlay` caption buttons.

@@ -48,6 +48,7 @@ import {
   popoverWindowChrome,
   settingsWindowChrome,
   aboutWindowChrome,
+  utilityDialogWindowChrome,
   appIconFileName,
 } from "./window-chrome.js";
 
@@ -77,6 +78,7 @@ export {
   popoverWindowChrome,
   settingsWindowChrome,
   aboutWindowChrome,
+  utilityDialogWindowChrome,
   appIconFileName,
   getBatteryPercent,
   parsePmsetOutput,

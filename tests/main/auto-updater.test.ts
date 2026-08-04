@@ -21,13 +21,9 @@ const mockLogInfo = vi.hoisted(() => vi.fn());
 const mockLogError = vi.hoisted(() => vi.fn());
 const mockLogWarn = vi.hoisted(() => vi.fn());
 const mockShellOpenExternal = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
-const mockShowMessageBox = vi.hoisted(() =>
-  vi.fn().mockResolvedValue({ response: 1, checkboxChecked: false }),
+const mockShowUserDialog = vi.hoisted(() =>
+  vi.fn().mockResolvedValue({ response: 1, checkboxChecked: false as const }),
 );
-const mockAppFocus = vi.hoisted(() => vi.fn());
-const mockEnterForegroundMode = vi.hoisted(() => vi.fn());
-const mockEnterTrayOnlyMode = vi.hoisted(() => vi.fn());
-const mockIsSettingsWindowOpen = vi.hoisted(() => vi.fn().mockReturnValue(false));
 const mockGetPackageInfo = vi.hoisted(() =>
   vi.fn().mockReturnValue({
     name: "amphetamine",
@@ -60,16 +56,13 @@ vi.mock("electron", () => ({
   app: {
     isPackaged: true,
     getAppPath: () => "/path/to/app.asar",
-    focus: mockAppFocus,
+    focus: vi.fn(),
   },
   BrowserWindow: {
     getAllWindows: mockGetAllWindows,
   },
   shell: {
     openExternal: mockShellOpenExternal,
-  },
-  dialog: {
-    showMessageBox: mockShowMessageBox,
   },
   ipcMain: {
     handle: mockIpcMainHandle,
@@ -104,8 +97,7 @@ describe("auto-updater (hybrid infrastructure)", () => {
     mockCheckForUpdates.mockResolvedValue(null);
     mockDownloadUpdate.mockResolvedValue(undefined);
     mockGetAllWindows.mockReturnValue([]);
-    mockShowMessageBox.mockResolvedValue({ response: 1, checkboxChecked: false });
-    mockIsSettingsWindowOpen.mockReturnValue(false);
+    mockShowUserDialog.mockResolvedValue({ response: 1, checkboxChecked: false });
 
     const hybrid = await import("../../src/infrastructure/updater/hybrid-auto-updater.js");
     const { broadcastToWindows } = await import("../../src/main/utils/broadcast.js");
@@ -118,14 +110,7 @@ describe("auto-updater (hybrid infrastructure)", () => {
         notifier.publish(event);
       },
       getRepositoryUrl: () => String(mockGetPackageInfo().repository),
-      prepareDialogPresentation: () => {
-        mockEnterForegroundMode();
-      },
-      restoreTrayPresentation: () => {
-        if (mockIsSettingsWindowOpen() === false) {
-          mockEnterTrayOnlyMode();
-        }
-      },
+      showUserDialog: mockShowUserDialog,
     });
     initAutoUpdater = hybrid.initAutoUpdater;
     stopAutoUpdater = hybrid.stopAutoUpdater;
@@ -158,8 +143,7 @@ describe("auto-updater (hybrid infrastructure)", () => {
             n.publish(event);
           },
           getRepositoryUrl: () => "https://github.com/iWorkforces/Amphetamine",
-          prepareDialogPresentation: () => {},
-          restoreTrayPresentation: () => {},
+          showUserDialog: mockShowUserDialog,
         });
         freshHybrid.initAutoUpdater();
 
@@ -283,20 +267,19 @@ describe("auto-updater (hybrid infrastructure)", () => {
 
     it("prompts to restart after download and calls quitAndInstall on Restart", async () => {
       // HIG layout: secondary left (Later=0), primary right (Restart=1)
-      mockShowMessageBox.mockResolvedValueOnce({ response: 1, checkboxChecked: false });
+      mockShowUserDialog.mockResolvedValueOnce({ response: 1, checkboxChecked: false });
       initAutoUpdater();
       checkForUpdatesNow();
       getHandler("update-available")({ version: "2.1.0", releaseDate: "2025-01-01" });
       getHandler("update-downloaded")({ version: "2.1.0", releaseDate: "2025-01-01" });
 
       await vi.waitFor(() => {
-        expect(mockShowMessageBox).toHaveBeenCalledWith(
+        expect(mockShowUserDialog).toHaveBeenCalledWith(
           expect.objectContaining({
             message: "A New Version Is Ready to Install",
             buttons: ["Later", "Restart"],
             defaultId: 1,
             cancelId: 0,
-            noLink: true,
           }),
         );
       });
@@ -307,21 +290,21 @@ describe("auto-updater (hybrid infrastructure)", () => {
     });
 
     it("does not quitAndInstall when user chooses Later", async () => {
-      mockShowMessageBox.mockResolvedValueOnce({ response: 0, checkboxChecked: false });
+      mockShowUserDialog.mockResolvedValueOnce({ response: 0, checkboxChecked: false });
       initAutoUpdater();
       checkForUpdatesNow();
       getHandler("update-available")({ version: "2.1.0", releaseDate: "2025-01-01" });
       getHandler("update-downloaded")({ version: "2.1.0", releaseDate: "2025-01-01" });
 
       await vi.waitFor(() => {
-        expect(mockShowMessageBox).toHaveBeenCalled();
+        expect(mockShowUserDialog).toHaveBeenCalled();
       });
       await Promise.resolve();
       expect(mockQuitAndInstall).not.toHaveBeenCalled();
     });
 
     it("opens release page when quitAndInstall throws", async () => {
-      mockShowMessageBox.mockResolvedValueOnce({ response: 1, checkboxChecked: false });
+      mockShowUserDialog.mockResolvedValueOnce({ response: 1, checkboxChecked: false });
       mockQuitAndInstall.mockImplementationOnce(() => {
         throw new Error("unsigned");
       });
@@ -370,32 +353,13 @@ describe("auto-updater (hybrid infrastructure)", () => {
       getHandler("update-not-available")({ version: "1.0.0", releaseDate: "2025-01-01" });
 
       await vi.waitFor(() => {
-        expect(mockShowMessageBox).toHaveBeenCalledWith(
+        expect(mockShowUserDialog).toHaveBeenCalledWith(
           expect.objectContaining({
             message: "You’re Up to Date",
             detail: "Amphetamine 1.0.0 is the latest version available.",
           }),
         );
       });
-      expect(mockEnterForegroundMode).toHaveBeenCalled();
-      expect(mockAppFocus).toHaveBeenCalledWith({ steal: true });
-      await vi.waitFor(() => {
-        expect(mockEnterTrayOnlyMode).toHaveBeenCalled();
-      });
-    });
-
-    it("keeps foreground when settings window is open after dialog", async () => {
-      mockIsSettingsWindowOpen.mockReturnValue(true);
-      initAutoUpdater();
-      checkForUpdatesNow();
-      getHandler("update-not-available")({ version: "1.0.0", releaseDate: "2025-01-01" });
-
-      await vi.waitFor(() => {
-        expect(mockShowMessageBox).toHaveBeenCalled();
-      });
-      await Promise.resolve();
-      expect(mockEnterForegroundMode).toHaveBeenCalled();
-      expect(mockEnterTrayOnlyMode).not.toHaveBeenCalled();
     });
 
     it("shows check-failed dialog on user-initiated error with no known version", async () => {
@@ -404,13 +368,12 @@ describe("auto-updater (hybrid infrastructure)", () => {
       getHandler("error")(new Error("Network error ENOTFOUND"));
 
       await vi.waitFor(() => {
-        expect(mockShowMessageBox).toHaveBeenCalledWith(
+        expect(mockShowUserDialog).toHaveBeenCalledWith(
           expect.objectContaining({
             message: "Unable to Check for Updates",
             buttons: ["Open Releases…", "OK"],
             defaultId: 1,
             cancelId: 1, // Esc dismisses (OK), does not open Releases
-            noLink: true,
           }),
         );
       });
@@ -418,13 +381,13 @@ describe("auto-updater (hybrid infrastructure)", () => {
     });
 
     it("does not open releases when user chooses OK on check failure", async () => {
-      mockShowMessageBox.mockResolvedValueOnce({ response: 1, checkboxChecked: false });
+      mockShowUserDialog.mockResolvedValueOnce({ response: 1, checkboxChecked: false });
       initAutoUpdater();
       checkForUpdatesNow();
       getHandler("error")(new Error("Network error ENOTFOUND"));
 
       await vi.waitFor(() => {
-        expect(mockShowMessageBox).toHaveBeenCalled();
+        expect(mockShowUserDialog).toHaveBeenCalled();
       });
       await Promise.resolve();
       expect(mockShellOpenExternal).not.toHaveBeenCalled();
@@ -432,7 +395,7 @@ describe("auto-updater (hybrid infrastructure)", () => {
 
     it("opens releases list when user chooses Open Releases on check failure", async () => {
       // Secondary (Open Releases…) is index 0 in HIG two-button layout
-      mockShowMessageBox.mockResolvedValueOnce({ response: 0, checkboxChecked: false });
+      mockShowUserDialog.mockResolvedValueOnce({ response: 0, checkboxChecked: false });
       initAutoUpdater();
       checkForUpdatesNow();
       getHandler("error")(new Error("Network error"));
@@ -766,19 +729,14 @@ describe("auto-updater (hybrid infrastructure)", () => {
             n2.publish(event);
           },
           getRepositoryUrl: () => "https://github.com/iWorkforces/Amphetamine",
-          prepareDialogPresentation: () => {
-            mockEnterForegroundMode();
-          },
-          restoreTrayPresentation: () => {
-            mockEnterTrayOnlyMode();
-          },
+          showUserDialog: mockShowUserDialog,
         });
-        mockShowMessageBox.mockClear();
+        mockShowUserDialog.mockClear();
         mockCheckForUpdates.mockClear();
         freshMod.checkForUpdatesNow();
 
         await vi.waitFor(() => {
-          expect(mockShowMessageBox).toHaveBeenCalledWith(
+          expect(mockShowUserDialog).toHaveBeenCalledWith(
             expect.objectContaining({
               message: "Updates Unavailable",
             }),
@@ -806,7 +764,7 @@ describe("auto-updater (hybrid infrastructure)", () => {
       checkForUpdatesNow();
 
       await vi.waitFor(() => {
-        expect(mockShowMessageBox).toHaveBeenCalledWith(
+        expect(mockShowUserDialog).toHaveBeenCalledWith(
           expect.objectContaining({
             message: "Unable to Check for Updates",
           }),

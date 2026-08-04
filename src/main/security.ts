@@ -26,7 +26,7 @@ export function installGlobalWebContentsHardening(): void {
  * Apply navigation + window-open hardening to a BrowserWindow.
  * - Blocks navigation to any URL not matching validateSenderUrl (DEV_ORIGINS in dev, packaged file:// in prod).
  * - Denies all window.open() requests (no popups, no external new windows).
- * Applied to every BrowserWindow we create (popover + settings + about).
+ * Applied to every BrowserWindow we create (popover + settings + about + utility-dialog).
  * About may override setWindowOpenHandler after this for the package repository only.
  */
 export function hardenWebContents(win: BrowserWindow): void {

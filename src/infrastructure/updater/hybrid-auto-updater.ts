@@ -5,11 +5,15 @@
  */
 
 import { autoUpdater, type UpdateInfo, type ProgressInfo } from "electron-updater";
-import { app, dialog, type MessageBoxOptions, type MessageBoxReturnValue } from "electron/main";
+import { app } from "electron/main";
 import { shell } from "electron/common";
 import log from "electron-log";
 import type { AutoUpdaterStatus, UpdateMeta } from "../../shared/types.js";
 import type { AppPushEvent } from "../../application/ports/main-to-renderer-notifier.port.js";
+import type {
+  UtilityDialogOptions,
+  UtilityDialogResult,
+} from "../../shared/utility-dialog.js";
 import {
   categorizeUpdaterError,
   deriveReleaseUrlBase,
@@ -60,10 +64,11 @@ export interface HybridAutoUpdaterDeps {
   publish: (event: AppPushEvent) => void;
   /** Repository URL from package metadata (for browser fallback links). */
   getRepositoryUrl: () => string;
-  /** Before native dialogs (e.g. Dock/foreground on macOS). */
-  prepareDialogPresentation: () => void;
-  /** After native dialogs (restore tray-only when appropriate). */
-  restoreTrayPresentation: () => void;
+  /**
+   * Present an aurora utility dialog (Check for Updates, install ready, etc.).
+   * Main wires this to WindowGraph `presentUtilityDialog` (foreground + icon aurora).
+   */
+  showUserDialog: (options: UtilityDialogOptions) => Promise<UtilityDialogResult>;
   /** Optional OS notification for user-initiated check/download status. */
   notifyUser?: (message: { title: string; body: string }) => void;
 }
@@ -106,29 +111,13 @@ function toUpdateMeta(info: UpdateInfo): UpdateMeta {
 }
 
 /**
- * Present a native dialog for tray-only apps.
- *
- * macOS `accessory` activation policy often leaves `dialog.showMessageBox` invisible.
- * Presentation hooks (utility foreground / Dock) are injected by composition.
- * Acquire/restore are always paired even if prepare throws.
+ * Present the aurora utility dialog (injected by composition / WindowGraph).
+ * Keeps infrastructure free of BrowserWindow / Dock policy.
  */
-async function presentUserDialog(options: MessageBoxOptions): Promise<MessageBoxReturnValue> {
-  const d = requireDeps();
-  let prepared = false;
-  try {
-    d.prepareDialogPresentation();
-    prepared = true;
-    app.focus({ steal: true });
-    return await dialog.showMessageBox({
-      ...options,
-      // Prefer ordinary buttons over Windows command-link promotion.
-      noLink: true,
-    });
-  } finally {
-    if (prepared) {
-      d.restoreTrayPresentation();
-    }
-  }
+async function presentUserDialog(
+  options: UtilityDialogOptions,
+): Promise<UtilityDialogResult> {
+  return requireDeps().showUserDialog(options);
 }
 
 /**
@@ -260,9 +249,9 @@ function finishUserInitiatedFailure(): void {
 /** User-facing dialog when this build is already the latest. */
 function showUpToDateDialog(version: string): void {
   void presentUserDialog({
-    type: "info",
     buttons: ["OK"],
     defaultId: 0,
+    cancelId: 0,
     title: "Amphetamine",
     message: "You’re Up to Date",
     detail: `Amphetamine ${version} is the latest version available.`,
@@ -293,7 +282,6 @@ function showCheckFailedDialog(
   // Esc / cancel must dismiss (OK), not open the browser.
   const actions = twoButtonAlert("OK", "Open Releases…", { cancelOnPrimary: true });
   void presentUserDialog({
-    type: "warning",
     buttons: actions.buttons,
     defaultId: actions.defaultId,
     cancelId: actions.cancelId,
@@ -314,9 +302,9 @@ function showCheckFailedDialog(
 /** User-facing dialog when update checks are unavailable (unpackaged / dev). */
 function showUpdatesUnavailableDialog(): void {
   void presentUserDialog({
-    type: "info",
     buttons: ["OK"],
     defaultId: 0,
+    cancelId: 0,
     title: "Amphetamine",
     message: "Updates Unavailable",
     detail:
@@ -441,7 +429,6 @@ function onUpdateDownloaded(info: UpdateInfo): void {
 
   const actions = twoButtonAlert("Restart", "Later");
   void presentUserDialog({
-    type: "info",
     buttons: actions.buttons,
     defaultId: actions.defaultId,
     cancelId: actions.cancelId,
