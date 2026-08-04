@@ -176,7 +176,14 @@ function buildSettingsForm(): string {
       <span class="settings-title">${WINDOW_TITLE}</span>
     </div>
     <div class="settings-hero">
-      <img class="settings-hero-icon" src="${heroIcon}" alt="" />
+      <div class="icon-aurora-stage settings-hero-icon-stage">
+        <div class="icon-aurora" aria-hidden="true">
+          <span class="aurora-blob aurora-blob-a"></span>
+          <span class="aurora-blob aurora-blob-b"></span>
+          <span class="aurora-blob aurora-blob-c"></span>
+        </div>
+        <img class="settings-hero-icon" src="${heroIcon}" alt="" />
+      </div>
       <div class="settings-hero-text">
         <div class="settings-hero-name">${HERO_NAME}</div>
         <div class="settings-hero-desc">${HERO_DESCRIPTION}</div>
