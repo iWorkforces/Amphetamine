@@ -14,7 +14,8 @@ Electron renderer web context. Vanilla TypeScript only. Four built entries (Rsbu
 | `css.d.ts` | CSS module declarations |
 | `styles/main.css` | Popover styling, dark mode, reduced motion |
 | `styles/utility-tokens.css` | Shared Settings/About/utility-dialog surface tokens (e.g. `--utility-window-bg`) |
-| `styles/icon-aurora.css` | Shared coffee-brown aurora wash (ring, halo, blobs, sparks) behind app icons |
+| `styles/icon-aurora.css` | Shared coffee-brown aurora (GogMeet-style: core/blobs, dual rings, sheen, flare) behind app icons |
+| `icon-aurora-pause.ts` | Shared warm-cache pause wiring for fancy aurora stages (visibility/focus/blur/pageshow) |
 | `settings/` | Settings-window renderer; see `settings/AGENTS.md` |
 | `about/` | About-window renderer (package metadata + close) |
 | `utility-dialog/` | Aurora alert dialog (Check for Updates + other main-owned alerts) |
@@ -48,30 +49,35 @@ Electron renderer web context. Vanilla TypeScript only. Four built entries (Rsbu
 
 - Built entry `about.html` (Rsbuild env `about`); loaded by WindowGraph with shared preload.
 - Classic macOS About panel: icon, name, version, description, copyright (`AboutInfo.author`), **OK** button (default focus on first open).
-- Shared fixed dark surface (`--utility-window-bg` from `styles/utility-tokens.css`) + open scale/opacity; press feedback on icon and button.
-- Bootstrap calls `window.api.app.getAbout()` for product name, version, description, repository, author.
+- Shared fixed dark surface (`--utility-window-bg` from `styles/utility-tokens.css`) + **opacity-only** open (scale lives on aurora bloom only); press feedback on icon/button under `prefers-reduced-motion: no-preference`.
+- Bootstrap: `bindIconAuroraStagePause(root)` **before** any `await`, then `startOpenAnimation`, then `window.api.app.getAbout()`.
 - Icon click / Enter / Space uses `window.open(repository)` — main allowlists the package repository URL (and paths under it on `github.com`) via `setWindowOpenHandler` + `shell.openExternal`.
 - OK / Escape uses `window.close()` → main **hide-on-close** warm cache (same as Settings); quit force-destroys.
 - Safe visibility: shell materializes even if `getAbout` fails (fallback copy).
-- Hero icon: bundled `settings-hero-icon.png` via `import.meta.url` (not a main-process data URI).
-- Icon sits in `.icon-aurora-stage` with shared coffee-brown aurora (`styles/icon-aurora.css`); decorative ring/halo/blobs/sparks are `aria-hidden`.
+- Hero icon: bundled `settings-hero-icon.png` via `import.meta.url` (not a main-process data URI); size via stage `--icon-size` (80px).
+- Icon sits in `.icon-aurora-stage` with fancy coffee-brown aurora; decorative core/blobs/rings/sheen/flare are `aria-hidden` (GogMeet app-icon-aurora model).
+- Bloom runs on `.icon-aurora` only (never the stage that wraps the app icon). Ambient leaf motion starts after `--aurora-ambient-delay` (~480ms).
 - No separate `constants.ts`; copy comes from `AboutInfo` + static HTML structure.
 
 ## Utility dialog (updater alerts)
 
 - Built entry `utility-dialog.html` (Rsbuild env `utility-dialog`); dedicated preload `lib/preload/utility-dialog.cjs` exposing `window.utilityDialogApi` only (not `window.api`).
 - Presented by WindowGraph `presentUtilityDialog` for hybrid updater dialogs (up-to-date, check failed, install ready, unpackaged). **Hide-on-close warm cache** (re-apply payload via `onApply`); single-flight in main; quit force-destroys.
-- Opaque dark surface (`--utility-window-bg`) + single-layer coffee-brown aurora; system Close chrome. Content height shrink-wraps via `setHeight` after layout (opacity-only open animation).
+- Opaque dark surface (`--utility-window-bg`) + fancy multi-layer coffee-brown aurora; system Close chrome. Stage `--icon-size: 72px`.
+- **Open order:** hold `#app.pre-animate` → measure → `setHeight` → **then** opacity fade-in. Never race bloom/filters with window resize (first-open edge fringe).
+- `#app` uses `overflow: hidden` (clips corona to the dialog surface). No focus outline on `#app` when info-only surfaces call `root.focus()`.
 - **Info-only** (single button, e.g. OK): hide the action row; dismiss via system Close / Esc / Enter → `cancelId`. Multi-button: secondary left / primary right; Esc → `cancelId`; Enter → `defaultId` when no button focused.
 - Private IPC (not in public `IPC_CHANNELS` budget): `get-payload` / `respond` / `set-height` / push `apply`.
 - Always assign message/detail/button labels with `textContent` (never `innerHTML`).
+- Wire `bindIconAuroraStagePause(root)` at bootstrap start (before async payload).
 
 ## Utility window surface
 
 - Settings, About, and utility-dialog `@import` `styles/utility-tokens.css` and paint `#app` with `var(--utility-window-bg)`.
 - Keep the hex only in `utility-tokens.css` so utility surfaces stay aligned.
-- All three also `@import` `styles/icon-aurora.css` (single blurred gradient layer; Settings uses `icon-aurora--static`). Stage size (80px About / 72px utility-dialog / 48px Settings) is local. Pause with `.is-paused` when `document.hidden`.
-- Respect `prefers-reduced-motion` / `prefers-reduced-transparency` / `prefers-contrast` on the shared aurora (and local chrome).
+- All three also `@import` `styles/icon-aurora.css`. About + utility-dialog use fancy animated aurora (core + 3 blobs, dual rings, sheen, flare — sized via CSS `--icon-size` on the stage class; hero/dialog imgs use `var(--icon-size)`). Settings uses `icon-aurora--static` (no pause wiring). Stage size: 80 / 72 / 48.
+- Fancy surfaces wire `bindIconAuroraStagePause()` → `.is-paused` from `document.hidden` / `visibilityState`, re-sync on `focus` / `blur` / `pageshow` + short timeouts (Electron `show:false` race). Pause freezes **leaf** loops only; demotes `will-change`.
+- Respect `prefers-reduced-motion` (single static wash; hide fancy leaves) / `prefers-reduced-transparency` / `prefers-contrast` (opacity keyframes killed so preference opacities stick).
 
 ## Countdown
 
@@ -98,6 +104,9 @@ Electron renderer web context. Vanilla TypeScript only. Four built entries (Rsbu
 - Never duplicate settings-window rules; see `settings/AGENTS.md`.
 - Never import shared preload `window.api` into the utility-dialog entry (dedicated preload only).
 - Never re-hardcode `#0D1117` outside `styles/utility-tokens.css`.
+- Never put aurora bloom on `.icon-aurora-stage` (would hide the app icon under `.is-paused` + fill-mode).
+- Never start utility-dialog open fade before `setHeight` settles on first present.
+- Never inline `style="--icon-size: …"` in HTML (stage classes own the token in CSS).
 
 ## Commands
 

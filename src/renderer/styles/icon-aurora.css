@@ -1,104 +1,545 @@
 /**
  * Soft aurora wash behind app icons (coffee-brown palette from generate-app-icon.mjs).
  *
- * Performance: a **single** blurred layer with static multi-stop gradients.
- * Only the outer layer may breathe (opacity/scale). Do not animate descendants
- * under `filter: blur()` — that forces per-frame re-filter of the subtree.
+ * Motion model from GogMeet `app-icon-aurora` (iWorkforces/GogMeet):
+ * multi-blob soft glow, dual counter-rotating rings, sheen, drifting flare.
+ * About + utility-dialog use the fancy tier. Settings is static.
  *
- * Markup (full / lite):
- *   <div class="icon-aurora-stage …">
- *     <div class="icon-aurora" aria-hidden="true"></div>
+ * Performance / safety:
+ * - Filter on each leaf only; transform/opacity animate (never parent-blur of kids).
+ * - Bloom runs on `.icon-aurora` (not the stage that wraps the app icon).
+ * - Pause only infinite leaf tracks (not one-shot bloom) via `.is-paused`.
+ * - `will-change` demoted while paused; drop under reduced-motion.
+ * - Pause while hidden: wireIconAuroraPause() → stage.classList "is-paused"
+ *
+ * Markup (fancy — About + utility-dialog):
+ *   <div class="icon-aurora-stage …">  <!-- --icon-size set in local CSS -->
+ *     <div class="icon-aurora" aria-hidden="true">
+ *       <span class="aurora-blob aurora-blob--core"></span>
+ *       <span class="aurora-blob aurora-blob--a"></span>
+ *       <span class="aurora-blob aurora-blob--b"></span>
+ *       <span class="aurora-blob aurora-blob--c"></span>
+ *       <span class="aurora-ring"></span>
+ *       <span class="aurora-ring aurora-ring--counter"></span>
+ *       <span class="aurora-sheen"></span>
+ *       <span class="aurora-flare"></span>
+ *     </div>
  *     <img class="…" />
  *   </div>
  *
- * Settings compact (static, no animation):
+ * Settings (static):
  *   <div class="icon-aurora-stage …">
  *     <div class="icon-aurora icon-aurora--static" aria-hidden="true"></div>
  *     <img class="…" />
  *   </div>
- *
- * Pause while hidden (warm cache):
- *   stage.classList.toggle("is-paused", document.hidden)
  */
 
 .icon-aurora-stage {
+  --icon-size: 80px;
+  /* Shared motion tokens (stage + leaves) */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-aurora: cubic-bezier(0.37, 0, 0.63, 1); /* easeInOutSine */
+  /* Ambient starts after bloom so open is not crowded */
+  --aurora-ambient-delay: 0.48s;
   position: relative;
   display: grid;
   place-items: center;
+  width: var(--icon-size);
+  height: var(--icon-size);
   overflow: visible;
   flex-shrink: 0;
+  isolation: isolate;
 }
 
 .icon-aurora {
   position: absolute;
-  inset: -56%;
+  /* Room for outer rings / flare travel (~1.7× icon sheen) */
+  inset: calc(var(--icon-size) * -0.45);
   z-index: 0;
   pointer-events: none;
-  border-radius: 50%;
-  /* Coffee-icon palette: #4A2C2A, #2C1810 + warm cream / ember */
+  transform-origin: center center;
+  /* Coffee-icon palette */
   --aurora-warm: #4a2c2a;
   --aurora-deep: #2c1810;
   --aurora-cream: #e8e0d8;
   --aurora-ember: #a86b4a;
   --aurora-glow: #c4895e;
-  /* One precomposed wash — no child DOM, no nested filters */
+  --aurora-mist: #f5f0eb;
+}
+
+/* Compact Settings: single precomposed wash (no infinite animation). */
+.icon-aurora.icon-aurora--static {
+  inset: -52%;
+  border-radius: 50%;
   background:
     radial-gradient(
-      ellipse 70% 65% at 38% 38%,
-      color-mix(in srgb, var(--aurora-warm) 88%, transparent) 0%,
-      color-mix(in srgb, var(--aurora-ember) 42%, transparent) 42%,
+      ellipse 72% 68% at 36% 36%,
+      color-mix(in srgb, var(--aurora-ember) 70%, transparent) 0%,
+      color-mix(in srgb, var(--aurora-warm) 52%, transparent) 38%,
       transparent 72%
     ),
     radial-gradient(
-      ellipse 68% 72% at 62% 58%,
-      color-mix(in srgb, var(--aurora-deep) 90%, transparent) 0%,
-      color-mix(in srgb, var(--aurora-ember) 38%, transparent) 48%,
+      ellipse 70% 74% at 64% 60%,
+      color-mix(in srgb, var(--aurora-glow) 48%, transparent) 0%,
+      color-mix(in srgb, var(--aurora-deep) 70%, transparent) 46%,
       transparent 74%
     ),
     radial-gradient(
       circle at 50% 48%,
-      color-mix(in srgb, var(--aurora-cream) 38%, transparent) 0%,
-      color-mix(in srgb, var(--aurora-glow) 28%, transparent) 36%,
+      color-mix(in srgb, var(--aurora-cream) 42%, transparent) 0%,
+      color-mix(in srgb, var(--aurora-glow) 36%, transparent) 34%,
       transparent 68%
     );
-  filter: blur(18px) saturate(1.22) brightness(1.03);
-  opacity: var(--aurora-opacity, 0.92);
+  filter: blur(12px) saturate(1.2) brightness(1.05);
+  opacity: 0.88;
+}
+
+/* ---- Fancy leaves (About + utility-dialog) ---- */
+
+.aurora-blob,
+.aurora-ring,
+.aurora-sheen,
+.aurora-flare {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
   transform-origin: center center;
 }
 
-/* Compact Settings stage: static field, lighter blur (no infinite animation). */
-.icon-aurora.icon-aurora--static {
-  filter: blur(12px) saturate(1.15);
-  opacity: var(--aurora-opacity, 0.88);
+.aurora-blob {
+  mix-blend-mode: screen;
+  animation-timing-function: var(--ease-aurora);
+  animation-iteration-count: infinite;
+  animation-direction: alternate;
+  animation-fill-mode: both;
+  transform: translate3d(0, 0, 0) scale(1);
 }
 
+/* Soft core under the icon */
+.aurora-blob--core {
+  width: calc(var(--icon-size) * 1.35);
+  height: calc(var(--icon-size) * 1.35);
+  top: 50%;
+  left: 50%;
+  margin-top: calc(var(--icon-size) * -0.675);
+  margin-left: calc(var(--icon-size) * -0.675);
+  background: radial-gradient(
+    circle at 50% 45%,
+    color-mix(in srgb, var(--aurora-mist) 75%, var(--aurora-glow)) 0%,
+    color-mix(in srgb, var(--aurora-glow) 70%, transparent) 42%,
+    color-mix(in srgb, var(--aurora-ember) 35%, transparent) 68%,
+    transparent 78%
+  );
+  filter: blur(calc(var(--icon-size) * 0.14));
+  opacity: 1;
+}
+
+.aurora-blob--a {
+  width: calc(var(--icon-size) * 1.55);
+  height: calc(var(--icon-size) * 1.2);
+  top: 50%;
+  left: 50%;
+  margin-top: calc(var(--icon-size) * -0.6);
+  margin-left: calc(var(--icon-size) * -0.78);
+  background: radial-gradient(
+    ellipse at 40% 50%,
+    color-mix(in srgb, var(--aurora-ember) 90%, transparent) 0%,
+    color-mix(in srgb, var(--aurora-glow) 50%, transparent) 45%,
+    transparent 72%
+  );
+  filter: blur(calc(var(--icon-size) * 0.2));
+  opacity: 0.9;
+}
+
+.aurora-blob--b {
+  width: calc(var(--icon-size) * 1.25);
+  height: calc(var(--icon-size) * 1.45);
+  top: 50%;
+  left: 50%;
+  margin-top: calc(var(--icon-size) * -0.72);
+  margin-left: calc(var(--icon-size) * -0.55);
+  background: radial-gradient(
+    ellipse at 55% 40%,
+    color-mix(in srgb, var(--aurora-glow) 80%, transparent) 0%,
+    color-mix(in srgb, var(--aurora-warm) 40%, transparent) 50%,
+    transparent 74%
+  );
+  filter: blur(calc(var(--icon-size) * 0.22));
+  opacity: 0.75;
+}
+
+.aurora-blob--c {
+  width: calc(var(--icon-size) * 1.1);
+  height: calc(var(--icon-size) * 1.1);
+  top: 50%;
+  left: 50%;
+  margin-top: calc(var(--icon-size) * -0.55);
+  margin-left: calc(var(--icon-size) * -0.55);
+  background: radial-gradient(
+    circle at 50% 50%,
+    color-mix(in srgb, var(--aurora-cream) 70%, white) 0%,
+    color-mix(in srgb, var(--aurora-glow) 45%, transparent) 48%,
+    transparent 70%
+  );
+  filter: blur(calc(var(--icon-size) * 0.16));
+  opacity: 0.7;
+}
+
+/* Primary orbit ring */
+.aurora-ring {
+  width: calc(var(--icon-size) * 1.35);
+  height: calc(var(--icon-size) * 1.35);
+  top: 50%;
+  left: 50%;
+  margin-top: calc(var(--icon-size) * -0.675);
+  margin-left: calc(var(--icon-size) * -0.675);
+  background: conic-gradient(
+    from 180deg,
+    transparent 0deg,
+    color-mix(in srgb, var(--aurora-ember) 55%, transparent) 55deg,
+    color-mix(in srgb, var(--aurora-glow) 65%, transparent) 120deg,
+    color-mix(in srgb, var(--aurora-cream) 40%, transparent) 190deg,
+    color-mix(in srgb, var(--aurora-ember) 58%, transparent) 270deg,
+    transparent 360deg
+  );
+  filter: blur(calc(var(--icon-size) * 0.08));
+  opacity: 0.85;
+  mix-blend-mode: screen;
+}
+
+/* Counter-rotating outer ring */
+.aurora-ring--counter {
+  width: calc(var(--icon-size) * 1.55);
+  height: calc(var(--icon-size) * 1.55);
+  margin-top: calc(var(--icon-size) * -0.775);
+  margin-left: calc(var(--icon-size) * -0.775);
+  background: conic-gradient(
+    from 40deg,
+    transparent 0deg,
+    color-mix(in srgb, var(--aurora-glow) 40%, transparent) 50deg,
+    transparent 110deg,
+    color-mix(in srgb, var(--aurora-ember) 45%, transparent) 180deg,
+    transparent 240deg,
+    color-mix(in srgb, var(--aurora-cream) 28%, transparent) 300deg,
+    transparent 360deg
+  );
+  filter: blur(calc(var(--icon-size) * 0.1));
+  opacity: 0.6;
+}
+
+/* Specular sheen sweep */
+.aurora-sheen {
+  width: calc(var(--icon-size) * 1.7);
+  height: calc(var(--icon-size) * 1.7);
+  top: 50%;
+  left: 50%;
+  margin-top: calc(var(--icon-size) * -0.85);
+  margin-left: calc(var(--icon-size) * -0.85);
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg,
+    transparent 40deg,
+    color-mix(in srgb, white 40%, var(--aurora-glow) 20%) 75deg,
+    color-mix(in srgb, var(--aurora-mist) 35%, transparent) 100deg,
+    transparent 130deg,
+    transparent 360deg
+  );
+  filter: blur(calc(var(--icon-size) * 0.06));
+  opacity: 0.75;
+  mix-blend-mode: screen;
+}
+
+/* Hot flare that drifts around the icon */
+.aurora-flare {
+  width: calc(var(--icon-size) * 0.55);
+  height: calc(var(--icon-size) * 0.55);
+  top: 50%;
+  left: 50%;
+  margin-top: calc(var(--icon-size) * -0.275);
+  margin-left: calc(var(--icon-size) * -0.275);
+  background: radial-gradient(
+    circle at 50% 50%,
+    color-mix(in srgb, white 85%, var(--aurora-glow)) 0%,
+    color-mix(in srgb, var(--aurora-mist) 55%, transparent) 38%,
+    transparent 70%
+  );
+  filter: blur(calc(var(--icon-size) * 0.08));
+  opacity: 0.8;
+  mix-blend-mode: screen;
+}
+
+/* Hide fancy leaves when static (Settings has no leaf markup). */
+.icon-aurora--static .aurora-blob,
+.icon-aurora--static .aurora-ring,
+.icon-aurora--static .aurora-sheen,
+.icon-aurora--static .aurora-flare {
+  display: none;
+}
+
+/*
+ * Motion: bloom on wash only (never the stage/icon), then ambient after delay.
+ * will-change only while ambient is expected to run (no-preference + not paused).
+ */
 @media (prefers-reduced-motion: no-preference) {
   .icon-aurora:not(.icon-aurora--static) {
-    animation: icon-aurora-breathe 9s ease-in-out infinite alternate;
+    animation: icon-aurora-bloom-in 0.48s var(--ease-out) both;
+  }
+
+  .icon-aurora-stage:not(.is-paused) .aurora-blob,
+  .icon-aurora-stage:not(.is-paused) .aurora-ring,
+  .icon-aurora-stage:not(.is-paused) .aurora-sheen,
+  .icon-aurora-stage:not(.is-paused) .aurora-flare {
+    will-change: transform, opacity;
+  }
+
+  .aurora-blob--core {
+    animation-name: icon-aurora-breathe-fancy;
+    animation-duration: 2.8s;
+    animation-delay: var(--aurora-ambient-delay);
+  }
+
+  .aurora-blob--a {
+    animation-name: icon-aurora-drift-a-fancy;
+    animation-duration: 3.6s;
+    animation-delay: var(--aurora-ambient-delay);
+  }
+
+  .aurora-blob--b {
+    animation-name: icon-aurora-drift-b-fancy;
+    animation-duration: 4.2s;
+    animation-delay: var(--aurora-ambient-delay);
+  }
+
+  .aurora-blob--c {
+    animation-name: icon-aurora-drift-c-fancy;
+    animation-duration: 3.2s;
+    animation-delay: var(--aurora-ambient-delay);
+  }
+
+  .aurora-ring {
+    animation: icon-aurora-spin 6s linear infinite;
+    animation-delay: var(--aurora-ambient-delay);
+  }
+
+  .aurora-ring--counter {
+    animation: icon-aurora-spin 9s linear infinite reverse;
+    animation-delay: var(--aurora-ambient-delay);
+  }
+
+  .aurora-sheen {
+    animation:
+      icon-aurora-spin 5.5s linear infinite var(--aurora-ambient-delay),
+      icon-aurora-sheen-pulse 2.4s var(--ease-aurora) infinite alternate var(--aurora-ambient-delay);
+  }
+
+  .aurora-flare {
+    animation:
+      icon-aurora-flare-path 4s var(--ease-aurora) infinite alternate var(--aurora-ambient-delay),
+      icon-aurora-flare-pulse 1.8s var(--ease-aurora) infinite alternate var(--aurora-ambient-delay);
   }
 }
 
-/* Warm-cache / background tab: stop compositor work while not visible. */
-.icon-aurora-stage.is-paused .icon-aurora {
+/* Warm-cache: freeze leaf loops only (not bloom on .icon-aurora). Demote layers. */
+.icon-aurora-stage.is-paused .aurora-blob,
+.icon-aurora-stage.is-paused .aurora-ring,
+.icon-aurora-stage.is-paused .aurora-sheen,
+.icon-aurora-stage.is-paused .aurora-flare {
   animation-play-state: paused !important;
+  will-change: auto;
 }
 
-@keyframes icon-aurora-breathe {
+/* ---- Keyframes (GogMeet fancy paths; coffee palette) ---- */
+
+@keyframes icon-aurora-breathe-fancy {
+  0% {
+    transform: scale(0.82);
+    opacity: 0.65;
+  }
+
+  100% {
+    transform: scale(1.22);
+    opacity: 1;
+  }
+}
+
+@keyframes icon-aurora-drift-a-fancy {
+  0% {
+    transform: translate3d(-28%, 18%, 0) rotate(-18deg) scale(0.85);
+    opacity: 0.55;
+  }
+
+  50% {
+    transform: translate3d(8%, -24%, 0) rotate(6deg) scale(1.15);
+    opacity: 0.95;
+  }
+
+  100% {
+    transform: translate3d(26%, 10%, 0) rotate(20deg) scale(1.05);
+    opacity: 0.7;
+  }
+}
+
+@keyframes icon-aurora-drift-b-fancy {
+  0% {
+    transform: translate3d(24%, -22%, 0) rotate(16deg) scale(1.12);
+    opacity: 0.5;
+  }
+
+  50% {
+    transform: translate3d(-10%, 6%, 0) rotate(-4deg) scale(0.92);
+    opacity: 0.85;
+  }
+
+  100% {
+    transform: translate3d(-28%, 20%, 0) rotate(-18deg) scale(0.88);
+    opacity: 0.55;
+  }
+}
+
+@keyframes icon-aurora-drift-c-fancy {
+  0% {
+    transform: translate3d(-20%, -26%, 0) scale(0.75);
+    opacity: 0.35;
+  }
+
+  50% {
+    transform: translate3d(18%, -4%, 0) scale(1.2);
+    opacity: 0.85;
+  }
+
+  100% {
+    transform: translate3d(10%, 24%, 0) scale(1.05);
+    opacity: 0.45;
+  }
+}
+
+@keyframes icon-aurora-spin {
   from {
-    opacity: 0.8;
-    transform: scale(0.96);
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Bloom: wash only — never the stage that owns the app icon. */
+@keyframes icon-aurora-bloom-in {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
   }
 
   to {
     opacity: 1;
-    transform: scale(1.05);
+    transform: scale(1);
   }
 }
 
+@keyframes icon-aurora-sheen-pulse {
+  from {
+    opacity: 0.35;
+  }
+
+  to {
+    opacity: 0.9;
+  }
+}
+
+@keyframes icon-aurora-flare-path {
+  0% {
+    transform: translate3d(-55%, -40%, 0) scale(0.75);
+  }
+
+  35% {
+    transform: translate3d(30%, -60%, 0) scale(1.25);
+  }
+
+  70% {
+    transform: translate3d(55%, 25%, 0) scale(0.9);
+  }
+
+  100% {
+    transform: translate3d(-20%, 50%, 0) scale(1.15);
+  }
+}
+
+@keyframes icon-aurora-flare-pulse {
+  from {
+    opacity: 0.35;
+  }
+
+  to {
+    opacity: 0.95;
+  }
+}
+
+/*
+ * Reduced motion: single static wash (Settings-like). Hide fancy leaves so
+ * multi-filter paint cost drops to one layer.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .icon-aurora:not(.icon-aurora--static) {
+    inset: -52%;
+    border-radius: 50%;
+    background:
+      radial-gradient(
+        ellipse 72% 68% at 36% 36%,
+        color-mix(in srgb, var(--aurora-ember) 70%, transparent) 0%,
+        color-mix(in srgb, var(--aurora-warm) 52%, transparent) 38%,
+        transparent 72%
+      ),
+      radial-gradient(
+        ellipse 70% 74% at 64% 60%,
+        color-mix(in srgb, var(--aurora-glow) 48%, transparent) 0%,
+        color-mix(in srgb, var(--aurora-deep) 70%, transparent) 46%,
+        transparent 74%
+      ),
+      radial-gradient(
+        circle at 50% 48%,
+        color-mix(in srgb, var(--aurora-cream) 42%, transparent) 0%,
+        color-mix(in srgb, var(--aurora-glow) 36%, transparent) 34%,
+        transparent 68%
+      );
+    filter: blur(12px) saturate(1.15) brightness(1.03);
+    opacity: 0.88;
+    animation: none !important;
+    transform: none;
+  }
+
+  .icon-aurora:not(.icon-aurora--static) .aurora-blob,
+  .icon-aurora:not(.icon-aurora--static) .aurora-ring,
+  .icon-aurora:not(.icon-aurora--static) .aurora-sheen,
+  .icon-aurora:not(.icon-aurora--static) .aurora-flare {
+    display: none !important;
+    animation: none !important;
+    will-change: auto;
+  }
+}
+
+/*
+ * Transparency / contrast: kill opacity-keyframed tracks so static
+ * preference opacities stick (keyframes would otherwise win).
+ */
 @media (prefers-reduced-transparency: reduce) {
-  .icon-aurora {
-    filter: blur(10px) saturate(1);
-    opacity: 0.55;
+  .aurora-blob,
+  .aurora-ring,
+  .aurora-sheen,
+  .aurora-flare {
+    animation: none !important;
+    will-change: auto;
+    mix-blend-mode: normal;
+    filter: blur(calc(var(--icon-size) * 0.14));
+    opacity: 0.28 !important;
+  }
+
+  .aurora-blob--core {
+    opacity: 0.4 !important;
+  }
+
+  .aurora-sheen,
+  .aurora-flare {
+    opacity: 0 !important;
   }
 
   .icon-aurora.icon-aurora--static {
@@ -108,8 +549,22 @@
 }
 
 @media (prefers-contrast: more) {
-  .icon-aurora {
-    opacity: 0.4;
+  .aurora-blob,
+  .aurora-ring,
+  .aurora-sheen,
+  .aurora-flare {
+    animation: none !important;
+    will-change: auto;
+    opacity: 0.2 !important;
+  }
+
+  .aurora-sheen,
+  .aurora-flare {
+    opacity: 0 !important;
+  }
+
+  .icon-aurora.icon-aurora--static {
     filter: blur(8px);
+    opacity: 0.4;
   }
 }

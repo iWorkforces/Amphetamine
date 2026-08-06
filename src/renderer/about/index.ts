@@ -3,6 +3,7 @@
  * All privileged access goes through window.api (preload).
  */
 import "./styles.css";
+import { bindIconAuroraStagePause } from "../icon-aurora-pause.js";
 
 const heroIcon = new URL("../../assets/settings-hero-icon.png", import.meta.url).toString();
 
@@ -30,7 +31,11 @@ function prefersReducedMotion(): boolean {
   }
 }
 
-/** Opt-in open animation; default paint is always visible (safe if bootstrap fails). */
+/**
+ * Opt-in open animation (opacity only — scale lives on aurora bloom so we
+ * do not double-scale the whole About surface). Default paint is always
+ * visible (safe if bootstrap fails).
+ */
 function startOpenAnimation(root: HTMLElement): void {
   if (prefersReducedMotion()) {
     root.classList.add("ready");
@@ -57,6 +62,8 @@ async function bootstrap(): Promise<void> {
   }
 
   const root = requireEl<HTMLDivElement>("app");
+  // Wire pause before any await so warm-cache hide during getAbout still freezes leaves.
+  bindIconAuroraStagePause(root);
   // Materialize immediately so a failed getAbout() never leaves a blank window.
   startOpenAnimation(root);
 
@@ -108,16 +115,6 @@ async function bootstrap(): Promise<void> {
   });
 
   closeBtn.focus();
-
-  // Pause aurora while the warm-cache window is hidden.
-  const auroraStage = document.querySelector(".icon-aurora-stage");
-  if (auroraStage instanceof HTMLElement) {
-    const syncPause = (): void => {
-      auroraStage.classList.toggle("is-paused", document.visibilityState !== "visible");
-    };
-    document.addEventListener("visibilitychange", syncPause);
-    syncPause();
-  }
 }
 
 void bootstrap().catch((err: unknown) => {

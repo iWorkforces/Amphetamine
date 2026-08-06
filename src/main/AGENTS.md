@@ -104,7 +104,7 @@ Do not register a second `before-quit` handler on settings or other modules.
 - Window chrome: `popoverWindowChrome` / `settingsWindowChrome` / `aboutWindowChrome` / `utilityDialogWindowChrome` (applied inside WindowGraph). Utility dialog chrome is **opaque** (`backgroundColor: #0D1117`, no vibrancy/mica) with system Close (hiddenInset / titleBarOverlay).
 - Settings, About, and utility dialog acquire/release **refcounted** utility foreground (`acquireUtilityForeground` / `releaseUtilityForeground`); Dock icon via `setUtilityDockIcon`.
 - Settings/About/utility-dialog use **hide-on-close warm cache**: first open creates+loads the BrowserWindow; user close hides (renderer stays warm); quit/`close*Window` force-destroys (`win.destroy()`, not hide).
-- Utility dialog is **single-flight** (concurrent `presentUtilityDialog` joins the in-flight promise). Re-present pushes payload via `utility-dialog:apply` (no reload), shrink-wraps height via `set-height`.
+- Utility dialog is **single-flight** (concurrent `presentUtilityDialog` joins the in-flight promise). Re-present pushes payload via `utility-dialog:apply` (no reload). Present path resets content size to default then re-measures; renderer calls `set-height` **before** the open fade (avoids first-open aurora filter fringe at the window edge).
 - `*WantsVisible` intent flag (Settings/About/utility-dialog): late `ready-to-show` after user dismiss must not re-show; reopening sets intent true again.
 - Settings present path clears form focus after show (deferred `webContents.executeJavaScript` blur) so warm-cache reopen does not restore Launch at Login / last control.
 - `isSettingsWindowOpen()` means **visible** (not merely cached-and-hidden).

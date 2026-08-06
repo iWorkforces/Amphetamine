@@ -70,9 +70,20 @@ body {
   /* Room for system traffic lights / caption Close (hiddenInset / titleBarOverlay) */
   padding: 48px 28px 20px;
   background: var(--utility-window-bg);
-  overflow: visible;
+  /*
+   * Clip aurora corona to the dialog surface. `overflow: visible` let first-open
+   * filter/blend composite fringe paint a warm edge at the BrowserWindow bounds
+   * (especially while setHeight resizes the shell). Stage still allows local corona.
+   */
+  overflow: hidden;
   opacity: 1;
   transform: none;
+}
+
+/* Info-only surface receives programmatic focus — never draw a focus ring as a window border. */
+#app.utility-dialog:focus,
+#app.utility-dialog:focus-visible {
+  outline: none;
 }
 
 body.platform-win32 #app.utility-dialog {
@@ -101,16 +112,15 @@ body.platform-win32 #app.utility-dialog {
 }
 
 .icon-aurora-stage.dialog-icon-stage {
-  width: 72px;
-  height: 72px;
+  --icon-size: 72px;
   margin-bottom: 14px;
 }
 
 .dialog-icon {
   position: relative;
   z-index: 1;
-  width: 72px;
-  height: 72px;
+  width: var(--icon-size);
+  height: var(--icon-size);
   border-radius: var(--radius-icon);
   box-shadow:
     0 2px 6px rgba(0, 0, 0, 0.08),

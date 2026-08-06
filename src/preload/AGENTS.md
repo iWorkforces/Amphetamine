@@ -42,7 +42,7 @@ Always return unsubscribe. Payload types from `IpcChannelMap` / push responses.
 |--------|---------|-------|
 | `getPayload()` | `utility-dialog:get-payload` | Invoke; main validates webContents id |
 | `respond(index)` | `utility-dialog:respond` | Invoke; settles dialog promise (main hides warm shell) |
-| `setHeight(px)` | `utility-dialog:set-height` | Invoke; main clamps height then `setContentSize` |
+| `setHeight(px)` | `utility-dialog:set-height` | Invoke; main clamps height then `setContentSize` (renderer awaits before open fade) |
 | `onApply(cb)` | `utility-dialog:apply` | Push listener; warm-cache re-present without reload |
 | `os` | (sync) | `process.platform` for optional body class |
 

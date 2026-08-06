@@ -59,7 +59,7 @@ Shortcut defaults, reserved keys, and accelerator validation live in domain vali
 |---------|-------|---------|
 | Popover | vibrancy popover, transparent, `skipTaskbar: true` | opaque frameless, `skipTaskbar: true` |
 | Settings / About | vibrancy under-window, `hiddenInset`, Dock via utility-presentation | mica + `titleBarOverlay` caption buttons, taskbar visible (`skipTaskbar: false`) |
-| Utility dialog | **opaque** `backgroundColor: #0D1117`, `hiddenInset` (system Close), no vibrancy | opaque `#0D1117` + matching `titleBarOverlay`, no mica |
+| Utility dialog | **opaque** `backgroundColor: #0D1117`, `hiddenInset` (system Close), no vibrancy (solid fill avoids shrink-wrap edge bleed) | opaque `#0D1117` + matching `titleBarOverlay`, no mica |
 
 Renderer CSS owns the fixed dark `#app` fill (`--utility-window-bg` in `src/renderer/styles/utility-tokens.css`). Utility-dialog chrome **also** sets native `backgroundColor` to the same hex so shrink-wrapped content does not leave transparent/vibrancy edges.
 

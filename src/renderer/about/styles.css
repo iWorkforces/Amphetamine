@@ -120,33 +120,29 @@ body.platform-win32 #app.about {
   transform: none;
 }
 
+/* Opacity-only open — scale lives on aurora bloom (single scale owner). */
 @media (prefers-reduced-motion: no-preference) {
   #app.about.pre-animate {
     opacity: 0;
-    transform: scale(0.98);
   }
 
   #app.about.ready {
     opacity: 1;
-    transform: scale(1);
-    transition:
-      opacity 280ms cubic-bezier(0.22, 1, 0.36, 1),
-      transform 320ms cubic-bezier(0.22, 1, 0.36, 1);
+    transition: opacity 280ms cubic-bezier(0.23, 1, 0.32, 1);
   }
 }
 
-/* About icon stage: 80px hero + shared aurora (icon-aurora.css). */
+/* About icon stage: 80px hero + GogMeet-style fancy aurora (icon-aurora.css). */
 .icon-aurora-stage.app-icon-stage {
-  width: 80px;
-  height: 80px;
+  --icon-size: 80px;
   margin-bottom: 18px;
 }
 
 .app-icon {
   position: relative;
   z-index: 1;
-  width: 80px;
-  height: 80px;
+  width: var(--icon-size);
+  height: var(--icon-size);
   border-radius: var(--radius-icon);
   box-shadow:
     0 2px 6px rgba(0, 0, 0, 0.08),
@@ -161,12 +157,12 @@ body.platform-win32 #app.about {
 
 @media (prefers-reduced-motion: no-preference) {
   .app-icon {
-    transition: transform 140ms cubic-bezier(0.22, 1, 0.36, 1);
+    transition: transform 140ms cubic-bezier(0.23, 1, 0.32, 1);
   }
-}
 
-.app-icon:active {
-  transform: scale(0.96);
+  .app-icon:active {
+    transform: scale(0.96);
+  }
 }
 
 .app-icon:focus-visible {
