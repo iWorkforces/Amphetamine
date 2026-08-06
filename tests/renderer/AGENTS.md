@@ -8,20 +8,23 @@ Renderer Vitest suites run in jsdom and assert DOM behavior for vanilla TypeScri
 |------|------|
 | `index.test.ts` | Popover render, status/timer, controls, pushes, effective-active OR matrix, session-action identity, hide dedupe, benchmark API mock |
 | `settings.test.ts` | Settings form, sections, debounced save, rejectedKeys, sleep mode, shortcut-failure subscription |
-| `about.test.ts` | About metadata fill, copyright/author, OK/Escape close, icon open (aurora stage DOM: ring/halo/blobs/sparks), getAbout failure visibility |
+| `about.test.ts` | About metadata fill, copyright/author, OK/Escape close, icon open, fancy aurora leaf fixture + warm-cache `.is-paused` toggle, getAbout failure visibility |
+| `utility-dialog.test.ts` | Payload apply, fancy aurora leaf fixture, warm-cache `.is-paused` toggle |
 | `delegation.test.ts` | Event delegation on `#app` |
 
-Settings warm-cache focus clear and main hide-on-close are covered primarily in `tests/main/window-graph.test.ts` (main process). Utility-dialog renderer behavior is currently exercised via main hybrid-updater mocks (`showUserDialog`); add dedicated `utility-dialog` renderer tests when expanding that surface.
+Settings warm-cache focus clear and main hide-on-close are covered primarily in `tests/main/window-graph.test.ts` (main process). Utility-dialog presentation (WindowGraph / hybrid-updater) stays covered in main tests; renderer pause/payload smoke lives in `utility-dialog.test.ts`.
 
 ## Setup
 
 - Build DOM explicitly (`#app`).
-- Install `window.api` mock before importing renderer modules.
+- Install `window.api` mock before importing renderer modules (popover / settings / about).
+- Utility-dialog: install `window.utilityDialogApi` (`getPayload`, `respond`, `setHeight`, `onApply`, `os`) — not `window.api`.
 - Include `window.api.benchmark.isEnabled()` when importing popover code.
 - Include `window.api.platform.os` when testing settings shortcut labels.
-- Import entry after mocks, then dispatch `DOMContentLoaded`.
-- Fake timers for countdown, debounced saves, RAF, delayed indicators.
+- Import entry after mocks, then dispatch `DOMContentLoaded` when the entry listens for it.
+- Fake timers for countdown, debounced saves, RAF, delayed indicators, aurora pause resync timeouts.
 - Settings fixtures: spread `DEFAULT_SETTINGS`.
+- For utility-dialog height settle tests, stub `HTMLElement.prototype.scrollHeight` (jsdom often reports 0).
 
 ## Assertions
 
@@ -33,6 +36,8 @@ Settings warm-cache focus clear and main hide-on-close are covered primarily in 
 - Effective active: status stays on when session running even if `preventSleep` is false (domain OR rule).
 - Settings: duration select starts session + saves preference; sleep mode saves `sleepBlockMode`.
 - Settings save path handles `{ settings, rejectedKeys }` responses.
+- About / utility-dialog: visibilitychange → stage `.is-paused` toggles; fancy leaf counts (4 blobs, 2 rings, sheen, flare); `aria-hidden` on `.icon-aurora`.
+- Utility-dialog: payload text applied; `setHeight` called after measure when scrollHeight is stubbed; `#app.ready` after height settles.
 
 ## Mocking
 
@@ -40,6 +45,7 @@ Settings warm-cache focus clear and main hide-on-close are covered primarily in 
 - Settings tests mock `settings.get` / `set` (`{ settings, rejectedKeys }`), `onSettingsChanged`, `onShortcutRegistrationFailed`.
 - Popover tests mock session status/pushes, `window.setHeight`, `app.getVersion`, settings/session/app methods as needed.
 - About: mock `app.getAbout()` returning `AboutInfo` (author/copyright, repository open).
+- Utility-dialog: mock `utilityDialogApi` (not public `api`); `matchMedia` exact-query for reduced-motion when needed.
 - Do not mock `electron-log` for renderer (modules must not import it).
 
 ## Anti-Patterns

@@ -6,7 +6,7 @@ Checked-in PNG assets consumed by Electron main/renderer. Most files are generat
 
 | File | Source | Consumer |
 |------|--------|----------|
-| `settings-hero-icon.png` | `scripts/generate-app-icon.mjs` | Settings UI hero; About + utility-dialog renderer icons (`import.meta.url`); window taskbar icons; coffee-brown aurora palette source |
+| `settings-hero-icon.png` | `scripts/generate-app-icon.mjs` | Settings UI hero; About + utility-dialog renderer icons (`import.meta.url`); window taskbar icons; coffee-brown fancy aurora palette source (`--aurora-*` in `icon-aurora.css`) |
 | `tray-icon-dark.png` / `tray-icon-dark@2x.png` | `scripts/generate-coffee-tray-icons.mjs` | Active tray icon on dark menu bar |
 | `tray-icon-light.png` / `tray-icon-light@2x.png` | `scripts/generate-coffee-tray-icons.mjs` | Active tray icon on light menu bar |
 | `tray-icon-inactive-dark.png` / `tray-icon-inactive-dark@2x.png` | `scripts/generate-coffee-tray-icons.mjs` | Inactive tray icon on dark menu bar |

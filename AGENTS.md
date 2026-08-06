@@ -8,7 +8,7 @@ Tray-only Electron app for **macOS and Windows**. Prevents system sleep through 
 |------|------|
 | Runtime | Bun 1.3.14+ / Node `>=26 <27` |
 | TypeScript | Dual: native **7.x** (`@typescript/native` owns workspace `tsc`) for typecheck; **6.x** (`typescript@6`) for the JS API / ESLint until 7.1 programmatic API lands |
-| Electron | `^43.2.0` (package pin; do not downgrade below patched 43.x) |
+| Electron | `^43.3.0` (package pin; do not downgrade below patched 43.x) |
 | Build | Rslib main/preload to CJS + Rsbuild renderer (popover + settings + about + utility-dialog) |
 | Test | Vitest 4 workspace: domain + application + main (Node) + renderer (jsdom) |
 | Lint | ESLint 10 flat; sticky type-safety rules as errors for `src/` |
@@ -32,6 +32,7 @@ src/main/                 Composition root, IPC, tray, windows, process façades
 src/preload/              sandboxed contextBridge API (public `api` + utility-dialog preload)
 src/renderer/             popover + settings + about + utility-dialog (built HTML entries)
   styles/                 popover main.css + utility-tokens.css + icon-aurora.css (utility surfaces)
+  icon-aurora-pause.ts    Shared warm-cache pause for fancy aurora stages
 src/shared/               IPC transport contracts; utility-dialog private channels; domain re-exports
 src/assets/               checked-in generated PNGs consumed at runtime
 scripts/                  Bun tooling, icons, dev, benchmarks, sticky/layer guards
@@ -65,8 +66,8 @@ Dependency rule: **domain** and **application** must not import `electron` / `el
 | Settings UI | `src/renderer/settings/AGENTS.md` | System Settings groups; debounced saves; shortcut recorder; warm-cache focus clear |
 | About window | `src/renderer/about/`, WindowGraph `showAbout` | Built `about.html`; `app:get-about` (+ `author`); coffee-brown icon aurora; github allowlist; hide-on-close cache |
 | Utility surface color | `src/renderer/styles/utility-tokens.css` | Shared `--utility-window-bg` (`#0D1117`) for Settings + About + utility-dialog `#app` fills |
-| Icon aurora | `src/renderer/styles/icon-aurora.css` | Single-layer coffee-brown wash (static on Settings; breathe on About/dialog); pause when hidden |
-| Utility dialog | `src/renderer/utility-dialog/`, WindowGraph `presentUtilityDialog` | Aurora alert for Check for Updates; dedicated preload; single-flight; **hide-on-close warm cache** |
+| Icon aurora | `src/renderer/styles/icon-aurora.css` + `icon-aurora-pause.ts` | GogMeet-style fancy aurora (core/blobs, dual rings, sheen, flare) on About/dialog; static wash on Settings; pause leaf loops when warm-cached hidden |
+| Utility dialog | `src/renderer/utility-dialog/`, WindowGraph `presentUtilityDialog` | Aurora alert for Check for Updates; dedicated preload; single-flight; **hide-on-close warm cache**; height settle before fade-in |
 | Hybrid auto-updater | `src/infrastructure/updater/` (+ main IPC façade) | `showUserDialog` inject; `setFeedURL` from package repo; single-flight checks; needs `latest-mac.yml` / `latest.yml` on release |
 | Utility Dock / dialogs | `src/main/platform/utility-presentation.ts` | Refcounted macOS foreground for Settings, About, and utility dialogs |
 | Benchmark mode | `src/infrastructure/benchmark/`, `src/renderer/benchmark-countdown.ts`, `scripts/benchmark-performance.ts` | Scenarios `idle` \| `active-session`; requires built `lib/` |
@@ -162,26 +163,28 @@ bun run clean                  # remove lib/dist outputs
 
 ## Notes
 
-- **Version:** `1.11.0` in root `package.json` (release tags `v1.11.0`; beta `v1.11.0-beta.N`).
+- **Version:** `1.11.2` in root `package.json` (release tags `v1.11.2`; beta `v1.11.2-beta.N`).
 - Effective sleep prevention is user `preventSleep` intent **OR** active session. Low-battery auto-stop disables both.
 - Tray icon reflects effective active state; tray menu checkbox reflects user intent only.
 - Tray menu: Prevent Sleep, **Cancel session** (only while a session is active), Settings…, About Amphetamine, Check for Updates…, Quit.
 - Popover is the primary control surface: prevent-sleep toggle, duration chips (start only; do not write preference), cancel session, Settings/Quit.
-- Settings UI is System Settings–style grouped lists (General / Session / Power). Duration select still starts a session **and** updates `defaultSessionDuration`. Hero icon uses the shared coffee-brown aurora (`styles/icon-aurora.css`).
+- Settings UI is System Settings–style grouped lists (General / Session / Power). Duration select still starts a session **and** updates `defaultSessionDuration`. Hero icon uses the **static** shared coffee-brown aurora (`icon-aurora--static`).
 - Settings, About, and the updater utility dialog share a fixed dark canvas via `styles/utility-tokens.css` (`--utility-window-bg: #0D1117` on `#app`). Do not re-hardcode that hex in entry stylesheets.
 - Sleep block mode defaults to `prevent-display-sleep`; `prevent-app-suspension` allows display sleep.
 - Login items: macOS uses `openAsHidden: true`; Windows uses `openAtLogin` without that flag.
 - Settings and About share refcounted macOS Dock presentation via `acquireUtilityForeground` / `releaseUtilityForeground` (`platform/utility-presentation`). Windows shows a taskbar button while open (`skipTaskbar: false` + `titleBarOverlay` caption buttons). Tray-only mode returns when the last utility ref is released.
-- Settings/About **warm cache**: first open creates+loads the BrowserWindow; user close **hides** (renderer stays warm); quit/composition `close*Window` force-**destroy**s. `*WantsVisible` blocks late `ready-to-show` after dismiss. Settings reopen clears control focus (no autofocus on Launch at Login).
-- Updater dialogs use WindowGraph `presentUtilityDialog` (built `utility-dialog.html` + coffee-brown icon aurora + opaque `#0D1117` chrome). Own utility-foreground ref; **hide-on-close warm cache** (re-apply payload via `utility-dialog:apply`); single-flight. Info-only alerts hide the OK row — dismiss via system Close / Esc / Enter. Multi-button alerts follow HIG left-secondary / right-primary; check-failed Esc dismisses OK, not Open Releases. Content height shrink-wraps via private `set-height` IPC.
+- Settings/About/utility-dialog **warm cache**: first open creates+loads the BrowserWindow; user close **hides** (renderer stays warm); quit/composition `close*Window` force-**destroy**s. `*WantsVisible` blocks late `ready-to-show` after dismiss. Settings reopen clears control focus (no autofocus on Launch at Login).
+- Icon aurora (About + utility-dialog): GogMeet-style fancy multi-layer wash (core + 3 blobs, dual rings, sheen, flare; coffee palette from `generate-app-icon.mjs`). Bloom on `.icon-aurora` only (not the stage that owns the app icon). Ambient leaf motion delayed after bloom. Settings stays static.
+- Fancy aurora pause: `bindIconAuroraStagePause()` (`icon-aurora-pause.ts`) toggles `.is-paused` from `document.hidden` / visibility, re-sync on focus/blur/pageshow + short timeouts (Electron `show:false` race). Pause freezes leaf loops only (not bloom). Wire **before** any await in About bootstrap.
+- Updater dialogs use WindowGraph `presentUtilityDialog` (built `utility-dialog.html` + fancy aurora + opaque `#0D1117` chrome). Own utility-foreground ref; **hide-on-close warm cache** (re-apply payload via `utility-dialog:apply`); single-flight. Info-only alerts hide the OK row — dismiss via system Close / Esc / Enter. Multi-button alerts follow HIG left-secondary / right-primary; check-failed Esc dismisses OK, not Open Releases. Content height shrink-wraps via private `set-height` IPC **before** the open fade (avoids first-open aurora edge fringe). `#app` clips corona (`overflow: hidden`); no focus outline on the dialog surface.
 - Low-battery auto-stop clears intent + cancels session and shows an OS notification via `UserNotifierPort` (`createOsUserNotifier`).
 - Popover hide on blur uses typed `window:hide`, not DOM `CustomEvent`.
-- About is a built renderer (`about.html`) with shared preload; not inline `data:` HTML. Copyright uses `AboutInfo.author` from package metadata. App icon sits over a shared coffee-brown aurora wash (`styles/icon-aurora.css`; palette from `generate-app-icon.mjs`).
+- About is a built renderer (`about.html`) with shared preload; not inline `data:` HTML. Copyright uses `AboutInfo.author` from package metadata. Open animation is **opacity-only** (scale lives on aurora bloom). App icon is a GitHub control over the fancy aurora stage.
 - Utility dialog is a fourth built renderer (`utility-dialog.html`) with dedicated preload (`lib/preload/utility-dialog.cjs`); private channels in `shared/utility-dialog.ts` (not in public `IPC_CHANNELS` budget of 16).
 - `hardenWebContents` denies all `window.open`; About overrides with a package-repository allowlist on `github.com` that opens via `shell.openExternal`.
 - Auto-updater is hybrid: feed from package.json `repository` via `setFeedURL`; concurrent checks single-flight. **Check for Updates** tries in-app download/install when possible; falls back to the GitHub release page. Background checks do not auto-download. Presentation via injected `showUserDialog` (no native `dialog.showMessageBox`).
 - GitHub Releases must publish **`latest-mac.yml`** (mac) and **`latest.yml`** (win) or macOS Check for Updates fails with a false network-error dialog. Repo: `iWorkforces/Amphetamine`.
-- Electron pin is `^43.2.0` in package.json; do not downgrade below the patched 43.x line referenced by security comments.
+- Electron pin is `^43.3.0` in package.json; do not downgrade below the patched 43.x line referenced by security comments.
 - Runtime deps are only `electron-log` and `electron-updater`; externalized in Rslib. Renderer must not import `electron-log`.
 - Production Rslib/Rsbuild builds drop console output. `bun run build` runs targets in parallel (outputs include `utility-dialog.html` + `utility-dialog.cjs`).
 - Develop pushes/merges: CI lint/test; **Beta** workflow packages `*-beta-{N}.*` and publishes prerelease tag `vX.Y.Z-beta.N`.

@@ -27,8 +27,17 @@ function setupDom(): void {
   document.body.innerHTML = `
     <div id="app" class="about" role="dialog" aria-labelledby="product-name">
       <div class="icon-aurora-stage app-icon-stage">
-        <div class="icon-aurora" aria-hidden="true"></div>
-        <img id="app-icon" class="app-icon" alt="" role="button" tabindex="0" aria-label="View source on GitHub" />
+        <div class="icon-aurora" aria-hidden="true">
+          <span class="aurora-blob aurora-blob--core"></span>
+          <span class="aurora-blob aurora-blob--a"></span>
+          <span class="aurora-blob aurora-blob--b"></span>
+          <span class="aurora-blob aurora-blob--c"></span>
+          <span class="aurora-ring"></span>
+          <span class="aurora-ring aurora-ring--counter"></span>
+          <span class="aurora-sheen"></span>
+          <span class="aurora-flare"></span>
+        </div>
+        <img id="app-icon" class="app-icon" alt="" draggable="false" role="button" tabindex="0" aria-label="View source on GitHub" />
       </div>
       <h1 id="product-name">Amphetamine</h1>
       <div id="version" class="version"></div>
@@ -39,11 +48,23 @@ function setupDom(): void {
   `;
 }
 
+function setDocumentVisibility(visibilityState: DocumentVisibilityState): void {
+  Object.defineProperty(document, "visibilityState", {
+    value: visibilityState,
+    configurable: true,
+  });
+  Object.defineProperty(document, "hidden", {
+    value: visibilityState === "hidden",
+    configurable: true,
+  });
+}
+
 describe("renderer about", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.useFakeTimers();
     setupDom();
+    setDocumentVisibility("visible");
     mockGetAbout.mockResolvedValue({
       productName: "Amphetamine",
       version: "1.10.5",
@@ -58,7 +79,8 @@ describe("renderer about", () => {
         close: mockClose,
         open: mockOpen,
         matchMedia: (query: string) => ({
-          matches: query.includes("reduce"),
+          // Exact match so tests can exercise motion-on path when needed.
+          matches: query === "(prefers-reduced-motion: reduce)",
           media: query,
           addEventListener: vi.fn(),
           removeEventListener: vi.fn(),
@@ -132,5 +154,36 @@ describe("renderer about", () => {
       true,
     );
     expect(document.getElementById("version")?.textContent).toBe("Version unknown");
+  });
+
+  it("pauses aurora stage when document is hidden and unpauses when visible", async () => {
+    vi.resetModules();
+    await import("../../src/renderer/about/index.js");
+    await vi.advanceTimersByTimeAsync(100);
+
+    const stage = document.querySelector(".icon-aurora-stage");
+    expect(stage).toBeInstanceOf(HTMLElement);
+    expect(stage?.classList.contains("is-paused")).toBe(false);
+
+    setDocumentVisibility("hidden");
+    document.dispatchEvent(new Event("visibilitychange"));
+    expect(stage?.classList.contains("is-paused")).toBe(true);
+
+    setDocumentVisibility("visible");
+    document.dispatchEvent(new Event("visibilitychange"));
+    expect(stage?.classList.contains("is-paused")).toBe(false);
+  });
+
+  it("mirrors fancy aurora leaf markup (core/blobs/rings/sheen/flare)", async () => {
+    vi.resetModules();
+    await import("../../src/renderer/about/index.js");
+    await vi.advanceTimersByTimeAsync(0);
+
+    const aurora = document.querySelector(".icon-aurora");
+    expect(aurora?.getAttribute("aria-hidden")).toBe("true");
+    expect(document.querySelectorAll(".aurora-blob")).toHaveLength(4);
+    expect(document.querySelectorAll(".aurora-ring")).toHaveLength(2);
+    expect(document.querySelector(".aurora-sheen")).not.toBeNull();
+    expect(document.querySelector(".aurora-flare")).not.toBeNull();
   });
 });

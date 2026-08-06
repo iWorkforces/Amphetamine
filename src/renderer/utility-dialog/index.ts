@@ -5,6 +5,7 @@
  */
 import "./styles.css";
 import type { UtilityDialogPayload } from "../../shared/utility-dialog.js";
+import { bindIconAuroraStagePause } from "../icon-aurora-pause.js";
 
 const heroIcon = new URL("../../assets/settings-hero-icon.png", import.meta.url).toString();
 
@@ -72,8 +73,10 @@ function clampIndex(index: number, length: number, fallback: number): number {
 /**
  * Measure intrinsic content height and shrink-wrap.
  * Single rAF; does not wait on icon (stage size is reserved in CSS).
+ * Invokes `onSettled` after setHeight resolves (or immediately on skip/failure)
+ * so open animation never races the first resize (warm-edge filter fringe).
  */
-function reportContentHeight(root: HTMLElement): void {
+function reportContentHeight(root: HTMLElement, onSettled?: () => void): void {
   const measure = (): void => {
     const prevMinHeight = root.style.minHeight;
     const prevHeight = root.style.height;
@@ -83,11 +86,19 @@ function reportContentHeight(root: HTMLElement): void {
     root.style.minHeight = prevMinHeight;
     root.style.height = prevHeight;
     if (height <= 0) {
+      onSettled?.();
       return;
     }
-    void window.utilityDialogApi.setHeight(height).catch((err: unknown) => {
-      console.error("[utility-dialog] setHeight failed:", err);
-    });
+    void window.utilityDialogApi
+      .setHeight(height)
+      .then(() => {
+        onSettled?.();
+      })
+      .catch((err: unknown) => {
+        console.error("[utility-dialog] setHeight failed:", err);
+        // Still reveal content if sizing fails.
+        onSettled?.();
+      });
   };
   if (typeof requestAnimationFrame === "function") {
     requestAnimationFrame(measure);
@@ -106,7 +117,8 @@ function bootstrap(): void {
   const messageEl = requireEl<HTMLHeadingElement>("dialog-message");
   const detailEl = requireEl<HTMLParagraphElement>("dialog-detail");
   const actionsEl = requireEl<HTMLDivElement>("dialog-actions");
-  const auroraStage = document.querySelector(".icon-aurora-stage");
+  // Wire pause before async payload so warm-cache hide still freezes leaves.
+  bindIconAuroraStagePause(root);
 
   icon.src = heroIcon;
   // Icon is decorative for layout; height measure does not wait on decode.
@@ -167,9 +179,14 @@ function bootstrap(): void {
       root.focus({ preventScroll: true });
     }
 
-    // Height first, then fade in (avoids empty chrome + resize fighting scale).
-    reportContentHeight(root);
-    startOpenAnimation(root);
+    // Hold invisible, shrink-wrap, then fade in. Racing fade/bloom with setHeight
+    // on first open let aurora filter/blend fringe paint a warm edge outside the
+    // final window bounds.
+    root.classList.remove("ready");
+    root.classList.add("pre-animate");
+    reportContentHeight(root, () => {
+      startOpenAnimation(root);
+    });
   };
 
   window.addEventListener("keydown", (e: KeyboardEvent) => {
@@ -192,15 +209,6 @@ function bootstrap(): void {
       respond(defaultId);
     }
   });
-
-  // Pause aurora paint work while the warm shell is hidden.
-  if (auroraStage instanceof HTMLElement) {
-    const syncPause = (): void => {
-      auroraStage.classList.toggle("is-paused", document.visibilityState !== "visible");
-    };
-    document.addEventListener("visibilitychange", syncPause);
-    syncPause();
-  }
 
   // Warm-cache re-present: main pushes a fresh payload without reloading.
   window.utilityDialogApi.onApply(applyPayload);

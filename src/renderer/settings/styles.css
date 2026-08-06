@@ -194,19 +194,14 @@ body.platform-win32 .settings-titlebar {
 
 /* 48px hero stage + static shared aurora (no infinite animation; see icon-aurora--static) */
 .icon-aurora-stage.settings-hero-icon-stage {
-  width: 48px;
-  height: 48px;
-}
-
-.icon-aurora-stage.settings-hero-icon-stage .icon-aurora {
-  inset: -52%;
+  --icon-size: 48px;
 }
 
 .settings-hero-icon {
   position: relative;
   z-index: 1;
-  width: 48px;
-  height: 48px;
+  width: var(--icon-size);
+  height: var(--icon-size);
   border-radius: 11px;
   flex-shrink: 0;
   object-fit: cover;
