@@ -67,7 +67,7 @@ Application code must not import channel literals; it publishes semantic `AppPus
 - `SessionStartResponse`: ok/fail (`invalid-duration`, `Duration cannot exceed 24 hours`, `rejected`).
 - `AutoUpdaterStatus`: checking / available / not-available / downloaded / downloading / errors.
 - `AboutInfo`: `productName`, `version`, `description`, `repository`, `author` (`app:get-about`).
-- `UtilityDialogOptions` / `UtilityDialogPayload` / `UtilityDialogResult`: aurora alert contract (`utility-dialog.ts`).
+- `UtilityDialogOptions` / `UtilityDialogPayload` / `UtilityDialogResult`: fancy-aurora utility alert contract (`utility-dialog.ts`; private channels, not public `IPC_CHANNELS`).
 - `PerfTimestamp` is branded via domain `asPerf(n)`.
 
 ## Benchmark Contract
